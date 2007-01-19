@@ -1,0 +1,388 @@
+module Text.Regex.TDFA.CorePattern where
+
+import Control.Monad.Fix()
+import Control.Monad.RWS
+import Text.Regex.TDFA.Common(Tag,GroupInfo(..),PatternIndex,Position,WinTags,DoPa,mapSnd)
+import Text.Regex.TDFA.Pattern(Pattern(..),starTrans)
+
+import Data.Maybe
+import Data.Array.IArray
+import Data.Set(Set)
+import qualified Data.Set as Set
+-- import Data.IntSet(IntSet)
+import qualified Data.IntSet as ISet
+import Data.Map(Map)
+import qualified Data.Map as Map
+-- import Data.IntMap(IntMap)
+-- import qualified Data.IntMap as IMap
+
+-- import Debug.Trace
+
+debug :: (Show a) => a -> b -> b
+debug _ = id
+
+-- Smart constructors for NullView
+notNull :: NullView
+notNull = []
+
+-- QQQ
+emptyNull :: WinTags -> NullView
+emptyNull tags = (mempty, tags) : []
+
+-- QQQ
+testNull :: TestInfo -> WinTags -> NullView
+testNull (w,d) tags = (SetTestInfo (Map.singleton w (Set.singleton d)), tags) : []
+
+seqTake :: (Int, Maybe Int) -> (Int, Maybe Int) -> (Int, Maybe Int)
+seqTake (x1,y1) (x2,y2) = (x1+x2,liftM2 (+) y1 y2)
+
+orTakes :: [(Int, Maybe Int)] -> (Int,Maybe Int)
+orTakes [] = (0,Just 0)
+orTakes ts = let (xs,ys) = unzip ts
+             in (minimum xs, foldl1 (liftM2 max) ys)
+
+cleanNullView :: NullView -> NullView
+cleanNullView [] = []
+cleanNullView (first@(SetTestInfo sti,_):rest) | Map.null sti = first : []
+                                               | otherwise =
+  first : cleanNullView (filter (not . (setTI `Set.isSubsetOf`) . Map.keysSet . getTests . fst) rest)
+  where setTI = Map.keysSet sti
+
+mergeNullViews :: NullView -> NullView -> NullView
+-- mergeNullViews = liftM2 (mappend *** mappend)
+mergeNullViews s1 s2 = do
+  (test1,tag1) <- s1
+  (test2,tag2) <- s2
+  return (mappend test1 test2,mappend tag1 tag2)
+
+
+data OP = Maximize | Minimize deriving (Eq,Show)  -- whether to prefer large or smaller match indices
+
+-- During the depth first traversal, children are told about bounds by the parent
+data HandleTag = NoTag | Advice Tag | Apply Tag deriving (Show)
+
+-- Invariant: apply (toAdvice _ ) == mempty
+apply :: HandleTag -> Maybe Tag
+apply (Apply tag) = Just tag
+apply _ = Nothing
+toAdvice :: HandleTag -> HandleTag
+toAdvice (Apply tag) = Advice tag
+toAdvice s = s
+noTag :: HandleTag -> Bool
+noTag NoTag = True
+noTag _ = False
+fromHandleTag :: HandleTag -> Tag
+fromHandleTag (Apply tag) = tag
+fromHandleTag (Advice tag) = tag
+fromHandleTag _ = error "fromHandleTag"
+
+
+
+-- Core Pattern Language
+data P = Empty
+       | Or [Q]
+       | Seq Q Q
+       | Star [Tag] Q -- need to reset this contained groups
+       | Test TestInfo
+       | OneChar Pattern
+         deriving (Show,Eq)
+
+-- The diagnostics about the pattern
+data Q = Q {nullQ :: NullView         -- Ordered list of nullable views
+           ,takes :: (Position,Maybe Position)  -- Range of number of accepted characters
+           ,preTag,postTag :: Maybe Tag -- Tags assigned around this pattern
+           ,tagged :: Bool            -- Whether this node should be tagged (XXX only used in patternToQ)
+           ,wants :: Wanted           -- What kind of continuation is used by this pattern
+           ,unQ :: P} deriving (Eq)
+
+type TestInfo = (WhichTest,DoPa)
+
+-- This is newtype'd to allow for a custom Ord instance
+-- This is a set of WhichTest where each test has associated pattern location information
+newtype SetTestInfo = SetTestInfo {getTests :: Map WhichTest (Set DoPa)} deriving (Eq,Monoid)
+
+data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord)  -- known predicates, todo: allow for inversion
+
+--QQQ
+{-
+type NullView = [(SetTestInfo,SetTag)]  -- Ordered list of null views, each is a set of tests and tags
+-}
+type NullView = [(SetTestInfo,WinTags)]  -- Ordered list of null views, each is a set of tests and tags
+
+winTags :: Maybe Tag -> Maybe Tag -> WinTags
+winTags (Just a) (Just b) = ISet.fromList [a,b]
+winTags (Just a) Nothing  = ISet.singleton a
+winTags Nothing  (Just b) = ISet.singleton b
+winTags Nothing  Nothing  = ISet.empty
+
+data Wanted = WantsQNFA | WantsQT | WantsBoth | WantsEither deriving (Eq,Show)
+
+instance Show Q where
+  show = showQ
+
+--- QQQ
+{-
+showQ :: Q -> String
+showQ q = "Q { nullQ = "++show (mapSnd (ISet.toList) $ nullQ q)++
+        "\n  , takes = "++show (takes q)++
+        "\n  , preTag = "++show (preTag q)++
+        "\n  , postTag = "++show (postTag q)++
+        "\n  , tagged = "++show (tagged q)++
+        "\n  , wants = "++show (wants q)++
+        "\n  , unQ = "++ indent (unQ q)++" }"
+   where indent = unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . show
+         spaces = replicate 10 ' '
+-}
+showQ :: Q -> String
+showQ q = "Q { nullQ = "++show (nullQ q)++
+        "\n  , takes = "++show (takes q)++
+        "\n  , preTag = "++show (preTag q)++
+        "\n  , postTag = "++show (postTag q)++
+        "\n  , tagged = "++show (tagged q)++
+        "\n  , wants = "++show (wants q)++
+        "\n  , unQ = "++ indent (unQ q)++" }"
+   where indent = unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . show
+         spaces = replicate 10 ' '
+
+instance Show SetTestInfo where
+  show (SetTestInfo sti) = "SetTestInfo "++show (mapSnd (Set.toList) $ Map.assocs sti)
+
+varies :: Q -> Bool
+varies Q {takes = (_,Nothing)} = True
+varies Q {takes = (x,Just y)} = x/=y
+
+canAccept :: Q -> Bool
+canAccept q = maybe True (0/=) $ snd . takes $ q
+cannotAccept :: Q -> Bool
+cannotAccept q = maybe False (0==) $ snd . takes $ q
+
+-- This converts then input Pattern to an analyzed Q structure with
+-- the tags assigned.
+--
+-- The analysis is filled in by a depth first search and the tags are
+-- created top down and passed to children.  Thus information flows up
+-- from the dfs of the children and simultaneously down in the form of
+-- pre and post HandleTag data.  This bidirectional flow is handled
+-- declaratively by using the MonadFix (i.e. mdo) instance of State.
+-- 
+-- Invariant: A tag should exist in Q in exactly one place.  This is
+-- because PGroup needs to know the tags are around precisely the
+-- expression that it wants to record.  If the same tag were in other
+-- branches then this would no longer be true.
+--
+-- This invariant is enforced by each node either taking
+-- responsibility (apply) for a passed in / created tag or sending it
+-- to exactly one child node.  Other child nodes need to receive it
+-- via toAdvice.
+--
+-- There is a final "qwin of Q {postTag=ISet.singleton 1}" and an
+-- implied initial index tag of 0.
+-- 
+-- favoring pushing Apply into the child postTag makes PGroup happier
+
+{-
+getChildTags :: Q -> [Tag]
+getChildTags q = maybe id (:) (preTag q) $ maybe (childTags q) (:childTags q) (postTag q)
+-}
+
+type PM = RWS PatternIndex [GroupInfo] ([OP]->[OP],Tag) 
+type HHQ = HandleTag  -- m1 : info about left or pre-tag, currently NoTag or Advice and never Apply
+        -> HandleTag  -- m2 : info about right or post-tag, currently NoTag or Apply, and top-level Advice
+        -> PM Q
+
+makeGroupArray :: PatternIndex -> [GroupInfo] -> Array PatternIndex [GroupInfo]
+makeGroupArray maxPatternIndex groups = accumArray (\earlier later -> later:earlier) [] (1,maxPatternIndex) filler
+    where filler = map (\gi -> (thisIndex gi,gi)) groups
+
+patternToQ :: (Pattern,(PatternIndex,Int)) -> (Q,Array Tag OP,Array PatternIndex [GroupInfo])
+patternToQ (pOrig,(maxPatternIndex,_)) = (tnfa
+                                         ,aTags
+                                         ,aGroups) where
+  (tnfa,(tag_dlist,nextTag),groups) = runRWS monad startReader startState
+  aTags = listArray (0,pred nextTag) (tag_dlist [])
+  aGroups = makeGroupArray maxPatternIndex groups
+  -- implicitly inside a PGroup 0 converted into a GroupInfo 0 undefined 0 1
+  monad = go (starTrans pOrig) (Advice 0) (Apply 1)
+  startReader :: PatternIndex
+  startReader = 0             -- start inside group 0
+  startState :: ([OP]->[OP],Tag)
+  startState = ( (Minimize:) . (Maximize:) , 2)  -- Tag 0 is Minimized and Tag 1 is maximized.
+  -- Give the operations more meaningful names
+  getParentIndex = ask
+  withParent i = local (const i)
+  makeGroup = tell . (:[])
+
+  uniq newOp = do (op,s) <- get                -- generate the next tag with bias newOp
+                  let op' = op . (newOp:)
+                      s' = succ s
+                  put $! debug ("\n"++show (s,newOp)++"\n") (op',s')
+                  return (Apply s) -- someone will need to apply it
+
+-- This is right-assoc
+  combine :: Pattern -> HHQ -> HHQ
+  combine cFront pEnd m1 m2 = mdo
+    let bothVary = varies qFront && varies qEnd
+    a <- if noTag m1 && bothVary then uniq Maximize else return m1
+    b <- if noTag m2 && bothVary then uniq Maximize else return m2
+    mid <- case (noTag a,canAccept qFront,noTag b,canAccept qEnd) of
+             (False,False,_,_) -> return (toAdvice a)
+             (_,_,False,False) -> return (toAdvice b)
+             _ -> if tagged qFront || tagged qEnd then uniq Maximize else return NoTag
+    qFront <- go cFront a mid
+    qEnd <- pEnd (toAdvice mid) b
+    let wanted = if WantsEither == wants qEnd then wants qFront else wants qEnd
+    return $ Q (mergeNullViews (nullQ qFront) (nullQ qEnd))
+               (seqTake (takes qFront) (takes qEnd))
+               Nothing Nothing
+               bothVary wanted
+               (Seq qFront qEnd)
+
+{- this is the same associativity as libtre (left-assoc)
+  combine :: HHQ -> Pattern -> HHQ
+  combine cFront pEnd m1 m2 = mdo
+    let bothVary = varies qFront && varies qEnd
+    a <- if noTag m1 && bothVary then uniq Maximize else return m1
+    b <- if noTag m2 && bothVary then uniq Maximize else return m2
+    mid <- case (noTag a,canAccept qFront,noTag b,canAccept qEnd) of
+             (False,False,_,_) -> return (toAdvice a)
+             (_,_,False,False) -> return (toAdvice b)
+             _ -> if tagged qFront || tagged qEnd then uniq Maximize else return NoTag
+    qFront <- cFront a mid
+    qEnd <- go pEnd (toAdvice mid) b
+    let wanted = if WantsEither == wants qEnd then wants qFront else wants qEnd
+    return $ Q (mergeNullViews (nullQ qFront) (nullQ qEnd))
+               (seqTake (takes qFront) (takes qEnd))
+               Nothing Nothing
+               bothVary wanted
+               (Seq qFront qEnd)
+-}
+  go :: Pattern -> HHQ
+  go pIn m1 m2 =
+    let die = error $ "patternToQ cannot handle "++show pIn -- assume (starTrans) has been run already
+        nil = return $ Q {nullQ=emptyNull (apply m1 `winTags` apply m2) -- No tests, just empty
+                         ,takes=(0,Just 0)
+                         ,preTag=apply m1
+                         ,postTag=apply m2
+                         ,tagged=False
+                         ,wants=WantsEither
+                         ,unQ=Empty}
+        one = return $ Q {nullQ=notNull              -- one character accepted (just store P type)
+                         ,takes=(1,Just 1)
+                         ,preTag=apply m1
+                         ,postTag=apply m2
+                         ,tagged=False
+                         ,wants=WantsQNFA
+                         ,unQ = OneChar pIn}
+        test myTest = return $ Q {nullQ=testNull myTest (apply m1 `winTags` apply m2) -- anchor of some sort
+                                 ,takes=(0,Just 0)
+                                 ,preTag=apply m1
+                                 ,postTag=apply m2
+                                 ,tagged=False
+                                 ,wants=WantsQT
+                                 ,unQ=Test myTest }
+
+    in case pIn of
+         PEmpty -> nil
+         POr [] -> nil
+         POr [p] -> go p m1 m2
+{-
+         POr ps -> mdo
+           let canVary = any tagged qs || varies ans -- not overkill.
+           a <- if noTag m1 && canVary then uniq Minimize else return m1
+           b <- if noTag m2 && canVary then uniq Maximize else return m2
+           -- Due to the recursive-do, it seems that I have to put the if canVary into the op'
+           let aAdvice = toAdvice a
+               bAdvice = toAdvice b
+               op' = if canVary then uniq Maximize else return bAdvice
+               op'' =  if canVary then uniq Maximize else return aAdvice
+           a's <- replicateM (length ps) op''
+           b's <- replicateM (length ps) op'
+           qs <- mapM (\(p,a',b') -> go p a' b') (zip3 ps a's b's)
+           let wqs = map wants qs
+               wanted = if any (WantsBoth==) wqs then WantsBoth
+                          else case (any (WantsQNFA==) wqs,any (WantsQT==) wqs) of
+                                 (True,True) -> WantsBoth
+                                 (True,False) -> WantsQNFA
+                                 (False,True) -> WantsQT
+                                 (False,False) -> WantsEither
+           let ans = Q (cleanNullView . concatMap nullQ $ qs)
+                       (orTakes . map takes $ qs)
+                       (apply a) (apply b)
+                       canVary wanted
+                       (Or qs)
+           return ans
+-}
+         POr ps -> mdo
+           let canVary = any tagged qs || varies ans -- not overkill.
+           a <- if noTag m1 && canVary then uniq Minimize else return m1
+           b <- if noTag m2 && canVary then uniq Maximize else return m2
+           -- Due to the recursive-do, it seems that I have to put the if canVary into the op'
+           let aAdvice = toAdvice a
+               bAdvice = toAdvice b
+               op' = if canVary then uniq Maximize else return bAdvice
+           cs <- fmap (++[bAdvice]) $ replicateM (pred $ length ps) op'
+--           cs <- replicateM (length ps) op'
+           qs <- mapM (\(p,c) -> go p aAdvice c) (zip ps cs)
+           let wqs = map wants qs
+               wanted = if any (WantsBoth==) wqs then WantsBoth
+                          else case (any (WantsQNFA==) wqs,any (WantsQT==) wqs) of
+                                 (True,True) -> WantsBoth
+                                 (True,False) -> WantsQNFA
+                                 (False,True) -> WantsQT
+                                 (False,False) -> WantsEither
+           let ans = Q (cleanNullView . concatMap nullQ $ qs)
+                       (orTakes . map takes $ qs)
+                       (apply a) (apply b) canVary wanted
+                       (Or qs)
+           return ans
+         PConcat [] -> nil
+-- This is the same associativity as libtre (left-assocs
+--         PConcat (p:ps) -> foldl combine (go p) ps m1 m2
+-- This is right-assoc
+         PConcat (ps) -> foldr combine (go (last ps)) (init ps) m1 m2
+         PStar p -> mdo
+           -- ideal order of decision
+           --  min start of PStar
+           --  max end of PStar
+           --  min iterations of PStar
+           --  max start of last iteration
+           let accepts = canAccept q
+           a <- if noTag m1 && accepts then uniq Minimize else return m1
+           b <- if noTag m2 && accepts then uniq Maximize else return m2
+           -- end of each iteration is Maximize and is the beginning
+           -- of the next so the start of each iteration should be a
+           -- Maximize (except the first iteration, but this is taken
+           -- care of by 'a' above').  To keep the interior pattern
+           -- from making a Minimize tag and breaking the logic, a
+           -- Maximize tag is always passed as the first tag
+           (q,resetGroups) <- listens (concatMap (\g -> map stopTag . (aGroups!) . thisIndex $ g))
+                                      (go p NoTag NoTag)
+           let ans = Q (emptyNull (maybe ISet.empty ISet.singleton $ apply m2))
+                       (0,if accepts then Nothing else (Just 0))
+                       (apply a) (apply b)
+                       accepts WantsQT
+                       (Star resetGroups q)
+           return ans
+         PCarat dopa -> test (Test_BOL,dopa)
+         PDollar dopa -> test (Test_EOL,dopa)
+         PChar {} -> one
+         PDot {} -> one
+         PAny {} -> one
+         PAnyNot {} -> one
+         PEscape {} -> one
+
+         -- a PGroup can share a preTag (with Advice) with other branches but must have a postTag of Apply
+         PGroup this p -> do
+           a <- if noTag m1 then uniq Minimize else return m1
+           b <- if isNothing (apply m2) then uniq Maximize else return m2
+           parent <- getParentIndex
+           makeGroup (GroupInfo this parent (fromHandleTag a) (fromHandleTag b))
+           q <- withParent this $ go p a b
+           let ans = q {tagged = True}
+           return ans
+
+         -- these are here for completeness of the case branches, currently starTrans replaces them all
+         PPlus {} -> die
+         PQuest {} -> die
+         PBound {} -> die
+

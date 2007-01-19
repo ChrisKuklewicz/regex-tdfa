@@ -1,0 +1,52 @@
+Name:                   regex-tdfa
+Version:                0.10
+-- Cabal-Version:       >=1.1.6
+License:                BSD3
+License-File:           LICENSE
+Copyright:              Copyright (c) 2007, Christopher Kuklewicz
+Author:                 Christopher Kuklewicz
+Maintainer:             TextRegexLazy@personal.mightyreason.com
+Stability:              Seems to work, passes a few tests
+Homepage:               http://sourceforge.net/projects/lazy-regex
+Package-URL:            http://darcs.haskell.org/packages/
+Synopsis:               Replaces/Enhances Text.Regex
+Description:            A new POSIX all Haskell "tagged" DFA regex engine, inspired by libtre
+Category:               Text
+Tested-With:            GHC
+Build-Depends:          regex-base, base >= 2.0, parsec, mtl
+-- Data-Files:
+-- Extra-Source-Files:
+-- Extra-Tmp-Files:
+Exposed-Modules:        Text.Regex.TDFA.CorePattern
+                        Text.Regex.TDFA.TNFA
+                        Text.Regex.TDFA.TDFA
+                        Text.Regex.TDFA.Common
+                        Text.Regex.TDFA.Pattern
+                        Text.Regex.TDFA.ReadRegex
+                        Text.Regex.TDFA.Wrap
+                        Text.Regex.TDFA.Run
+                        Text.Regex.TDFA.RunBS
+                        Text.Regex.TDFA.RunLBS
+                        Text.Regex.TDFA.IntArrTrieSet
+                        Text.Regex.TDFA
+                        Text.Regex.TDFA.String
+                        Text.Regex.TDFA.Sequence
+                        Text.Regex.TDFA.ByteString
+                        Text.Regex.TDFA.ByteString.Lazy
+Buildable:              True
+-- HS-Source-Dirs:         "."
+Extensions:             MultiParamTypeClasses, FunctionalDependencies
+-- GHC-Options:            -Wall
+GHC-Options:            -Wall -Werror -O2
+-- GHC-Options:            -Wall -ddump-minimal-imports
+-- GHC-Prog-Options: 
+-- Hugs-Options:
+-- NHC-Options:
+-- Includes:
+-- Include-Dirs:
+-- C-Sources:
+-- Extra-Libraries:
+-- Extra-Lib-Dirs:
+-- CC-Options:
+-- LD-Options:
+-- Frameworks:
