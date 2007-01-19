@@ -6,11 +6,11 @@ License-File:           LICENSE
 Copyright:              Copyright (c) 2007, Christopher Kuklewicz
 Author:                 Christopher Kuklewicz
 Maintainer:             TextRegexLazy@personal.mightyreason.com
-Stability:              Seems to work, passes a few tests
+Stability:              Seems to work, but not POSIX yet
 Homepage:               http://sourceforge.net/projects/lazy-regex
 Package-URL:            http://darcs.haskell.org/packages/
 Synopsis:               Replaces/Enhances Text.Regex
-Description:            A new POSIX all Haskell "tagged" DFA regex engine, inspired by libtre
+Description:            A new all Haskell "tagged" DFA regex engine, inspired by libtre
 Category:               Text
 Tested-With:            GHC
 Build-Depends:          regex-base, base >= 2.0, parsec, mtl
