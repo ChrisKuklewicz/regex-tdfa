@@ -64,7 +64,7 @@ compile compOpt execOpt bs =
   case parseRegex (toList bs) of
     Left err -> Left ("parseRegex for Text.Regex.TDFA.ByteString failed:"++show err)
     Right pattern ->
-      let (dfa,i,tags,groups) = patternToDFA pattern compOpt
+      let (dfa,i,tags,groups) = patternToDFA compOpt pattern
       in Right (Regex dfa i tags groups compOpt execOpt)
 
 execute :: Regex      -- ^ Compiled regular expression

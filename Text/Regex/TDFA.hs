@@ -24,13 +24,12 @@ Beyond posix:
   leftmost branch instead of leftmost/longest (open/close group instead of tagging)
 -}
 
-module Text.Regex.TDFA(
-   module Text.Regex.TDFA.Wrap
-  ,module Text.Regex.TDFA.String
-  ,module Text.Regex.TDFA.ByteString
-  ,module Text.Regex.TDFA.ByteString.Lazy
-  ,module Text.Regex.TDFA.Sequence
-  ,module Text.Regex.Base) where
+module Text.Regex.TDFA(module Text.Regex.TDFA.Wrap
+                      ,module Text.Regex.TDFA.String
+                      ,module Text.Regex.TDFA.ByteString
+                      ,module Text.Regex.TDFA.ByteString.Lazy
+                      ,module Text.Regex.TDFA.Sequence
+                      ,module Text.Regex.Base) where
 
 import Text.Regex.TDFA.Wrap(Regex,CompOption(..),ExecOption(..),(=~),(=~~))
 import Text.Regex.TDFA.String()

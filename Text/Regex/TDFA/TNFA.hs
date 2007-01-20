@@ -52,7 +52,8 @@ debug _ s = s
 data QNFA = QNFA {q_id :: Index
                  ,q_qt :: QT} deriving (Show)
 
-data TagUpdate = ResetTag | PreTag | PostTag deriving (Show,Eq,Ord)
+data TagUpdate = ResetTag | PreTag | PostTag 
+               | EnterOrbit | LeaveOrbit deriving (Show,Eq,Ord)
 
 type TagCommand = (DoPa,[(Tag,TagUpdate)])
 
@@ -106,13 +107,13 @@ qtwin,qtlose :: QT
 qtwin = Simple {qt_win=ISet.singleton 1,qt_trans=mempty,qt_other=mempty}
 qtlose = Simple {qt_win=mempty,qt_trans=mempty,qt_other=mempty}
 
-patternToNFA :: (Text.Regex.TDFA.Pattern.Pattern,(PatternIndex, Int))
-             -> CompOption
+patternToNFA :: CompOption
+             -> (Text.Regex.TDFA.Pattern.Pattern,(PatternIndex, Int))
              -> ((Index,Array Index QNFA)
                 ,Array Tag OP
                 ,Array PatternIndex [GroupInfo])
-patternToNFA pattern compOpt =
-  let (q,tags,groups) = patternToQ pattern
+patternToNFA compOpt pattern =
+  let (q,tags,groups) = patternToQ compOpt pattern
       msg = unlines [ show q ]
   in debug msg (qToNFA q compOpt,tags,groups)
 
@@ -188,6 +189,19 @@ resetTags :: [Tag] -> QT -> QT
 resetTags tags qt | null tags = qt
                   | nullQT qt = qt
                   | otherwise = prependTags' tags ResetTag qt
+
+enterOrbit :: Maybe Tag -> QT -> QT
+enterOrbit Nothing qt = qt
+enterOrbit (Just tag) qt | nullQT qt = qt
+                         | otherwise = prependTags' [tag] EnterOrbit qt
+
+leaveOrbit :: Maybe Tag -> E -> E
+leaveOrbit = undefined
+{-
+leaveOrbit Nothing e = q
+leaveOrbit (Just tag) qt | nullQT qt = qt
+                         | otherwise = prependTags' [negate tag] LeaveOrbit qt
+-}
 
 prependTags' :: [Tag] -> TagUpdate -> QT -> QT
 prependTags' tags c qt@(Testing {}) = qt {qt_a = prependTags' tags c (qt_a qt)
@@ -408,17 +422,19 @@ qToNFA qTop compOpt = (q_id startingQNFA,array (0,pred lastIndex) (table [])) wh
                   else sequence [ getTrans cont q | q <- qs ]
         let qts = map getQT eqts
         return (fromQT (foldr1 mergeAltQT qts))
-      Star tags q | cannotAccept q -> return cont -- XXX may not by POSIX correct
-                  | otherwise ->  mdo
-        mqt <- inStar this q
-        this <- case mqt of
-                  Nothing -> return cont
-                  Just qt ->
-                    let qt' = resetTags tags qt
-                    in if usesQNFA q {- pretag qt with tag reset commands -}
-                         then fmap fromQNFA $ newQNFA "getTrans/Star" (mergeQT qt' (getQT cont))
-                         else return $ fromQT (mergeQT qt' (getQT cont))
-        return this
+      Star orbit tags q | cannotAccept q -> return cont -- XXX may not by POSIX correct
+                        | otherwise ->
+        mdo
+          mqt <- inStar this q
+          this <- case mqt of
+                    Nothing -> error "Wierd pattern in getTransTagless/Star" >> return cont
+                    Just qt ->
+                      let qt' = resetTags tags qt
+                          cont' = leaveOrbit orbit cont
+                      in if usesQNFA q
+                           then fmap fromQNFA $ newQNFA "getTrans/Star" (enterOrbit orbit $ mergeQT qt' (getQT cont'))
+                           else return $ fromQT (enterOrbit orbit $ mergeQT qt' (getQT cont'))
+          return this
       _ -> error "This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen"
 
   inStar,inStarTagless :: E -> Q -> S (Maybe QT)
@@ -445,9 +461,9 @@ qToNFA qTop compOpt = (q_id startingQNFA,array (0,pred lastIndex) (table [])) wh
       Seq q1 q2 -> do cont <- actNullable (eLoop,Nothing,Nothing) q2
                       (_,mAcceptingOut,_) <- actNullable cont q1
                       return (fmap getQT mAcceptingOut)
-      Star tags q | cannotAccept q -> return Nothing
-                  | otherwise -> do (_,mAcceptingOut,_) <- actNullableTagless (eLoop,Nothing,Nothing) qIn
-                                    return (fmap (resetTags tags . getQT) mAcceptingOut)
+      Star orbit tags q | cannotAccept q -> return Nothing
+                        | otherwise -> do (_,mAcceptingOut,_) <- actNullableTagless (eLoop,Nothing,Nothing) qIn
+                                          return (fmap (resetTags tags . getQT) mAcceptingOut)
       Test {} -> return Nothing -- with Or this discards (^) branch in "((^)|foo|())*"
       OneChar {} -> error ("OneChar cannot have nullable True")
 
@@ -560,7 +576,7 @@ qToNFA qTop compOpt = (q_id startingQNFA,array (0,pred lastIndex) (table [])) wh
                               Nothing -> Nothing
                        else Nothing
         return (eLoop',mAccepting',mQNFA')
-      Star tags q -> mdo
+      Star orbit tags q -> mdo
         let contQT = case mAccepting of
                        Nothing -> getQT eLoop
                        Just accepting -> mergeQT (getQT eLoop) (getQT accepting)

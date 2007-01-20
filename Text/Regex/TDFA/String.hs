@@ -47,7 +47,7 @@ compile compOpt execOpt source =
   case parseRegex source of
     Left err -> Left ("parseRegex for Text.Regex.TDFA.String failed:"++show err)
     Right pattern ->
-      let (dfa,i,tags,groups) = patternToDFA pattern compOpt
+      let (dfa,i,tags,groups) = patternToDFA compOpt pattern
       in Right (Regex dfa i tags groups compOpt execOpt)
 
 instance RegexMaker Regex CompOption ExecOption String where

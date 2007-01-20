@@ -10,25 +10,12 @@ information in "Text.Regex.Lazy.DFAEngine".
 module Text.Regex.TDFA.Wrap(Regex(..),CompOption(..),ExecOption(..),(=~),(=~~)) where
 
 import Text.Regex.Base.RegexLike(RegexMaker(..),RegexOptions(..),RegexContext(..))
-import Text.Regex.TDFA.Common -- (CompOption(..),ExecOption(..))
-import Text.Regex.TDFA.TDFA
-import Text.Regex.TDFA.CorePattern
-import Text.Regex.TDFA.Pattern
-import Data.Array.IArray
-
--- | The DFA backend specific 'Regex' type, used by this module's '=~'
--- and '=~~' operators.
-data Regex = Regex {regex_dfa::DFA
-                   ,regex_init::Index
-                   ,regex_tags::Array Tag OP
-                   ,regex_groups::Array PatternIndex [GroupInfo]
-                   ,regex_compOptions::CompOption
-                   ,regex_execOptions::ExecOption}
+import Text.Regex.TDFA.Common(CompOption(..),ExecOption(..),Regex(..))
 
 instance RegexOptions Regex CompOption ExecOption where
   blankCompOpt = defaultCompOpt
   blankExecOpt = defaultExecOpt
-  defaultCompOpt = CompOption {caseSensitive = True,multiline = True}
+  defaultCompOpt = CompOption {caseSensitive = True,multiline = True, rightAssoc = False}
   defaultExecOpt = ExecOption {captureGroups = True}
   setExecOpts e r = r {regex_execOptions=e}
   getExecOpts r = regex_execOptions r

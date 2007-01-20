@@ -1,8 +1,9 @@
-module Text.Regex.TDFA.CorePattern where
+module Text.Regex.TDFA.CorePattern(Q(..),P(..),WhichTest(..),Wanted(..),TestInfo,OP(..),SetTestInfo(..),NullView
+                                  ,patternToQ,cleanNullView,cannotAccept) where
 
 import Control.Monad.Fix()
 import Control.Monad.RWS
-import Text.Regex.TDFA.Common(Tag,GroupInfo(..),PatternIndex,Position,WinTags,DoPa,mapSnd)
+import Text.Regex.TDFA.Common -- (Tag,GroupInfo(..),PatternIndex,Position,WinTags,DoPa,CompOption(..),mapSnd)
 import Text.Regex.TDFA.Pattern(Pattern(..),starTrans)
 
 import Data.Maybe
@@ -55,9 +56,6 @@ mergeNullViews s1 s2 = do
   (test2,tag2) <- s2
   return (mappend test1 test2,mappend tag1 tag2)
 
-
-data OP = Maximize | Minimize deriving (Eq,Show)  -- whether to prefer large or smaller match indices
-
 -- During the depth first traversal, children are told about bounds by the parent
 data HandleTag = NoTag | Advice Tag | Apply Tag deriving (Show)
 
@@ -76,13 +74,11 @@ fromHandleTag (Apply tag) = tag
 fromHandleTag (Advice tag) = tag
 fromHandleTag _ = error "fromHandleTag"
 
-
-
 -- Core Pattern Language
 data P = Empty
        | Or [Q]
        | Seq Q Q
-       | Star [Tag] Q -- need to reset this contained groups
+       | Star {orbit :: Maybe Tag, reset::[Tag], unStar::Q} -- need to reset the contained groups by unsetting closing tags
        | Test TestInfo
        | OneChar Pattern
          deriving (Show,Eq)
@@ -100,8 +96,6 @@ type TestInfo = (WhichTest,DoPa)
 -- This is newtype'd to allow for a custom Ord instance
 -- This is a set of WhichTest where each test has associated pattern location information
 newtype SetTestInfo = SetTestInfo {getTests :: Map WhichTest (Set DoPa)} deriving (Eq,Monoid)
-
-data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord)  -- known predicates, todo: allow for inversion
 
 --QQQ
 {-
@@ -194,10 +188,8 @@ makeGroupArray :: PatternIndex -> [GroupInfo] -> Array PatternIndex [GroupInfo]
 makeGroupArray maxPatternIndex groups = accumArray (\earlier later -> later:earlier) [] (1,maxPatternIndex) filler
     where filler = map (\gi -> (thisIndex gi,gi)) groups
 
-patternToQ :: (Pattern,(PatternIndex,Int)) -> (Q,Array Tag OP,Array PatternIndex [GroupInfo])
-patternToQ (pOrig,(maxPatternIndex,_)) = (tnfa
-                                         ,aTags
-                                         ,aGroups) where
+patternToQ :: CompOption -> (Pattern,(PatternIndex,Int)) -> (Q,Array Tag OP,Array PatternIndex [GroupInfo])
+patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
   (tnfa,(tag_dlist,nextTag),groups) = runRWS monad startReader startState
   aTags = listArray (0,pred nextTag) (tag_dlist [])
   aGroups = makeGroupArray maxPatternIndex groups
@@ -218,9 +210,13 @@ patternToQ (pOrig,(maxPatternIndex,_)) = (tnfa
                   put $! debug ("\n"++show (s,newOp)++"\n") (op',s')
                   return (Apply s) -- someone will need to apply it
 
--- This is right-assoc
-  combine :: Pattern -> HHQ -> HHQ
-  combine cFront pEnd m1 m2 = mdo
+  combineConcat ps m1 m2 =
+    if rightAssoc compOpt
+      then foldr combineRight (go (last ps)) (init ps) m1 m2
+      else foldl combineLeft  (go (head ps)) (tail ps) m1 m2    -- libtre default
+
+  combineRight :: Pattern -> HHQ -> HHQ
+  combineRight cFront pEnd m1 m2 = mdo
     let bothVary = varies qFront && varies qEnd
     a <- if noTag m1 && bothVary then uniq Maximize else return m1
     b <- if noTag m2 && bothVary then uniq Maximize else return m2
@@ -237,9 +233,8 @@ patternToQ (pOrig,(maxPatternIndex,_)) = (tnfa
                bothVary wanted
                (Seq qFront qEnd)
 
-{- this is the same associativity as libtre (left-assoc)
-  combine :: HHQ -> Pattern -> HHQ
-  combine cFront pEnd m1 m2 = mdo
+  combineLeft :: HHQ -> Pattern -> HHQ
+  combineLeft cFront pEnd m1 m2 = mdo
     let bothVary = varies qFront && varies qEnd
     a <- if noTag m1 && bothVary then uniq Maximize else return m1
     b <- if noTag m2 && bothVary then uniq Maximize else return m2
@@ -255,7 +250,7 @@ patternToQ (pOrig,(maxPatternIndex,_)) = (tnfa
                Nothing Nothing
                bothVary wanted
                (Seq qFront qEnd)
--}
+
   go :: Pattern -> HHQ
   go pIn m1 m2 =
     let die = error $ "patternToQ cannot handle "++show pIn -- assume (starTrans) has been run already
@@ -285,43 +280,15 @@ patternToQ (pOrig,(maxPatternIndex,_)) = (tnfa
          PEmpty -> nil
          POr [] -> nil
          POr [p] -> go p m1 m2
-{-
          POr ps -> mdo
-           let canVary = any tagged qs || varies ans -- not overkill.
+           let canVary = any tagged qs || varies ans
            a <- if noTag m1 && canVary then uniq Minimize else return m1
            b <- if noTag m2 && canVary then uniq Maximize else return m2
-           -- Due to the recursive-do, it seems that I have to put the if canVary into the op'
            let aAdvice = toAdvice a
                bAdvice = toAdvice b
-               op' = if canVary then uniq Maximize else return bAdvice
-               op'' =  if canVary then uniq Maximize else return aAdvice
-           a's <- replicateM (length ps) op''
-           b's <- replicateM (length ps) op'
-           qs <- mapM (\(p,a',b') -> go p a' b') (zip3 ps a's b's)
-           let wqs = map wants qs
-               wanted = if any (WantsBoth==) wqs then WantsBoth
-                          else case (any (WantsQNFA==) wqs,any (WantsQT==) wqs) of
-                                 (True,True) -> WantsBoth
-                                 (True,False) -> WantsQNFA
-                                 (False,True) -> WantsQT
-                                 (False,False) -> WantsEither
-           let ans = Q (cleanNullView . concatMap nullQ $ qs)
-                       (orTakes . map takes $ qs)
-                       (apply a) (apply b)
-                       canVary wanted
-                       (Or qs)
-           return ans
--}
-         POr ps -> mdo
-           let canVary = any tagged qs || varies ans -- not overkill.
-           a <- if noTag m1 && canVary then uniq Minimize else return m1
-           b <- if noTag m2 && canVary then uniq Maximize else return m2
-           -- Due to the recursive-do, it seems that I have to put the if canVary into the op'
-           let aAdvice = toAdvice a
-               bAdvice = toAdvice b
+               -- Due to the recursive-do, it seems that I have to put the if canVary into the op'
                op' = if canVary then uniq Maximize else return bAdvice
            cs <- fmap (++[bAdvice]) $ replicateM (pred $ length ps) op'
---           cs <- replicateM (length ps) op'
            qs <- mapM (\(p,c) -> go p aAdvice c) (zip ps cs)
            let wqs = map wants qs
                wanted = if any (WantsBoth==) wqs then WantsBoth
@@ -336,10 +303,7 @@ patternToQ (pOrig,(maxPatternIndex,_)) = (tnfa
                        (Or qs)
            return ans
          PConcat [] -> nil
--- This is the same associativity as libtre (left-assocs
---         PConcat (p:ps) -> foldl combine (go p) ps m1 m2
--- This is right-assoc
-         PConcat (ps) -> foldr combine (go (last ps)) (init ps) m1 m2
+         PConcat ps -> combineConcat ps m1 m2 -- unsafe to pass [] to combineConcat
          PStar p -> mdo
            -- ideal order of decision
            --  min start of PStar
@@ -349,6 +313,7 @@ patternToQ (pOrig,(maxPatternIndex,_)) = (tnfa
            let accepts = canAccept q
            a <- if noTag m1 && accepts then uniq Minimize else return m1
            b <- if noTag m2 && accepts then uniq Maximize else return m2
+           c <- if varies q then uniq Maximize {-- XXX why not its own value? XXX -} else return NoTag
            -- end of each iteration is Maximize and is the beginning
            -- of the next so the start of each iteration should be a
            -- Maximize (except the first iteration, but this is taken
@@ -361,7 +326,7 @@ patternToQ (pOrig,(maxPatternIndex,_)) = (tnfa
                        (0,if accepts then Nothing else (Just 0))
                        (apply a) (apply b)
                        accepts WantsQT
-                       (Star resetGroups q)
+                       (Star (apply c) resetGroups q)
            return ans
          PCarat dopa -> test (Test_BOL,dopa)
          PDollar dopa -> test (Test_EOL,dopa)

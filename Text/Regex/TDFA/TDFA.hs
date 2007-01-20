@@ -26,43 +26,11 @@ import qualified Text.Regex.TDFA.IntArrTrieSet as Trie
 
 -- import Debug.Trace
 
--- DFA
 
-type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,Delta))
-type DTrans' = [(Index, [(Index, (DoPa, [(Tag, Position)]))])]
+debug :: (Show a) => a -> s -> s
+debug _ s = s
 
-data DFA = DFA { d_id :: SetIndex
-               , d_dt :: DT} deriving Show
 
-data DT = Simple' { dt_win :: IntMap {- Index -} Delta
-                  , dt_trans :: Map Char (DFA,DTrans)
-                  , dt_other :: Maybe (DFA,DTrans) }
-        | Testing' { dt_test :: WhichTest
-                   , dt_dopas :: Set DoPa
-                   , dt_a,dt_b :: DT}
-
-instance Show DT where show = showDT
-
-showDT :: DT -> String
-showDT (Simple' w t o) = "Simple' { dt_win = " ++ (show . map (\(i,d) -> (i,d 0)) . IMap.assocs $ w)
-                    ++ "\n        , dt_trans = " ++ (show . mapSnd (ISet.toList . d_id *** seeDTrans) . Map.assocs $ t)
-                    ++ "\n        , dt_other = " ++ (show . fmap (ISet.toList . d_id *** seeDTrans) $ o)
-                    ++ "\n        }"
-  where seeDTrans :: DTrans -> DTrans'
-        seeDTrans dtrans = 
-          let x :: [(Index,IntMap (DoPa,Delta))]
-              x = IMap.assocs dtrans
-              y :: IntMap (DoPa,Delta) -> [(Int,(DoPa,[(Tag,Position)]))]
-              y z = mapSnd (\(dopa,delta) -> (dopa,delta 0)) . IMap.assocs $ z
-          in mapSnd y x
-
-showDT (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
-                        ++ "\n         , dt_dopas = " ++ show d
-                        ++ "\n         , dt_a = " ++ indent a
-                        ++ "\n         , dt_b = " ++ indent b
-                        ++ "\n         }"
- where indent = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT
-       spaces = replicate 10 ' '
 
 {-
 dlose :: DFA
@@ -103,9 +71,11 @@ nfaToDFA ((startIndex,aIndexQNFA),aTagOp,aGroupInfo) =
       makeUpdater spec = sequence fspec -- Monad (Reader ((->) Tag))
         where fspec = do (tag,update) <- spec -- Monad []
                          return $ case update of
-                                    ResetTag -> (\_->(tag,-1))
                                     PreTag   -> (\j->(tag,j))
                                     PostTag  -> (\j->(tag,succ j))
+                                    ResetTag -> (\_->(tag,-1))
+                                    EnterOrbit -> (\_ -> (tag,-2))
+                                    LeaveOrbit -> (\_ -> (tag,-3))
 
       makeDFA i dt = debug ("\n>Making DFA "++show i++"<") $ DFA i dt
 
@@ -189,8 +159,8 @@ nfaToDFA ((startIndex,aIndexQNFA),aTagOp,aGroupInfo) =
                     ]
   in debug msg $ (dfa,startIndex,aTagOp,aGroupInfo)
 
-patternToDFA :: (Pattern,(PatternIndex, Int)) -> CompOption -> (DFA,Index,Array Tag OP,Array PatternIndex [GroupInfo])
-patternToDFA pattern compOpt = nfaToDFA (patternToNFA pattern compOpt)
+patternToDFA :: CompOption -> (Pattern,(PatternIndex, Int)) -> (DFA,Index,Array Tag OP,Array PatternIndex [GroupInfo])
+patternToDFA compOpt pattern = nfaToDFA (patternToNFA compOpt pattern)
 
 {-
 dfaMap :: DFA -> Map SetIndex DFA
@@ -232,3 +202,27 @@ The above is a bug.  the (c*) group should not match "bb".
 
 -}
 
+
+
+instance Show DT where show = showDT
+
+showDT :: DT -> String
+showDT (Simple' w t o) = "Simple' { dt_win = " ++ (show . map (\(i,d) -> (i,d 0)) . IMap.assocs $ w)
+                    ++ "\n        , dt_trans = " ++ (show . mapSnd (ISet.toList . d_id *** seeDTrans) . Map.assocs $ t)
+                    ++ "\n        , dt_other = " ++ (show . fmap (ISet.toList . d_id *** seeDTrans) $ o)
+                    ++ "\n        }"
+  where seeDTrans :: DTrans -> DTrans'
+        seeDTrans dtrans = 
+          let x :: [(Index,IntMap (DoPa,Delta))]
+              x = IMap.assocs dtrans
+              y :: IntMap (DoPa,Delta) -> [(Int,(DoPa,[(Tag,Position)]))]
+              y z = mapSnd (\(dopa,delta) -> (dopa,delta 0)) . IMap.assocs $ z
+          in mapSnd y x
+
+showDT (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
+                        ++ "\n         , dt_dopas = " ++ show d
+                        ++ "\n         , dt_a = " ++ indent a
+                        ++ "\n         , dt_b = " ++ indent b
+                        ++ "\n         }"
+ where indent = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT
+       spaces = replicate 10 ' '

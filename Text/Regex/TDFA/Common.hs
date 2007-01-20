@@ -3,6 +3,9 @@
 -- Pattern.
 module Text.Regex.TDFA.Common {- export everything -} where
 
+import Data.Array.IArray
+import Data.Map(Map)
+import Data.Set(Set)
 import Data.IntMap(IntMap)
 import Data.IntSet(IntSet)
 
@@ -46,18 +49,8 @@ type PatternIndex = Int
 -- | 'RegexOption' control whether the pattern is multiline or
 -- case-sensitive like Text.Regex and whether to capture the subgroups
 -- (\1, \2, etc).
-data CompOption = CompOption {caseSensitive :: Bool,multiline :: Bool}
+data CompOption = CompOption {caseSensitive :: Bool,multiline :: Bool, rightAssoc :: Bool}
 data ExecOption = ExecOption {captureGroups::Bool}
-{-
--- | This is a convenience value of RegexOption with multiline,
--- caseSensitive, and captureGroups all True and longestMatch False.
-defaultRegexOption :: RegexOption
-defaultRegexOption = RegexOption {multiline = True
-                                 ,caseSensitive = True
-                                 ,captureGroups = True
-                                 ,strategy = Find_LongestMatch
-                                 }
--}
 
 -- | 'MatchedStrings' is an IntMap where the keys are PatternIndex
 -- numbers and the values are completed substring captures.
@@ -93,3 +86,31 @@ andTag (Just a) (Just b) = [a,b]
 andTag (Just a) Nothing  = [a]
 andTag Nothing  (Just b) = [b]
 andTag Nothing  Nothing  = []
+
+-- | The DFA backend specific 'Regex' type, used by this module's '=~'
+-- and '=~~' operators.
+data Regex = Regex {regex_dfa::DFA
+                   ,regex_init::Index
+                   ,regex_tags::Array Tag OP
+                   ,regex_groups::Array PatternIndex [GroupInfo]
+                   ,regex_compOptions::CompOption
+                   ,regex_execOptions::ExecOption}
+
+data OP = Maximize | Minimize | Orbit deriving (Eq,Show)  -- whether to prefer large or smaller match indices
+
+
+-- DFA
+
+data DFA = DFA { d_id :: SetIndex, d_dt :: DT}
+
+data DT = Simple' { dt_win :: IntMap {- Index -} Delta
+                  , dt_trans :: Map Char (DFA,DTrans)
+                  , dt_other :: Maybe (DFA,DTrans) }
+        | Testing' { dt_test :: WhichTest
+                   , dt_dopas :: Set DoPa
+                   , dt_a,dt_b :: DT}
+
+type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,Delta))
+type DTrans' = [(Index, [(Index, (DoPa, [(Tag, Position)]))])]
+
+data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord)  -- known predicates, todo: allow for inversion
