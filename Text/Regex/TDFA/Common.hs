@@ -29,6 +29,7 @@ norepBy eqF (a:bs@(c:cs)) | a `eqF` c = norepBy eqF (a:cs)
 
 mapFst :: (Functor f) => (t -> t2) -> f (t, t1) -> f (t2, t1)
 mapFst f = fmap (\ (a,b) -> (f a,b))
+
 mapSnd :: (Functor f) => (t1 -> t2) -> f (t, t1) -> f (t, t2)
 mapSnd f = fmap (\ (a,b) -> (a,f b))
 
@@ -79,14 +80,6 @@ type Delta = Position -> [(Tag,Position)]
 
 data GroupInfo = GroupInfo {thisIndex,parentIndex::PatternIndex,startTag,stopTag::Tag} deriving Show
 
-type WinTags = IntSet {- Tag -}
-
-andTag :: Maybe Tag -> Maybe Tag -> [Tag]
-andTag (Just a) (Just b) = [a,b]
-andTag (Just a) Nothing  = [a]
-andTag Nothing  (Just b) = [b]
-andTag Nothing  Nothing  = []
-
 -- | The DFA backend specific 'Regex' type, used by this module's '=~'
 -- and '=~~' operators.
 data Regex = Regex {regex_dfa::DFA
@@ -98,6 +91,36 @@ data Regex = Regex {regex_dfa::DFA
 
 data OP = Maximize | Minimize | Orbit deriving (Eq,Show)  -- whether to prefer large or smaller match indices
 
+data QNFA = QNFA {q_id :: Index
+                 ,q_qt :: QT}
+
+type QTrans = IntMap {- Destination Index -} (Set TagCommand)
+
+data QT = Simple {qt_win :: TagList
+                 ,qt_trans :: Map Char QTrans
+                 ,qt_other :: QTrans}
+        | Testing {qt_test :: WhichTest
+                  ,qt_dopas :: Set DoPa
+                  ,qt_a,qt_b :: QT}
+
+-- during contruction
+data TagTask = ResetTask | TagTask | EnterOrbitTask | LeaveOrbitTask deriving (Show,Eq,Ord)
+type TagTasks = [(Tag,TagTask)]
+
+-- for QTrans
+data TagUpdate = PreUpdate TagTask | PostUpdate TagTask deriving (Show,Eq,Ord)
+type TagList = [(Tag,TagUpdate)]
+type TagCommand = (DoPa,TagList)
+
+type WinTags = TagList -- or TagTasks?
+
+-- Perhaps still in use?  Magic numbers are bad, but...
+updateReset,updatePreEnterOrbit,updatePreLeaveOrbit,updatePostEnterOrbit,updatePostLeaveOrbit :: Int
+updateReset = -1
+updatePreEnterOrbit = -2
+updatePreLeaveOrbit = -3
+updatePostEnterOrbit = -4
+updatePostLeaveOrbit = -5
 
 -- DFA
 

@@ -18,15 +18,18 @@ closing group captures.
 This still requires ordering the tags instead of keeping them sorted.
 -}
 
-module Text.Regex.TDFA.TNFA(patternToNFA,pickQTrans
+module Text.Regex.TDFA.TNFA(patternToNFA,pickQTrans,noWin
+                           ,toP,toQ,toNFA,display_NFA
                            ,QNFA(..),QT(..),QTrans,TagUpdate(..)) where
 
 import Text.Regex.TDFA.Pattern(Pattern(..))
 import Text.Regex.TDFA.CorePattern(Q(..),P(..),OP(..),WhichTest,cleanNullView,NullView
                                  ,SetTestInfo(..),Wanted(..),TestInfo,cannotAccept,patternToQ)
-import Text.Regex.TDFA.Common(Tag,WinTags,DoPa,Index,PatternIndex,GroupInfo,CompOption(..)
-                             ,on,andTag,mapFst,mapSnd,norep)
-import Text.Regex.TDFA.ReadRegex(decodePatternSet)
+import Text.Regex.TDFA.Common
+import Text.Regex.TDFA.Wrap
+import Text.Regex.Base(RegexOptions(defaultCompOpt))
+-- (DoPa,Index,PatternIndex,GroupInfo,CompOption(..),on,mapFst,mapSnd,norep)
+import Text.Regex.TDFA.ReadRegex(decodePatternSet,parseRegex)
 
 import Data.Monoid
 import Control.Monad.State
@@ -38,10 +41,10 @@ import Data.Array.IArray
 import Data.Set(Set)
 import qualified Data.Set as Set
 -- import Data.IntSet(IntSet)
-import qualified Data.IntSet as ISet
+-- import qualified Data.IntSet as ISet
 import Data.Map(Map)
 import qualified Data.Map as Map
-import Data.IntMap(IntMap)
+-- import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
 
 -- import Debug.Trace
@@ -49,22 +52,10 @@ import qualified Data.IntMap as IMap
 debug :: (Show a) => a -> s -> s
 debug _ s = s
 
-data QNFA = QNFA {q_id :: Index
-                 ,q_qt :: QT} deriving (Show)
-
-data TagUpdate = ResetTag | PreTag | PostTag 
-               | EnterOrbit | LeaveOrbit deriving (Show,Eq,Ord)
-
-type TagCommand = (DoPa,[(Tag,TagUpdate)])
-
-type QTrans = IntMap {- Destination Index -} (Set TagCommand)
-
-data QT = Simple {qt_win :: WinTags -- winning never involves looping back and resetting, all are "PreTag"
-                 ,qt_trans :: Map Char QTrans
-                 ,qt_other :: QTrans}
-        | Testing {qt_test :: WhichTest
-                  ,qt_dopas :: Set DoPa
-                  ,qt_a,qt_b :: QT}
+instance Show QNFA where
+  show (QNFA {q_id = i, q_qt = qt}) = "QNFA {q_id = "++show i
+                                  ++"\n     ,q_qt = "++ show qt
+                                  ++"\n}"
 
 instance Show QT where
   show = showQT
@@ -104,7 +95,7 @@ mkTesting t@(Testing {qt_a=a,qt_b=b}) = if a==b then a else t
 mkTesting t = t
 
 qtwin,qtlose :: QT
-qtwin = Simple {qt_win=ISet.singleton 1,qt_trans=mempty,qt_other=mempty}
+qtwin = Simple {qt_win=[(1,PreUpdate TagTask)],qt_trans=mempty,qt_other=mempty}
 qtlose = Simple {qt_win=mempty,qt_trans=mempty,qt_other=mempty}
 
 patternToNFA :: CompOption
@@ -115,7 +106,7 @@ patternToNFA :: CompOption
 patternToNFA compOpt pattern =
   let (q,tags,groups) = patternToQ compOpt pattern
       msg = unlines [ show q ]
-  in debug msg (qToNFA q compOpt,tags,groups)
+  in debug msg (qToNFA compOpt q,tags,groups)
 
 -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
 
@@ -140,6 +131,15 @@ maybeOnlyEmpty :: Q -> Maybe WinTags
 maybeOnlyEmpty (Q {nullQ = ((SetTestInfo sti,tags):_)}) | Map.null sti = Just tags
 maybeOnlyEmpty _ = Nothing
 
+usesQNFA :: Q -> Bool
+usesQNFA (Q {wants=WantsBoth}) = True
+usesQNFA (Q {wants=WantsQNFA}) = True
+usesQNFA _ = False
+
+nullQT :: QT -> Bool
+nullQT (Simple {qt_win=w,qt_trans=t,qt_other=o}) = noWin w && Map.null t && IMap.null o
+nullQT _ = False
+
 listTestInfo :: QT -> Set WhichTest -> Set WhichTest
 listTestInfo qt s = execState (helper qt) s
   where helper (Simple {}) = return ()
@@ -155,7 +155,7 @@ applyNullViews nvs win = foldl' dominate qtlose (reverse $ cleanNullView nvs) wh
   dominate :: QT -> (SetTestInfo,WinTags) -> QT
   dominate lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x) $
     let -- The winning states are reached through the SetTag
-        win' = prependTags (ISet.toList tags) win
+        win' = prependTags' tags win
         -- get the SetTestInfo 
         allTests = (listTestInfo lose $ Map.keysSet sti) `mappend` winTests
         useTest _ [] w _ = w -- no more dominating tests to fail to choose lose, so just choose win
@@ -175,42 +175,6 @@ applyNullViews nvs win = foldl' dominate qtlose (reverse $ cleanNullView nvs) wh
                             ,qt_b = useTest tests allD wB lB}
         useTest [] _ _  _ = error "This case in Text.Regex.TNFA.TNFA.applyNullViews.useText cannot happen"
     in useTest (Set.toList allTests) (Map.assocs sti) win' lose
-
-prependTag :: Maybe Tag -> QT -> QT
-prependTag (Just a) qt = prependTags' [a] PreTag qt
-prependTag Nothing qt = qt
-
-prependTags :: [Tag] -> QT -> QT
-prependTags tags qt | null tags = qt
-                    | nullQT qt = qt
-                    | otherwise = prependTags' tags PreTag qt
-
-resetTags :: [Tag] -> QT -> QT
-resetTags tags qt | null tags = qt
-                  | nullQT qt = qt
-                  | otherwise = prependTags' tags ResetTag qt
-
-enterOrbit :: Maybe Tag -> QT -> QT
-enterOrbit Nothing qt = qt
-enterOrbit (Just tag) qt | nullQT qt = qt
-                         | otherwise = prependTags' [tag] EnterOrbit qt
-
-leaveOrbit :: Maybe Tag -> E -> E
-leaveOrbit = undefined
-{-
-leaveOrbit Nothing e = q
-leaveOrbit (Just tag) qt | nullQT qt = qt
-                         | otherwise = prependTags' [negate tag] LeaveOrbit qt
--}
-
-prependTags' :: [Tag] -> TagUpdate -> QT -> QT
-prependTags' tags c qt@(Testing {}) = qt {qt_a = prependTags' tags c (qt_a qt)
-                                     ,qt_b = prependTags' tags c (qt_b qt)}
-prependTags' tags c (Simple {qt_win=w,qt_trans=t,qt_other=o}) =
-  Simple { qt_win = if ISet.null w then w else w `mappend` ISet.fromList tags
-         , qt_trans = Map.map (IMap.map (Set.map (\(d,tcs) -> (d,tcs' `mappend` tcs)))) t
-         , qt_other = IMap.map (Set.map (\(d,tcs) -> (d,tcs' `mappend` tcs))) o }
-  where tcs' = map (\tag -> (tag,c)) tags
 
 applyTest :: TestInfo -> QT -> QT
 applyTest (wt,dopa) qt | nullQT qt = qt
@@ -234,7 +198,7 @@ applyTest (wt,dopa) qt | nullQT qt = qt
 
 mergeAltQT,mergeQT :: QT -> QT -> QT
 mergeAltQT q1 q2 | nullQT q1 = q2  -- prefer winning with w1 then with w2
-                 | otherwise = mergeQTWith (\w1 w2 -> if ISet.null w1 then w2 else w1) q1 q2
+                 | otherwise = mergeQTWith (\w1 w2 -> if noWin w1 then w2 else w1) q1 q2
 mergeQT q1 q2 | nullQT q1 = q2  -- union wins
               | nullQT q2 = q1  -- union wins
               | otherwise = mergeQTWith mappend q1 q2 -- no preference, win with combined SetTag
@@ -275,12 +239,13 @@ mergeQTWith mergeWins = merge where
   mergeQTrans :: QTrans -> QTrans -> QTrans
   mergeQTrans = IMap.unionWith mappend
 
- 
 -- Type of State monad used inside qToNFA
-type S = State (Index,[(Index,QNFA)]->[(Index,QNFA)])
+type S = State (Index                              -- Next available QNFA index
+               ,[(Index,QNFA)]->[(Index,QNFA)])    -- DList of previous QNFAs
 
--- Type of continuation of the NFA
-type E = ([Tag],Either QNFA QT)
+-- Type of continuation of the NFA, not much more complicated
+type E = (TagTasks            -- Things to de before the Either QNFA QT
+         ,Either QNFA QT)     -- The future, packged in the best way
 
 newQNFA :: String -> QT -> S QNFA
 newQNFA s qt = do
@@ -289,7 +254,6 @@ newQNFA s qt = do
   let qnfa = mkQNFA thisI qt
   put (futureI, oldQs . ((thisI,qnfa):))
   return qnfa
-
 
 pickQTrans :: (Tag -> OP) -> QTrans -> [({-Destination-}Index,TagCommand)]
 pickQTrans op tr = mapSnd (bestTrans op) . IMap.toList $ tr
@@ -310,7 +274,7 @@ bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
   canonical :: TagCommand -> TagCommand
   canonical (dopa,tcs) = (dopa,sort clean) -- keep only last setting or resetting
     where clean = nubBy ((==) `on` fst) . reverse $ tcs
-  choose :: [(Tag,TagUpdate)] -> [(Tag,TagUpdate)] -> Ordering
+  choose :: TagList -> TagList -> Ordering
   choose ((t1,b1):rest1) ((t2,b2):rest2) =
     case compare t1 t2 of -- find and examine the smaller of t1 and t2
       LT -> if Maximize == op t1 then GT else LT
@@ -320,151 +284,232 @@ bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
   choose [] ((t2,_):_) = if Maximize == op t2 then LT else GT
   choose [] [] = EQ
 
+noWin :: TagList -> Bool
+noWin = null
 
+{- XXX
+andTag :: Maybe Tag -> Maybe Tag -> TagList
+andTag (Just a) (Just b) = [(b,PreTag),(a,PreTag)]
+andTag (Just a) Nothing  = [(a,PreTag)]
+andTag Nothing  (Just b) = [(b,PreTag)]
+andTag Nothing  Nothing  = []
+-}
+{-
+prependTags :: [Tag] -> QT -> QT
+prependTags tags qt | null tags = qt
+                    | nullQT qt = qt
+                    | otherwise = prependTags' [(tag,PreTag)|tag<-tags] qt
+-}
+
+{- XXX 
 -- Modify and query the continuation
 addTag :: Maybe Tag -> E -> E
-addTag (Just a) (tags,cont) = (a:tags,cont)
+addTag (Just tag) (tags,cont) = ((tag,PreTag):tags,cont)
 addTag Nothing x = x
 
-addTags :: [Tag] -> E -> E
+addTags :: TagList -> E -> E
+--addTags tags (tags',cont) = ([(tag,PreTag)|tag<-tags] `mappend` tags',cont)
 addTags tags (tags',cont) = (tags `mappend` tags',cont)
-
-getQT :: E -> QT
-getQT (tags,cont) = prependTags tags (either q_qt id cont)
-
-nullQT :: QT -> Bool
-nullQT (Simple {qt_win=w,qt_trans=t,qt_other=o}) = ISet.null w && Map.null t && IMap.null o
-nullQT _ = False
-
-fromQT :: QT -> E
-fromQT qt = (mempty,Right qt)
-
-getQNFA :: String -> E -> S QNFA
-getQNFA s (tags,cont) =
-  either (\qnfa -> if null tags
-                     then return qnfa
-                     else newQNFA s (prependTags tags (q_qt qnfa)))
-         (\qt -> newQNFA s (prependTags tags qt))
-         cont
-
-fromQNFA :: QNFA -> E
-fromQNFA qnfa = (mempty,Left qnfa)
-
--- Promises the fst part is Left _
-asQNFA :: String -> E -> S E
-asQNFA s x@(tags,cont) =
-  either (\_ -> return x)
-         (\qt -> do qnfa <- newQNFA s qt -- (prependTags tags qt)
-                    return (tags, Left qnfa))
-         cont
-
-mergeE :: E -> E -> E
-mergeE e1 e2 = fromQT (mergeQT (getQT e1) (getQT e2))
 
 insertTag :: Maybe Tag -> [Tag] -> [Tag]
 insertTag (Just tag) tags = (tag:tags)
 insertTag Nothing tags = tags
+-}
 
-usesQNFA :: Q -> Bool
-usesQNFA (Q {wants=WantsBoth}) = True
-usesQNFA (Q {wants=WantsQNFA}) = True
-usesQNFA _ = False
+-- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
 
+fromQNFA :: QNFA -> E
+fromQNFA qnfa = (mempty,Left qnfa)
+
+fromQT :: QT -> E
+fromQT qt = (mempty,Right qt)
+
+-- Promises (Left qnfa)
+asQNFA :: String -> E -> S E
+asQNFA _ x@(_,Left _) = return x
+asQNFA s (tags,Right qt) = do qnfa <- newQNFA s qt      -- YYY Policy choice: leave the tags
+                              return (tags, Left qnfa)
+
+getQNFA :: String -> E -> S QNFA
+getQNFA _ ([],Left qnfa) = return qnfa
+getQNFA s (tags,Left qnfa) = newQNFA s (prependTags' (promoteTasks PreUpdate tags) (q_qt qnfa))
+getQNFA s (tags,Right qt) = newQNFA s (prependTags' (promoteTasks PreUpdate tags) qt)
+
+getQT :: E -> QT
+getQT (tags,cont) = prependTags' (promoteTasks PreUpdate tags) (either q_qt id cont)
+
+addTest :: TestInfo -> E -> E
+addTest ti (tags,Left qnfa) = (tags, Right $ applyTest ti (q_qt qnfa))
+addTest ti (tags,Right qt) = (tags, Right $ applyTest ti qt)
+
+promoteTasks :: (TagTask->TagUpdate) -> TagTasks -> TagList
+promoteTasks promote tags = map (\(tag,task) -> (tag,promote task)) tags
+
+demoteTags :: TagList -> TagTasks
+demoteTags = map helper
+  where helper (tag,PreUpdate tt) = (tag,tt)
+        helper (tag,PostUpdate tt) = (tag,tt)
+
+{-# INLINE addWinTags #-}
+addWinTags :: WinTags -> (TagTasks,a) -> (TagTasks,a)
+addWinTags wtags (tags,cont) = (demoteTags wtags `mappend` tags,cont)
+
+{-# INLINE addTag' #-}
+addTag' :: Tag -> (TagTasks,a) -> (TagTasks,a)
+addTag' tag (tags,cont) = ((tag,TagTask):tags,cont)
+
+addTag :: Maybe Tag -> E -> E
+addTag Nothing e = e
+addTag (Just tag) e = addTag' tag e
+
+{- XXX use QT form instead
+enterOrbit :: Maybe Tag -> E -> E
+enterOrbit Nothing e = e
+enterOrbit (Just tag) (tags,cont) = ((tag,EnterOrbitTask):tags,cont)
+
+-}
+
+enterOrbitQT :: Maybe Tag -> QT -> QT
+enterOrbitQT Nothing qt = qt
+enterOrbitQT (Just tag) qt = prependTags' [(tag,PreUpdate EnterOrbitTask)] qt
+
+leaveOrbitQT :: Maybe Tag -> E -> QT
+leaveOrbitQT mt qt = getQT . leaveOrbit mt $ qt
+  where leaveOrbit :: Maybe Tag -> E -> E
+        leaveOrbit Nothing e = e
+        leaveOrbit (Just tag) (tags,cont) = ((tag,LeaveOrbitTask):tags,cont)
+
+type ActCont = (E, Maybe E, Maybe (TagTasks,QNFA))
+
+addTestAC :: TestInfo -> ActCont -> ActCont
+addTestAC ti (e,mE,_) = (addTest ti e
+                            ,fmap (addTest ti) mE
+                            ,Nothing)
+
+addTagAC :: Maybe Tag -> ActCont -> ActCont
+addTagAC Nothing ac = ac
+addTagAC (Just tag) (e,mE,mQNFA) = (addTag' tag e
+                                   ,fmap (addTag' tag) mE
+                                   ,fmap (addTag' tag) mQNFA)
+
+getE :: ActCont -> E
+getE (_,_,Just (tags,qnfa)) = (tags, Left qnfa)  -- consume optimized mQNFA value returned by Star
+getE (eLoop,Just accepting,_) = mergeE eLoop accepting
+getE (eLoop,Nothing,_) = eLoop
+
+mergeE :: E -> E -> E
+mergeE e1 e2 = fromQT (mergeQT (getQT e1) (getQT e2))
+
+-- This is applied directly to any qt right before passing to mergeQT
+addResets :: [Tag] -> QT -> QT
+addResets tags qt = prependTags' [(tag,PreUpdate ResetTask)|tag<-tags] qt
+
+prependTag :: Maybe Tag -> QT -> QT
+prependTag (Just tag) qt = prependTags' [(tag,PreUpdate TagTask)] qt
+prependTag Nothing qt = qt
+
+prependTags' :: TagList -> QT -> QT
+prependTags' tcs' qt@(Testing {}) = qt { qt_a = prependTags' tcs' (qt_a qt)
+                                       , qt_b = prependTags' tcs' (qt_b qt) }
+prependTags' tcs' (Simple {qt_win=w,qt_trans=t,qt_other=o}) =
+  Simple { qt_win = if noWin w then w else tcs' `mappend` w
+         , qt_trans = Map.map prependQTrans t
+         , qt_other = prependQTrans o }
+  where prependQTrans = IMap.map (Set.map (\(d,tcs) -> (d,tcs' `mappend` tcs)))
 
 -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
 
 -- Initial preTag of 0th tag is implied
 -- No other general pre-tags would be expected
-qToNFA :: Q -> CompOption -> (Index,Array Index QNFA)  -- XXX change to Array
-qToNFA qTop compOpt = (q_id startingQNFA,array (0,pred lastIndex) (table [])) where
-  (startingQNFA,(lastIndex,table)) = runState (getTrans (fromQT $ qtwin) qTop >>= getQNFA "top level") startState
+qToNFA :: CompOption -> Q -> (Index,Array Index QNFA)
+qToNFA compOpt qTop = (q_id startingQNFA
+                      ,array (0,pred lastIndex) (table [])) where
+  (startingQNFA,(lastIndex,table)) =
+    runState (getTrans qTop (fromQT $ qtwin) >>= getQNFA "top level") startState
   startState = (0,id)
 
-  modifyChars = if caseSensitive compOpt then id
+  -- This is the only place where PostUpdate is used
+  newTrans :: String -> Maybe Tag -> Pattern -> E -> S E
+  newTrans s mPre pat (tags,cont) = do
+    i <- case cont of
+           Left qnfa -> return (q_id qnfa)
+           Right qt -> do qnfa <- newQNFA s qt
+                          return (q_id qnfa)
+    let post = promoteTasks PostUpdate tags
+    return . fromQT $ acceptTrans mPre pat post i
+
+  modifyChars = if caseSensitive compOpt
+                  then id
                   else norep . sort . ($ []) 
-                         . foldr (\c dl -> if isAlpha c then (dl.(toUpper c:).(toLower c:)) else (dl.(c:))) id 
+                         . foldr (\c dl -> if isAlpha c
+                                             then (dl.(toUpper c:).(toLower c:))
+                                             else (dl.(c:))) id 
   
   -- Alternative: Either (SetTag,QNFA) QT to send Tags that apply
   --  before going to the QNFA leftward, where they may someday reach
   --  a OneChar.  Essentially it accumulates postTags and preTags into
   --  effective postTags. The (getQT) abstraction will handle this
   --  well.  
-  getTrans,getTransTagless :: E -> Q -> S E
-  getTrans cont qIn@(Q {preTag=pre,postTag=post,unQ=pIn}) = debug (">< getTrans "++show qIn++" <>") $ do
-    let tags = pre `andTag` post
+  getTrans,getTransTagless :: Q -> E -> S E
+  getTrans qIn@(Q {preTag=pre,postTag=post,unQ=pIn}) e = debug (">< getTrans "++show qIn++" <>") $
     case pIn of
-      OneChar pat -> fmap fromQT $
-        case cont of
-          (tags',Left qnfa) ->
-            return (acceptTrans pre pat (post `insertTag` tags') (q_id qnfa))
-          (tags',Right qt) -> do
-            qnfa <- newQNFA "getTrans/OneChar" qt
-            return (acceptTrans pre pat (post `insertTag` tags') (q_id qnfa))
-      Empty -> return $ addTags tags cont
-      Test ti -> return $
-        case addTags tags cont of
-          (tags',Left qnfa) -> (tags',Right $ applyTest ti (q_qt qnfa))
-          (tags',Right qt) -> (tags',Right $ applyTest ti qt)
-      _ -> do let cont' = addTag post cont
-              ans <- getTransTagless cont' qIn
-              return (addTag pre ans)
+      OneChar pat -> newTrans "getTrans/OneChar" pre pat . addTag post $ e
+      Empty -> return . addTag pre . addTag post $ e
+      Test ti -> return . addTag pre . addTest ti . addTag post $ e
+      _ -> return . addTag pre =<< getTransTagless qIn (addTag post $ e)
 
-  getTransTagless cont qIn = debug (">< getTransTagless "++show qIn++" <>") $
+  getTransTagless qIn e = debug (">< getTransTagless "++show qIn++" <>") $
     case unQ qIn of
-      Seq q1 q2 -> do cont' <- getTrans cont q2
-                      getTrans cont' q1
-      Or [] -> return cont
-      Or [q] -> getTrans cont q
+      Seq q1 q2 -> getTrans q1 =<< getTrans q2 e
+      Or [] -> return e
+      Or [q] -> getTrans q e
       Or qs -> do
         eqts <- if usesQNFA qIn
-                  then do contQNFA <- asQNFA "getTransTagless/Or/usesQNFA" cont
-                          sequence [ getTrans contQNFA q | q <- qs ]
-                  else sequence [ getTrans cont q | q <- qs ]
+                  then do eQNFA <- asQNFA "getTransTagless/Or/usesQNFA" e
+                          sequence [ getTrans q eQNFA | q <- qs ]
+                  else sequence [ getTrans q e | q <- qs ]
         let qts = map getQT eqts
         return (fromQT (foldr1 mergeAltQT qts))
-      Star orbit tags q | cannotAccept q -> return cont -- XXX may not by POSIX correct
-                        | otherwise ->
-        mdo
-          mqt <- inStar this q
-          this <- case mqt of
-                    Nothing -> error "Wierd pattern in getTransTagless/Star" >> return cont
-                    Just qt ->
-                      let qt' = resetTags tags qt
-                          cont' = leaveOrbit orbit cont
-                      in if usesQNFA q
-                           then fmap fromQNFA $ newQNFA "getTrans/Star" (enterOrbit orbit $ mergeQT qt' (getQT cont'))
-                           else return $ fromQT (enterOrbit orbit $ mergeQT qt' (getQT cont'))
-          return this
-      _ -> error "This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen"
+      Star mOrbit tags q | cannotAccept q -> return e -- XXX may not by POSIX correct
+                        | otherwise -> mdo
+        mqt <- inStar q this
+        this <- case mqt of
+                  Nothing -> error ("Weird pattern in getTransTagless/Star: " ++ show qIn)
+                  Just qt ->
+                    let qt' = addResets tags . enterOrbitQT mOrbit $ qt
+                        thisQT = mergeQT qt' . leaveOrbitQT mOrbit $ e
+                    in if usesQNFA q
+                         then return . fromQNFA =<< newQNFA "getTransTagless/Star" thisQT
+                         else return . fromQT $ thisQT
+        return this
+      _ -> error ("This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen" ++ show qIn)
 
-  inStar,inStarTagless :: E -> Q -> S (Maybe QT)
-  inStar eLoopIn qIn | notNullable qIn =  debug (">< inStar/1 "++show qIn++" <>") $
-                                            liftM (Just . getQT) (getTrans eLoopIn qIn)
-                     | otherwise = debug (">< inStar/2 "++show qIn++" <>") $ do
-    let eLoop = addTag (postTag qIn) eLoopIn
-    mAcceptingOut <- inStarTagless eLoop qIn
-    return (fmap (prependTag (preTag qIn)) mAcceptingOut)
-
-  inStarTagless eLoop qIn = debug (">< inStarTagless "++show qIn++" <>") $ do
+  inStar,inStarTagless :: Q -> E -> S (Maybe QT)
+  inStar qIn@(Q {preTag=pre,postTag=post}) eLoop | notNullable qIn =
+    debug (">< inStar/1 "++show qIn++" <>") $
+    return . Just . getQT =<< getTrans qIn eLoop
+                                                 | otherwise =
+    debug (">< inStar/2 "++show qIn++" <>") $
+    return . fmap (prependTag pre) =<< inStarTagless qIn (addTag post $ eLoop)
+    
+  inStarTagless qIn eLoop = debug (">< inStarTagless "++show qIn++" <>") $ do
     case unQ qIn of
-      Empty -> return Nothing -- with Or this discards () branch in "((^)|foo|())*"
+      Empty -> return Nothing -- with Or this discards () branch in "(^|foo|())*"
       Or [] -> return Nothing
-      Or [q] -> inStar eLoop q
+      Or [q] -> inStar q eLoop
       Or qs -> do
         mqts <- if usesQNFA qIn
-                  then do contQNFA <- asQNFA "inStarTagless/Or/usesQNFA" eLoop
-                          sequence [ inStar contQNFA q | q <- qs ]
-                  else sequence [inStar eLoop q | q <- qs ]
+                  then do eQNFA <- asQNFA "inStarTagless/Or/usesQNFA" eLoop
+                          sequence [ inStar q eQNFA | q <- qs ]
+                  else sequence [inStar q eLoop | q <- qs ]
         let qts = catMaybes mqts
             mqt = if null qts then Nothing else Just (foldr1 mergeAltQT qts)
         return mqt
-      Seq q1 q2 -> do cont <- actNullable (eLoop,Nothing,Nothing) q2
-                      (_,mAcceptingOut,_) <- actNullable cont q1
-                      return (fmap getQT mAcceptingOut)
-      Star orbit tags q | cannotAccept q -> return Nothing
-                        | otherwise -> do (_,mAcceptingOut,_) <- actNullableTagless (eLoop,Nothing,Nothing) qIn
-                                          return (fmap (resetTags tags . getQT) mAcceptingOut)
-      Test {} -> return Nothing -- with Or this discards (^) branch in "((^)|foo|())*"
+      Seq q1 q2 -> do (_,meAcceptingOut,_) <- actNullable q1 =<< actNullable q2 (eLoop,Nothing,Nothing)
+                      return (fmap getQT meAcceptingOut)
+      Star {} -> do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
+                    return (fmap getQT meAcceptingOut)
+      Test {} -> return Nothing -- with Or this discards ^ branch in "(^|foo|())*"
       OneChar {} -> error ("OneChar cannot have nullable True")
 
   {- act* functions
@@ -508,76 +553,71 @@ qToNFA qTop compOpt = (q_id startingQNFA,array (0,pred lastIndex) (table [])) wh
   -}
 
   -- act,actNullable,actNullableTagless :: (E, Maybe E,Maybe (SetTag,QNFA)) -> Q -> S (E, Maybe E,Maybe (SetTag,QNFA))
-  act,actNullable,actNullableTagless :: (E, Maybe E,Maybe ([Tag],QNFA)) -> Q -> S (E, Maybe E,Maybe ([Tag],QNFA))
-  act c@(eLoop,mAccepting,mQNFA) qIn | nullable qIn = actNullable c qIn
-                                     | otherwise = debug (">< act "++show qIn++" <>") $ do
-    let cont = case mQNFA of
-                 Just (tags,qnfa) -> (tags,Left qnfa) -- consume optimized mQNFA value returned by Star
-                 Nothing -> case mAccepting of
-                              Just accepting -> mergeE eLoop accepting
-                              Nothing -> eLoop
-    mqt <- liftM Just $ getTrans cont qIn
+  act,actNullable,actNullableTagless :: Q -> ActCont -> S ActCont
+  act qIn c | nullable qIn = actNullable qIn c
+            | otherwise = debug (">< act "++show qIn++" <>") $ do
+    mqt <- return . Just =<< getTrans qIn ( getE $ c )
     return (error "qToNFA / act / no clear view",mqt,Nothing)  -- or "return (fromQT qtlose,mqt,Nothing)"
 
-  actNullable (eLoopIn,mAcceptingIn,mQNFAIn) qIn@(Q {preTag=pre,postTag=post,unQ=pIn}) = debug (">< actNullable "++show qIn++" <>") $ do
-    let tags = pre `andTag` post
-        withTags :: [Tag] -> [Tag]
-        withTags = if null tags then id else (mappend tags)
+  actNullable qIn@(Q {preTag=pre,postTag=post,unQ=pIn}) ac =
+    debug (">< actNullable "++show qIn++" <>") $ do
     case pIn of
-      Empty -> return $ (addTags tags eLoopIn
-                        ,fmap (addTags tags) mAcceptingIn
-                        ,mapFst withTags mQNFAIn) -- EFF
-      Test ti -> 
-        let eLoop' = case eLoopIn of
-                       (tags', Left qnfa) -> (withTags tags', Right $ applyTest ti (q_qt qnfa))
-                       (tags', Right qt) -> (withTags tags', Right $ applyTest ti qt)
-            mAccepting' = case mAcceptingIn of
-                            Nothing -> Nothing
-                            Just (tags', Left qnfa) -> Just (withTags tags', Right $ applyTest ti (q_qt qnfa))
-                            Just (tags', Right qt) -> Just (withTags tags', Right $ applyTest ti qt)
-        in return (eLoop',mAccepting',Nothing)
+      Empty -> return . addTagAC pre . addTagAC post $ ac
+      Test ti -> return . addTagAC pre . addTestAC ti . addTagAC post $ ac
       OneChar {} -> error ("OneChar cannot have nullable True ")
-      _ -> do let eLoop = addTag post eLoopIn
-                  mAccepting = fmap (addTag post) mAcceptingIn
-                  mQNFA = maybe mQNFAIn (\tag -> mapFst (tag:) mQNFAIn) post
-              (eLoop',mAccepting',mQNFA') <- actNullableTagless (eLoop,mAccepting,mQNFA) qIn
-              let eLoopOut = addTag pre eLoop'
-                  mAcceptingOut = fmap (addTag pre) mAccepting'
-                  mQNFAOut = maybe mQNFA' (\tag -> mapFst (tag:) mQNFA') pre
-              return (eLoopOut,mAcceptingOut,mQNFAOut)
-  actNullableTagless cont@(eLoop,mAccepting,mQNFA) qIn = debug (">< actNullableTagless "++show (qIn)++" <>") $ do
+      _ -> return . addTagAC pre =<< actNullableTagless qIn ( addTagAC post $ ac )
+
+  actNullableTagless qIn ac@(eLoop,mAccepting,mQNFA) = debug (">< actNullableTagless "++show (qIn)++" <>") $ do
     case unQ qIn of
-      Seq q1 q2 -> do cont' <- actNullable cont q2   -- We know q1 and q2 are nullable
-                      actNullable cont' q1
-      Or [] -> return cont
-      Or [q] -> actNullableTagless cont q
+      Seq q1 q2 -> actNullable q1 =<< actNullable q2 ac   -- We know q1 and q2 are nullable
+                      
+      Or [] -> return ac
+      Or [q] -> actNullableTagless q ac
       Or qs -> do
         cqts <- do
           if all nullable qs
-            then sequence [act cont q | q <- qs]
+            then sequence [act q ac | q <- qs]
             else do
-              cont' <- case mQNFA of
-                         Just (tags,qnfa) -> return (tags,Left qnfa)  -- consume optimized mQNFA value returned by Star
-                         Nothing -> case mAccepting of
-                                      Nothing -> asQNFA "qToNFA/actNullableTagless/Or 1" eLoop
-                                      Just accepting -> asQNFA "actNullableTagless/Or 2" (mergeE eLoop accepting)
-              let act' q = getTrans cont' q >>= (\e -> return (error "qToNFA/actNullableTagless/Or: no clear view", Just e,Nothing))
-              sequence [ if nullable q then act cont q else act' q | q <- qs ]
+              e' <- asQNFA "qToNFA/actNullableTagless/Or" . getE $ ac
+              let act' :: Q -> S ActCont
+                  act' q = do mqt <- return . Just =<< getTrans q e'
+                              return (error "qToNFA/actNullableTagless/Or: no clear view", mqt,Nothing)
+              sequence [ if nullable q then act q ac else act' q | q <- qs ]
         let qts = map getQT (catMaybes (map (\(_,mA,_) -> mA) cqts))
             eLoop' = case maybeOnlyEmpty qIn of
-                       Just tags -> addTags (ISet.toList tags) eLoop -- nullable without tests; avoid getQT
+                       Just wtags -> addWinTags wtags eLoop -- nullable without tests; avoid getQT
                        Nothing -> fromQT $ applyNullViews (nullQ qIn) (getQT eLoop)
             mAccepting' = if null qts
                             then fmap (fromQT . applyNullViews (nullQ qIn) . getQT) mAccepting
                             else Just (fromQT $ foldr1 mergeAltQT qts)
             mQNFA' = if null qts
                        then case maybeOnlyEmpty qIn of
-                              Just tags -> mapFst ((ISet.toList tags) `mappend`) mQNFA
+                              Just wtags -> fmap (addWinTags wtags) mQNFA
                               Nothing -> Nothing
                        else Nothing
         return (eLoop',mAccepting',mQNFA')
-      Star orbit tags q -> mdo
-        let contQT = case mAccepting of
+
+      Star mOrbit tags q | cannotAccept q -> return ac
+                         | otherwise -> mdo
+        (_,mE,_) <- act q  (this,Nothing,Nothing)
+        ac'@(this,_,_) <- 
+          case mE of
+            Nothing -> error ("Weird pattern in getTransTagless/Star: " ++ show qIn)
+            Just e -> let qt' = addResets tags . enterOrbitQT mOrbit . getQT $ e
+                          thisQT = mergeQT qt' . leaveOrbitQT mOrbit . getE $ ac
+                          mAccepting' = case mAccepting of
+                                          Just eAccepting -> Just . fromQT . mergeQT qt' . getQT $ eAccepting
+                                          Nothing -> Just . fromQT $ qt'
+                      in if usesQNFA q
+                           then do qnfa <- newQNFA "actNullableTagless/Star" thisQT
+                                   return (fromQNFA qnfa, mAccepting', Just (mempty,qnfa))
+                           else return (fromQT thisQT, mAccepting', Nothing)
+        return ac'
+      _ -> error ("This case in Text.Regex.TNFA.TNFA.actNullableTagless cannot happen: "++show qIn)
+
+{- XXX change to getE which introduces the possibility of consuming an optimized mQNFA value from a different Star 
+       let contQT = prependTags' [(orbit,LeaveOrbit)] $
+                     case mAccepting of
                        Nothing -> getQT eLoop
                        Just accepting -> mergeQT (getQT eLoop) (getQT accepting)
         (_,mE,_) <- act (this,Nothing,Nothing) q
@@ -590,7 +630,7 @@ qToNFA qTop compOpt = (q_id startingQNFA,array (0,pred lastIndex) (table [])) wh
                             (Just eAccepting,Just qt) -> Just (fromQT $ mergeQT (getQT eAccepting) qt)
                             _ -> (fmap fromQT mqt) `mplus` mAccepting
         return (eLoop,mAccepting',mQNFA')
-      _ -> error "This case in Text.Regex.TNFA.TNFA.actNullableTagless cannot happen"
+-}
 
   dotTrans = if multiline compOpt 
                then Map.singleton '\n' mempty
@@ -600,11 +640,10 @@ qToNFA qTop compOpt = (q_id startingQNFA,array (0,pred lastIndex) (table [])) wh
                  then Set.insert '\n'
                  else id
 
-  acceptTrans :: Maybe Tag -> Pattern -> [Tag] -> Index -> QT
+  acceptTrans :: Maybe Tag -> Pattern -> TagList -> Index -> QT
   acceptTrans pre pIn post i =
     let target = IMap.singleton i $ Set.singleton (getDoPa pIn
-                                                  ,maybe id (\tag->((tag,PreTag):)) pre $
-                                                         map (\tag->(tag,PostTag)) post)
+                                                  ,maybe post (\tag->(tag,PreUpdate TagTask):post) pre)
         tomap = Map.fromDistinctAscList . map (\c -> (c,target)) . modifyChars
     in case pIn of
          PChar _ char ->
@@ -660,3 +699,8 @@ asQT :: E -> E
 asQT (tags,cont) = (tags,Right (either q_qt id cont))
 
 -}
+
+toP = either (error.show) id . parseRegex 
+toQ = patternToQ defaultCompOpt . toP
+toNFA = patternToNFA defaultCompOpt . toP
+display_NFA = mapM_ print . elems . (\(x,_,_) -> snd x) . toNFA 

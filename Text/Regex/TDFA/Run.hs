@@ -1,4 +1,4 @@
-module Text.Regex.TDFA.Run(findMatch,findMatchAll,countMatchAll) where
+module Text.Regex.TDFA.Run where -- (findMatch,findMatchAll,countMatchAll) where
 
 import Control.Monad
 import Data.Array.IArray
@@ -17,16 +17,18 @@ import Text.Regex.TDFA.CorePattern
 import Text.Regex.TDFA.TDFA
 import Text.Regex.TDFA.Wrap
 
--- import Debug.Trace
+import Text.Regex.TDFA.TNFA (patternToNFA)
 
-{-
+import Debug.Trace
+
+
 toP = either (error.show) id . parseRegex 
-toQ = patternToQ . toP
-toNFA = patternToNFA . toP
+toQ = patternToQ defaultCompOpt . toP
+toNFA = patternToNFA defaultCompOpt . toP
 toDFA = nfaToDFA . toNFA
 display_NFA = mapM_ print . elems . (\(x,_,_) -> snd x) . toNFA 
 display_DFA = mapM_ print . Map.elems . dfaMap . (\(x,_,_,_) -> x) . toDFA 
--}
+
 
 type TagValues = IntMap {- Tag -} Position
 type TagComparer = TagValues -> TagValues -> Ordering -- GT is the preferred one
@@ -135,11 +137,15 @@ countMatchAll isNull headTail regexIn stringIn = loop 0 '\n' stringIn $! 0 where
                               loop offset' prev' input' $! succ count
 
 {-# INLINE update #-}
-update :: Delta -> Position -> IntMap Position -> IntMap Position
-update delta off oldMap = foldl (\m (tag,pos) ->
-   if pos < 0 then IMap.delete tag m
-              else IMap.insert tag pos m) oldMap (delta off)
-
+update :: Delta -> Position -> IntMap Position -> (IntMap Position,[String])
+update delta off oldMap = foldl (\(m,w) (tag,pos) ->
+   case () of
+     _ | 0 <= pos -> (IMap.insert tag pos m,w)
+       | updateReset == pos -> (IMap.delete tag m,w)
+       | updateEnterOrbit == pos -> (IMap.insert tag (-tag) m,w++["Enter orbit at "++show (tag,pos)])
+       | updateLeaveOrbit == pos -> (IMap.delete tag m,w++["Leave orbit at "++show (tag,pos)])
+       | otherwise -> error ("There was a weird update pos: "++show (tag,pos))
+                                ) (oldMap,[]) (delta off)
 
 {-# INLINE matchHere #-}
 matchHere ::  (Extract a) => (a -> Bool) -> (a->(Char,a)) 
@@ -172,6 +178,7 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
   runHere winning dt tags off prev input =
     let best (destIndex,mSourceDelta) = (destIndex
                                         ,maximumBy comp 
+                                         . map (\(m,w) -> trace ("\n>"++show destIndex++'\n':unlines w++"<") m)
                                          . map (\(sourceIndex,(_,delta)) ->
                                                 update delta off (look sourceIndex tags))
                                          . IMap.toList $ mSourceDelta)
@@ -179,6 +186,7 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
          Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
            let winning' = if IMap.null w then winning
                             else Just . maximumBy comp
+                                      . map (\(m,w) -> trace ("\n>winning\n"++unlines w++"<") m)
                                       . map (\(sourceIndex,delta) ->
                                                update delta off (look sourceIndex tags))
                                       . IMap.toList $ w

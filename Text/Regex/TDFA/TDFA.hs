@@ -1,4 +1,5 @@
-module Text.Regex.TDFA.TDFA(DFA(..),DT(..),patternToDFA) where
+module Text.Regex.TDFA.TDFA(DFA(..),DT(..)
+                           ,patternToDFA,nfaToDFA,dfaMap) where
 
 import Control.Arrow((***))
 import Data.Monoid
@@ -26,11 +27,8 @@ import qualified Text.Regex.TDFA.IntArrTrieSet as Trie
 
 -- import Debug.Trace
 
-
 debug :: (Show a) => a -> s -> s
 debug _ s = s
-
-
 
 {-
 dlose :: DFA
@@ -62,10 +60,8 @@ nfaToDFA ((startIndex,aIndexQNFA),aTagOp,aGroupInfo) =
       indexesToDFA = Trie.lookupAsc trie  -- Lookup in cache
 
       makeWinner :: Index -> WinTags -> IntMap Delta
-      makeWinner i tags | ISet.null tags = IMap.empty
-                        | otherwise = IMap.singleton i . makeUpdater 
-                                      . map (\tag -> (tag,PreTag))
-                                      . ISet.toList $ tags
+      makeWinner i w | noWin w = IMap.empty
+                     | otherwise = IMap.singleton i . makeUpdater $ w
 
       makeUpdater :: [(Tag,TagUpdate)] -> Delta
       makeUpdater spec = sequence fspec -- Monad (Reader ((->) Tag))
@@ -73,9 +69,9 @@ nfaToDFA ((startIndex,aIndexQNFA),aTagOp,aGroupInfo) =
                          return $ case update of
                                     PreTag   -> (\j->(tag,j))
                                     PostTag  -> (\j->(tag,succ j))
-                                    ResetTag -> (\_->(tag,-1))
-                                    EnterOrbit -> (\_ -> (tag,-2))
-                                    LeaveOrbit -> (\_ -> (tag,-3))
+                                    ResetTag -> (\_->(tag,updateReset))
+                                    EnterOrbit -> (\_ -> (tag,updateEnterOrbit))
+                                    LeaveOrbit -> (\_ -> (tag,updateLeaveOrbit))
 
       makeDFA i dt = debug ("\n>Making DFA "++show i++"<") $ DFA i dt
 
@@ -162,7 +158,6 @@ nfaToDFA ((startIndex,aIndexQNFA),aTagOp,aGroupInfo) =
 patternToDFA :: CompOption -> (Pattern,(PatternIndex, Int)) -> (DFA,Index,Array Tag OP,Array PatternIndex [GroupInfo])
 patternToDFA compOpt pattern = nfaToDFA (patternToNFA compOpt pattern)
 
-{-
 dfaMap :: DFA -> Map SetIndex DFA
 dfaMap = seen (Map.empty) where
   seen old d@(DFA {d_id=i,d_dt=dt}) =
@@ -175,7 +170,6 @@ flattenDT :: DT -> [DFA]
 flattenDT (Simple' {dt_trans=mt,dt_other=mo}) = map fst . maybe id (:) mo . Map.elems $ mt
 flattenDT (Testing' {dt_a=a,dt_b=b}) = flattenDT a ++ flattenDT b
 
--}
 {-
 -- trebug
 
@@ -203,6 +197,10 @@ The above is a bug.  the (c*) group should not match "bb".
 -}
 
 
+instance Show DFA where
+  show (DFA {d_id=i,d_dt=dt}) = "DFA {d_id = "++show (ISet.toList i)
+                            ++"\n    ,d_dt = "++ show dt
+                            ++"\n}"
 
 instance Show DT where show = showDT
 
@@ -226,3 +224,4 @@ showDT (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
                         ++ "\n         }"
  where indent = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT
        spaces = replicate 10 ' '
+

@@ -11,7 +11,7 @@ import Data.Array.IArray
 import Data.Set(Set)
 import qualified Data.Set as Set
 -- import Data.IntSet(IntSet)
-import qualified Data.IntSet as ISet
+-- import qualified Data.IntSet as ISet
 import Data.Map(Map)
 import qualified Data.Map as Map
 -- import Data.IntMap(IntMap)
@@ -22,15 +22,54 @@ import qualified Data.Map as Map
 debug :: (Show a) => a -> b -> b
 debug _ = id
 
+-- Core Pattern Language
+data P = Empty
+       | Or [Q]
+       | Seq Q Q
+       | Star { getOrbit :: Maybe Tag  -- tag to prioritize the need to keep track of length of each pass though q
+              , reset :: [Tag]         -- need to reset the contained groups by resetting these closing tags
+              , unStar :: Q}
+       | Test TestInfo
+       | OneChar Pattern
+         deriving (Show,Eq)
+
+-- The diagnostics about the pattern
+data Q = Q {nullQ :: NullView         -- Ordered list of nullable views
+           ,takes :: (Position,Maybe Position)  -- Range of number of accepted characters
+           ,preTag,postTag :: Maybe Tag -- Tags assigned around this pattern
+           ,tagged :: Bool            -- Whether this node should be tagged (XXX only used in patternToQ/PStar)
+           ,childGroups :: Bool       -- Whether unQ has any PGroups (XXX only used in patternToQ/POr)
+           ,wants :: Wanted           -- What kind of continuation is used by this pattern
+           ,unQ :: P} deriving (Eq)
+
+type TestInfo = (WhichTest,DoPa)
+
+-- This is newtype'd to allow for a custom Ord instance
+-- This is a set of WhichTest where each test has associated pattern location information
+newtype SetTestInfo = SetTestInfo {getTests :: Map WhichTest (Set DoPa)} deriving (Eq,Monoid)
+
+
+-- During the depth first traversal, children are told about bounds by the parent
+data HandleTag = NoTag | Advice Tag | Apply Tag deriving (Show)
+
+type NullView = [(SetTestInfo,WinTags)]  -- Ordered list of null views, each is a set of tests and tags
+
+data Wanted = WantsQNFA | WantsQT | WantsBoth | WantsEither deriving (Eq,Show)
+
+instance Show Q where
+  show = showQ
+
+instance Show SetTestInfo where
+  show (SetTestInfo sti) = "SetTestInfo "++show (mapSnd (Set.toList) $ Map.assocs sti)
+
+
 -- Smart constructors for NullView
 notNull :: NullView
 notNull = []
 
--- QQQ
 emptyNull :: WinTags -> NullView
 emptyNull tags = (mempty, tags) : []
 
--- QQQ
 testNull :: TestInfo -> WinTags -> NullView
 testNull (w,d) tags = (SetTestInfo (Map.singleton w (Set.singleton d)), tags) : []
 
@@ -56,9 +95,6 @@ mergeNullViews s1 s2 = do
   (test2,tag2) <- s2
   return (mappend test1 test2,mappend tag1 tag2)
 
--- During the depth first traversal, children are told about bounds by the parent
-data HandleTag = NoTag | Advice Tag | Apply Tag deriving (Show)
-
 -- Invariant: apply (toAdvice _ ) == mempty
 apply :: HandleTag -> Maybe Tag
 apply (Apply tag) = Just tag
@@ -74,59 +110,12 @@ fromHandleTag (Apply tag) = tag
 fromHandleTag (Advice tag) = tag
 fromHandleTag _ = error "fromHandleTag"
 
--- Core Pattern Language
-data P = Empty
-       | Or [Q]
-       | Seq Q Q
-       | Star {orbit :: Maybe Tag, reset::[Tag], unStar::Q} -- need to reset the contained groups by unsetting closing tags
-       | Test TestInfo
-       | OneChar Pattern
-         deriving (Show,Eq)
-
--- The diagnostics about the pattern
-data Q = Q {nullQ :: NullView         -- Ordered list of nullable views
-           ,takes :: (Position,Maybe Position)  -- Range of number of accepted characters
-           ,preTag,postTag :: Maybe Tag -- Tags assigned around this pattern
-           ,tagged :: Bool            -- Whether this node should be tagged (XXX only used in patternToQ)
-           ,wants :: Wanted           -- What kind of continuation is used by this pattern
-           ,unQ :: P} deriving (Eq)
-
-type TestInfo = (WhichTest,DoPa)
-
--- This is newtype'd to allow for a custom Ord instance
--- This is a set of WhichTest where each test has associated pattern location information
-newtype SetTestInfo = SetTestInfo {getTests :: Map WhichTest (Set DoPa)} deriving (Eq,Monoid)
-
---QQQ
-{-
-type NullView = [(SetTestInfo,SetTag)]  -- Ordered list of null views, each is a set of tests and tags
--}
-type NullView = [(SetTestInfo,WinTags)]  -- Ordered list of null views, each is a set of tests and tags
-
 winTags :: Maybe Tag -> Maybe Tag -> WinTags
-winTags (Just a) (Just b) = ISet.fromList [a,b]
-winTags (Just a) Nothing  = ISet.singleton a
-winTags Nothing  (Just b) = ISet.singleton b
-winTags Nothing  Nothing  = ISet.empty
+winTags (Just a) (Just b) = [(b,PreUpdate TagTask),(a,PreUpdate TagTask)]
+winTags (Just a) Nothing  = [(a,PreUpdate TagTask)]
+winTags Nothing  (Just b) = [(b,PreUpdate TagTask)]
+winTags Nothing  Nothing  = mempty
 
-data Wanted = WantsQNFA | WantsQT | WantsBoth | WantsEither deriving (Eq,Show)
-
-instance Show Q where
-  show = showQ
-
---- QQQ
-{-
-showQ :: Q -> String
-showQ q = "Q { nullQ = "++show (mapSnd (ISet.toList) $ nullQ q)++
-        "\n  , takes = "++show (takes q)++
-        "\n  , preTag = "++show (preTag q)++
-        "\n  , postTag = "++show (postTag q)++
-        "\n  , tagged = "++show (tagged q)++
-        "\n  , wants = "++show (wants q)++
-        "\n  , unQ = "++ indent (unQ q)++" }"
-   where indent = unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . show
-         spaces = replicate 10 ' '
--}
 showQ :: Q -> String
 showQ q = "Q { nullQ = "++show (nullQ q)++
         "\n  , takes = "++show (takes q)++
@@ -137,9 +126,6 @@ showQ q = "Q { nullQ = "++show (nullQ q)++
         "\n  , unQ = "++ indent (unQ q)++" }"
    where indent = unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . show
          spaces = replicate 10 ' '
-
-instance Show SetTestInfo where
-  show (SetTestInfo sti) = "SetTestInfo "++show (mapSnd (Set.toList) $ Map.assocs sti)
 
 varies :: Q -> Bool
 varies Q {takes = (_,Nothing)} = True
@@ -213,7 +199,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
   combineConcat ps m1 m2 =
     if rightAssoc compOpt
       then foldr combineRight (go (last ps)) (init ps) m1 m2
-      else foldl combineLeft  (go (head ps)) (tail ps) m1 m2    -- libtre default
+    else foldl combineLeft  (go (head ps)) (tail ps) m1 m2    -- libtre default
 
   combineRight :: Pattern -> HHQ -> HHQ
   combineRight cFront pEnd m1 m2 = mdo
@@ -230,7 +216,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
     return $ Q (mergeNullViews (nullQ qFront) (nullQ qEnd))
                (seqTake (takes qFront) (takes qEnd))
                Nothing Nothing
-               bothVary wanted
+               bothVary (childGroups qFront || childGroups qEnd) wanted
                (Seq qFront qEnd)
 
   combineLeft :: HHQ -> Pattern -> HHQ
@@ -248,7 +234,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
     return $ Q (mergeNullViews (nullQ qFront) (nullQ qEnd))
                (seqTake (takes qFront) (takes qEnd))
                Nothing Nothing
-               bothVary wanted
+               bothVary (childGroups qFront || childGroups qEnd) wanted
                (Seq qFront qEnd)
 
   go :: Pattern -> HHQ
@@ -259,6 +245,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
                          ,preTag=apply m1
                          ,postTag=apply m2
                          ,tagged=False
+                         ,childGroups=False
                          ,wants=WantsEither
                          ,unQ=Empty}
         one = return $ Q {nullQ=notNull              -- one character accepted (just store P type)
@@ -266,6 +253,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
                          ,preTag=apply m1
                          ,postTag=apply m2
                          ,tagged=False
+                         ,childGroups=False
                          ,wants=WantsQNFA
                          ,unQ = OneChar pIn}
         test myTest = return $ Q {nullQ=testNull myTest (apply m1 `winTags` apply m2) -- anchor of some sort
@@ -273,6 +261,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
                                  ,preTag=apply m1
                                  ,postTag=apply m2
                                  ,tagged=False
+                                 ,childGroups=False
                                  ,wants=WantsQT
                                  ,unQ=Test myTest }
 
@@ -281,7 +270,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
          POr [] -> nil
          POr [p] -> go p m1 m2
          POr ps -> mdo
-           let canVary = any tagged qs || varies ans
+           let canVary = varies ans || childGroups ans -- how to detect "abc|a(b)c" ? need childGroups
            a <- if noTag m1 && canVary then uniq Minimize else return m1
            b <- if noTag m2 && canVary then uniq Maximize else return m2
            let aAdvice = toAdvice a
@@ -299,7 +288,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
                                  (False,False) -> WantsEither
            let ans = Q (cleanNullView . concatMap nullQ $ qs)
                        (orTakes . map takes $ qs)
-                       (apply a) (apply b) canVary wanted
+                       (apply a) (apply b) canVary (any childGroups qs) wanted
                        (Or qs)
            return ans
          PConcat [] -> nil
@@ -322,10 +311,10 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
            -- Maximize tag is always passed as the first tag
            (q,resetGroups) <- listens (concatMap (\g -> map stopTag . (aGroups!) . thisIndex $ g))
                                       (go p NoTag NoTag)
-           let ans = Q (emptyNull (maybe ISet.empty ISet.singleton $ apply m2))
+           let ans = Q (emptyNull (maybe mempty (\tag->[(tag,PreUpdate TagTask)]) $ apply m2))
                        (0,if accepts then Nothing else (Just 0))
                        (apply a) (apply b)
-                       accepts WantsQT
+                       accepts (not (null resetGroups)) WantsQT
                        (Star (apply c) resetGroups q)
            return ans
          PCarat dopa -> test (Test_BOL,dopa)
@@ -343,7 +332,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
            parent <- getParentIndex
            makeGroup (GroupInfo this parent (fromHandleTag a) (fromHandleTag b))
            q <- withParent this $ go p a b
-           let ans = q {tagged = True}
+           let ans = q {tagged = True,childGroups = True}
            return ans
 
          -- these are here for completeness of the case branches, currently starTrans replaces them all
