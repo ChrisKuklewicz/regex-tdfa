@@ -204,7 +204,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
   combineRight :: Pattern -> HHQ -> HHQ
   combineRight cFront pEnd m1 m2 = mdo
     let bothVary = varies qFront && varies qEnd
-    a <- if noTag m1 && bothVary then uniq Maximize else return m1
+    a <- if noTag m1 && bothVary then uniq Minimize else return m1 -- Why was this Maximize?
     b <- if noTag m2 && bothVary then uniq Maximize else return m2
     mid <- case (noTag a,canAccept qFront,noTag b,canAccept qEnd) of
              (False,False,_,_) -> return (toAdvice a)
@@ -222,11 +222,11 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
   combineLeft :: HHQ -> Pattern -> HHQ
   combineLeft cFront pEnd m1 m2 = mdo
     let bothVary = varies qFront && varies qEnd
-    a <- if noTag m1 && bothVary then uniq Maximize else return m1
+    a <- if noTag m1 && bothVary then uniq Minimize else return m1 -- Why was this Maximize?
     b <- if noTag m2 && bothVary then uniq Maximize else return m2
-    mid <- case (noTag a,canAccept qFront,noTag b,canAccept qEnd) of
-             (False,False,_,_) -> return (toAdvice a)
-             (_,_,False,False) -> return (toAdvice b)
+    mid <- case (noTag a, canAccept qFront, noTag b, canAccept qEnd) of
+             (False,False,_    ,_    ) -> return (toAdvice a)
+             (_    ,_    ,False,False) -> return (toAdvice b)
              _ -> if tagged qFront || tagged qEnd then uniq Maximize else return NoTag
     qFront <- cFront a mid
     qEnd <- go pEnd (toAdvice mid) b
@@ -302,7 +302,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
            let accepts = canAccept q
            a <- if noTag m1 && accepts then uniq Minimize else return m1
            b <- if noTag m2 && accepts then uniq Maximize else return m2
-           c <- if varies q then uniq Maximize {-- XXX why not its own value? XXX -} else return NoTag
+           c <- if varies q then uniq Minimize {-- XXX why not its own value? XXX -} else return NoTag
            -- end of each iteration is Maximize and is the beginning
            -- of the next so the start of each iteration should be a
            -- Maximize (except the first iteration, but this is taken

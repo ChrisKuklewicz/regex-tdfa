@@ -18,7 +18,7 @@ closing group captures.
 This still requires ordering the tags instead of keeping them sorted.
 -}
 
-module Text.Regex.TDFA.TNFA(patternToNFA,pickQTrans,noWin
+module Text.Regex.TDFA.TNFA(patternToNFA,pickQTrans,cleanWin,noWin
                            ,toP,toQ,toNFA,display_NFA
                            ,QNFA(..),QT(..),QTrans,TagUpdate(..)) where
 
@@ -258,6 +258,9 @@ newQNFA s qt = do
 pickQTrans :: (Tag -> OP) -> QTrans -> [({-Destination-}Index,TagCommand)]
 pickQTrans op tr = mapSnd (bestTrans op) . IMap.toList $ tr
 
+cleanWin :: WinTags -> WinTags
+cleanWin = sort . nubBy ((==) `on` fst) . reverse   -- ick, nub XXX
+
 bestTrans :: (Tag -> OP) -> Set TagCommand -> TagCommand
 bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
                | len == 1 = canonical $ head l
@@ -273,7 +276,7 @@ bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
          LT -> t2_can
   canonical :: TagCommand -> TagCommand
   canonical (dopa,tcs) = (dopa,sort clean) -- keep only last setting or resetting
-    where clean = nubBy ((==) `on` fst) . reverse $ tcs
+    where clean = nubBy ((==) `on` fst) . reverse $ tcs  -- ick, nub XXX
   choose :: TagList -> TagList -> Ordering
   choose ((t1,b1):rest1) ((t2,b2):rest2) =
     case compare t1 t2 of -- find and examine the smaller of t1 and t2

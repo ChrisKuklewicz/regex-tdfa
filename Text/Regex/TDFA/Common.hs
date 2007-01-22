@@ -3,6 +3,7 @@
 -- Pattern.
 module Text.Regex.TDFA.Common {- export everything -} where
 
+import Control.Monad.RWS(RWS)
 import Data.Array.IArray
 import Data.Map(Map)
 import Data.Set(Set)
@@ -39,7 +40,7 @@ snd3 (_,x,_) = x
 newtype DoPa = DoPa {dopaIndex :: Int} deriving (Eq,Ord)
 
 instance Show DoPa where
-  showsPrec p (DoPa {dopaIndex=i}) = showsPrec p i
+  showsPrec p (DoPa {dopaIndex=i}) = ('#':) . showsPrec p i
 
 newDoPa :: Int -> DoPa
 newDoPa i = DoPa i
@@ -76,7 +77,7 @@ type Index = Int         -- NFA node identity number
 -- used by TDFA
 type SetIndex = IntSet {- Index -}
 type Position = Int      -- index into the text being searched
-type Delta = Position -> [(Tag,Position)]
+-- type Delta = Position -> [(Tag,Position)]
 
 data GroupInfo = GroupInfo {thisIndex,parentIndex::PatternIndex,startTag,stopTag::Tag} deriving Show
 
@@ -96,7 +97,7 @@ data QNFA = QNFA {q_id :: Index
 
 type QTrans = IntMap {- Destination Index -} (Set TagCommand)
 
-data QT = Simple {qt_win :: TagList
+data QT = Simple {qt_win :: WinTags
                  ,qt_trans :: Map Char QTrans
                  ,qt_other :: QTrans}
         | Testing {qt_test :: WhichTest
@@ -126,14 +127,19 @@ updatePostLeaveOrbit = -5
 
 data DFA = DFA { d_id :: SetIndex, d_dt :: DT}
 
-data DT = Simple' { dt_win :: IntMap {- Index -} Delta
+data DT = Simple' { dt_win :: IntMap {- Index -} (RunState ())
                   , dt_trans :: Map Char (DFA,DTrans)
                   , dt_other :: Maybe (DFA,DTrans) }
         | Testing' { dt_test :: WhichTest
                    , dt_dopas :: Set DoPa
                    , dt_a,dt_b :: DT}
 
-type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,Delta))
-type DTrans' = [(Index, [(Index, (DoPa, [(Tag, Position)]))])]
+type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,RunState ()))
+type DTrans' = [(Index, [(Index, (DoPa, ([(Tag, Position)],[String])))])]
 
 data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord)  -- known predicates, todo: allow for inversion
+
+-- Run
+
+type RunState = RWS (Position,Position) [String] (IntMap Position)
+

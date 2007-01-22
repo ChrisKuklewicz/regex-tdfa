@@ -4,6 +4,9 @@ module Text.Regex.TDFA.TDFA(DFA(..),DT(..)
 import Control.Arrow((***))
 import Data.Monoid
 import Control.Monad.Reader
+import Control.Monad.Writer
+import Control.Monad.State
+import Control.Monad.RWS
 import Control.Monad.Instances
 import Data.List
 import Data.Maybe
@@ -24,6 +27,10 @@ import Text.Regex.TDFA.CorePattern
 import Text.Regex.TDFA.Pattern
 import Text.Regex.TDFA.IntArrTrieSet(TrieSet)
 import qualified Text.Regex.TDFA.IntArrTrieSet as Trie
+
+
+import Text.Regex.Base(RegexOptions(defaultCompOpt))
+import Text.Regex.TDFA.ReadRegex(parseRegex)
 
 -- import Debug.Trace
 
@@ -49,6 +56,48 @@ ungroupBy f g = map helper where
   helper [] = (error "empty group passed to ungroupBy",g [])
   helper x@(x1:_) = (f x1,g x)
 
+askPre :: RunState Position
+askPre = asks fst
+
+askPost :: RunState Position
+askPost = asks fst
+
+getMap :: RunState (IntMap Position)
+getMap = get
+
+putMap :: IntMap Position -> RunState ()
+putMap x = seq x (put x)
+
+modifyMap :: (IntMap Position -> IntMap Position) -> RunState ()
+modifyMap f = do
+  m <- getMap
+  putMap (f m)
+
+resetTag :: Tag -> RunState ()
+resetTag tag = modifyMap (IMap.delete tag)
+
+setPreTag :: Tag -> RunState ()
+setPreTag tag = do
+  pos <- askPre
+  modifyMap (IMap.insert tag pos)
+
+setPostTag :: Tag -> RunState ()
+setPostTag tag = do
+  pos <- askPost
+  let pos' = succ pos in seq pos' $ modifyMap (IMap.insert tag pos')
+
+enterOrbit :: Tag -> RunState ()
+enterOrbit tag = do
+  pos <- askPre
+  tell ["Entering Orbit "++show (tag,pos)]
+  modifyMap (IMap.insert tag (negate tag))
+
+leaveOrbit :: Tag -> RunState ()
+leaveOrbit tag = do
+  pos <- askPre
+  tell ["Leaving Orbit "++show (tag,pos)]
+  resetTag tag
+
 nfaToDFA :: ((Index,Array Index QNFA),Array Tag OP,Array PatternIndex [GroupInfo])
          -> (DFA,Index,Array Tag OP,Array PatternIndex [GroupInfo])
 nfaToDFA ((startIndex,aIndexQNFA),aTagOp,aGroupInfo) =
@@ -59,10 +108,21 @@ nfaToDFA ((startIndex,aIndexQNFA),aTagOp,aGroupInfo) =
       indexToDFA = qnfaToDFA . (aIndexQNFA!)  -- used to seed the Trie
       indexesToDFA = Trie.lookupAsc trie  -- Lookup in cache
 
-      makeWinner :: Index -> WinTags -> IntMap Delta
+      makeWinner :: Index -> WinTags -> IntMap {- Index -} (RunState ())
       makeWinner i w | noWin w = IMap.empty
-                     | otherwise = IMap.singleton i . makeUpdater $ w
+                     | otherwise = IMap.singleton i . makeUpdater . cleanWin $ w
 
+      makeUpdater :: TagList -> RunState ()
+      makeUpdater spec = specRunState
+        where specRunState = sequence_ . map helper $ spec
+              helper (tag,update) = case update of
+                                       PreUpdate TagTask -> setPreTag tag
+                                       PreUpdate ResetTask -> resetTag tag
+                                       PreUpdate EnterOrbitTask -> enterOrbit tag
+                                       PreUpdate LeaveOrbitTask -> leaveOrbit tag
+                                       PostUpdate TagTask -> setPostTag tag
+                                       _ -> error ("Weird command in makeUpdater: "++show (tag,update,spec))
+{-
       makeUpdater :: [(Tag,TagUpdate)] -> Delta
       makeUpdater spec = sequence fspec -- Monad (Reader ((->) Tag))
         where fspec = do (tag,update) <- spec -- Monad []
@@ -72,7 +132,7 @@ nfaToDFA ((startIndex,aIndexQNFA),aTagOp,aGroupInfo) =
                                     ResetTag -> (\_->(tag,updateReset))
                                     EnterOrbit -> (\_ -> (tag,updateEnterOrbit))
                                     LeaveOrbit -> (\_ -> (tag,updateLeaveOrbit))
-
+-}
       makeDFA i dt = debug ("\n>Making DFA "++show i++"<") $ DFA i dt
 
       qnfaToDFA :: QNFA -> DFA
@@ -196,32 +256,59 @@ The above is a bug.  the (c*) group should not match "bb".
 
 -}
 
+fillMap :: Tag -> IntMap Position
+fillMap tag = IMap.fromDistinctAscList [(t,-1) | t <- [0..tag] ]
 
+diffMap :: IntMap Position -> IntMap Position -> [(Index,Position)]
+diffMap old new = IMap.toList (IMap.differenceWith (\a b -> if a==b then Nothing else Just b) old new)
+
+examineDFA :: (DFA,Index,Array Tag OP,Array PatternIndex [GroupInfo]) -> String
+examineDFA (dfa,_,aTags,_) = unlines $ map (examineDFA' (snd . bounds $ aTags)) (Map.elems $ dfaMap dfa)
+
+examineDFA' :: Tag -> DFA -> String
+examineDFA' maxTag = showDFA (fillMap maxTag)
+
+{-
 instance Show DFA where
   show (DFA {d_id=i,d_dt=dt}) = "DFA {d_id = "++show (ISet.toList i)
                             ++"\n    ,d_dt = "++ show dt
                             ++"\n}"
+-}
+-- instance Show DT where show = showDT
 
-instance Show DT where show = showDT
+showDFA :: IntMap Position -> DFA -> String
+showDFA m (DFA {d_id=i,d_dt=dt}) = "DFA {d_id = "++show (ISet.toList i)
+                               ++"\n    ,d_dt = "++ showDT m dt
+                               ++"\n}"
 
-showDT :: DT -> String
-showDT (Simple' w t o) = "Simple' { dt_win = " ++ (show . map (\(i,d) -> (i,d 0)) . IMap.assocs $ w)
-                    ++ "\n        , dt_trans = " ++ (show . mapSnd (ISet.toList . d_id *** seeDTrans) . Map.assocs $ t)
-                    ++ "\n        , dt_other = " ++ (show . fmap (ISet.toList . d_id *** seeDTrans) $ o)
-                    ++ "\n        }"
+showDT :: IntMap Position -> DT -> String
+showDT m (Simple' w t o) = "Simple' { dt_win = " ++ (show . map (\(i,rs) -> (i,seeRS rs)) . IMap.assocs $ w)
+                      ++ "\n        , dt_trans = " ++ (unlines . map show . mapSnd (ISet.toList . d_id *** seeDTrans) . Map.assocs $ t)
+                      ++ "\n        , dt_other = " ++ maybe "None" (\o' -> (\ (a,b) -> "("++a++" , "++b++")" )
+                                                                           . ( (show . ISet.toList . d_id) *** 
+                                                                               (unlines . map show . seeDTrans) ) 
+                                                                           $ o')
+                                                                 o
+                      ++ "\n        }"
   where seeDTrans :: DTrans -> DTrans'
         seeDTrans dtrans = 
-          let x :: [(Index,IntMap (DoPa,Delta))]
+          let x :: [(Index,IntMap (DoPa,RunState ()))]
               x = IMap.assocs dtrans
-              y :: IntMap (DoPa,Delta) -> [(Int,(DoPa,[(Tag,Position)]))]
-              y z = mapSnd (\(dopa,delta) -> (dopa,delta 0)) . IMap.assocs $ z
+              y :: IntMap (DoPa,RunState ()) -> [(Index,(DoPa,([(Tag,Position)],[String])))]
+              y z = mapSnd (\(dopa,rs) -> (dopa,seeRS rs))
+                    . IMap.assocs $ z
           in mapSnd y x
+        seeRS :: RunState () -> ([(Tag,Position)],[String])
+        seeRS rs = let (s,w) = execRWS rs (0,0) m
+                   in (diffMap m s,w)
 
-showDT (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
-                        ++ "\n         , dt_dopas = " ++ show d
-                        ++ "\n         , dt_a = " ++ indent a
-                        ++ "\n         , dt_b = " ++ indent b
-                        ++ "\n         }"
- where indent = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT
+showDT m (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
+                          ++ "\n         , dt_dopas = " ++ show d
+                          ++ "\n         , dt_a = " ++ indent a
+                          ++ "\n         , dt_b = " ++ indent b
+                          ++ "\n         }"
+ where indent = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT m
        spaces = replicate 10 ' '
 
+toDFA = nfaToDFA . toNFA
+-- display_DFA = mapM_ print . Map.elems . dfaMap . (\(x,_,_,_) -> x) . toDFA 
