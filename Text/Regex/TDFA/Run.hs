@@ -1,6 +1,7 @@
 module Text.Regex.TDFA.Run where -- (findMatch,findMatchAll,countMatchAll) where
 
 import Control.Monad
+import Control.Monad.RWS
 import Data.Array.IArray
 -- import Data.Map(Map)
 import qualified Data.Map as Map
@@ -27,20 +28,22 @@ toQ = patternToQ defaultCompOpt . toP
 toNFA = patternToNFA defaultCompOpt . toP
 toDFA = nfaToDFA . toNFA
 display_NFA = mapM_ print . elems . (\(x,_,_) -> snd x) . toNFA 
-display_DFA = mapM_ print . Map.elems . dfaMap . (\(x,_,_,_) -> x) . toDFA 
+-- display_DFA = mapM_ print . Map.elems . dfaMap . (\(x,_,_,_) -> x) . toDFA 
 
 
 type TagValues = IntMap {- Tag -} Position
-type TagComparer = TagValues -> TagValues -> Ordering -- GT is the preferred one
+-- type TagComparer = TagValues -> TagValues -> Ordering -- GT is the preferred one
+type TagComparer = Scratch -> Scratch -> Ordering
 
 -- Returns GT if the first item is preferred. I could generate test
 -- cases to be sure about all the Maximize cases.  The minimize cases
 -- look stranger to trigger, so I am leaving them as errors until I am
 -- certain what to put there.
 makeTagComparer :: Array Tag OP -> TagComparer
+-- XXX serious help with -Wall needed
 makeTagComparer tags = (\ tv1 tv2 ->
-  let tv1' = IMap.toAscList tv1
-      tv2' = IMap.toAscList tv2
+  let tv1' = IMap.toAscList . fst $ tv1
+      tv2' = IMap.toAscList . fst $ tv2
       errMsg s = error $ s ++ " : " ++ show (tags,tv1,tv2)
       comp ((t1,v1):rest1) ((t2,v2):rest2) =
         case compare t1 t2 of
@@ -69,6 +72,21 @@ look key imap = IMap.findWithDefault (error ("key "++show key++" not found in Te
 
 
 {-# INLINE tagsToGroups #-}
+tagsToGroups :: Array PatternIndex [GroupInfo] -> Scratch -> MatchArray
+tagsToGroups aGroups (tags,[]) = groups -- trace (">><<< "++show (tags,filler)) groups
+  where groups = array (0,snd (bounds aGroups)) filler
+        filler = wholeMatch : map checkAll (assocs aGroups)
+        wholeMatch = (0,(startPos,stopPos-startPos)) -- will not fail to return good positions
+          where startPos = look 0 tags
+                stopPos = look 1 tags
+        checkAll (this_index,these_groups) = (this_index,if null good then (-1,0) else head good)
+          where good = do (GroupInfo _ _ start stop) <- these_groups -- Monad []
+                          startPos <- IMap.lookup start tags
+                          stopPos <- IMap.lookup stop tags
+                          return (startPos,stopPos-startPos)
+tagsToGroups aGroups (tags,orbits) = error ("tagsToGroups non null orbits :"++show (aGroups,tags,orbits)) -- XXX
+
+{-
 tagsToGroups :: Array PatternIndex [GroupInfo] -> IntMap Position -> MatchArray
 tagsToGroups aGroups tags = groups -- trace (">><<< "++show (tags,filler)) groups
   where groups = array (0,snd (bounds aGroups)) filler
@@ -81,6 +99,7 @@ tagsToGroups aGroups tags = groups -- trace (">><<< "++show (tags,filler)) group
                           startPos <- IMap.lookup start tags
                           stopPos <- IMap.lookup stop tags
                           return (startPos,stopPos-startPos)
+ -}
 
 {-# INLINE findMatch #-}
 findMatch :: (Extract a) => (a -> Bool) -> (a->(Char,a)) 
@@ -137,6 +156,9 @@ countMatchAll isNull headTail regexIn stringIn = loop 0 '\n' stringIn $! 0 where
                               loop offset' prev' input' $! succ count
 
 {-# INLINE update #-}
+update :: RunState () -> Position -> Scratch -> (Scratch,[String])
+update rs p sIn = execRWS rs (p,succ p) sIn
+{- XXX
 update :: Delta -> Position -> IntMap Position -> (IntMap Position,[String])
 update delta off oldMap = foldl (\(m,w) (tag,pos) ->
    case () of
@@ -146,21 +168,22 @@ update delta off oldMap = foldl (\(m,w) (tag,pos) ->
        | updateLeaveOrbit == pos -> (IMap.delete tag m,w++["Leave orbit at "++show (tag,pos)])
        | otherwise -> error ("There was a weird update pos: "++show (tag,pos))
                                 ) (oldMap,[]) (delta off)
+-}
 
 {-# INLINE matchHere #-}
-matchHere ::  (Extract a) => (a -> Bool) -> (a->(Char,a)) 
+matchHere ::  forall a. (Extract a) => (a -> Bool) -> (a->(Char,a)) 
               -> Regex -> Position -> Char -> a
               -> Maybe MatchArray
 matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
   ans = if captureGroups (regex_execOptions regexIn)
           then fmap (tagsToGroups (regex_groups regexIn)) $
-                 runHere Nothing (d_dt (regex_dfa regexIn)) initialTags offsetIn prevIn inputIn
+                 runHere Nothing (d_dt (regex_dfa regexIn)) initialScratchMap offsetIn prevIn inputIn
           else let winOff = runHereNoCap Nothing (d_dt (regex_dfa regexIn)) offsetIn prevIn inputIn
                in case winOff of
                     Nothing -> Nothing
                     Just offsetEnd -> Just (array (0,0) [(0,(offsetIn,offsetEnd-offsetIn))])
 
-  initialTags = IMap.singleton (regex_init regexIn) (IMap.singleton 0 offsetIn)
+  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 offsetIn,[])
   comp = makeTagComparer (regex_tags regexIn)
 
   test_multiline wt _ prev input =
@@ -175,20 +198,21 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
 
   test = if multiline (regex_compOptions regexIn) then test_multiline else test_singleline
   
+  runHere :: Maybe Scratch -> DT -> IntMap Scratch -> Position -> Char -> a -> Maybe Scratch
   runHere winning dt tags off prev input =
     let best (destIndex,mSourceDelta) = (destIndex
                                         ,maximumBy comp 
                                          . map (\(m,w) -> trace ("\n>"++show destIndex++'\n':unlines w++"<") m)
-                                         . map (\(sourceIndex,(_,delta)) ->
-                                                update delta off (look sourceIndex tags))
+                                         . map (\(sourceIndex,(_,rs)) ->
+                                                update rs off (look sourceIndex tags))
                                          . IMap.toList $ mSourceDelta)
     in case dt of
          Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
            let winning' = if IMap.null w then winning
                             else Just . maximumBy comp
                                       . map (\(m,w) -> trace ("\n>winning\n"++unlines w++"<") m)
-                                      . map (\(sourceIndex,delta) ->
-                                               update delta off (look sourceIndex tags))
+                                      . map (\(sourceIndex,rs) ->
+                                               update rs off (look sourceIndex tags))
                                       . IMap.toList $ w
         
            in seq winning' $
@@ -228,13 +252,6 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
           then runHereNoCap winning a off prev input
           else runHereNoCap winning b off prev input
 
-
-{-
--- old bug:
-
-*Text.Regex.TDFA.Run> let r = makeRegex "(.*|..*)+(....|(.(.*)*.))(.?|.?)" :: Regex in matchHere r 0 '\n' "aaaaaa"
-Just (fromList [(0,0),(1,6),(2,6),(3,4),(4,4),(5,4),(12,6),(13,5),(14,5),(18,6)],array (0,5) [(0,(0,6)),(1,(-1,0)),(2,(4,2)),(3,(4,2)),(4,(-1,0)),(5,*** Exception: (Array.!): undefined array element
--}
 
 {-
 The test cases that set the Maximize cases in makeTagComparer

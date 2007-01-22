@@ -10,6 +10,7 @@ import Control.Monad.RWS
 import Control.Monad.Instances
 import Data.List
 import Data.Maybe
+import qualified Data.Sequence as S
 
 import Data.Array.IArray
 import Data.Set(Set)
@@ -28,7 +29,6 @@ import Text.Regex.TDFA.Pattern
 import Text.Regex.TDFA.IntArrTrieSet(TrieSet)
 import qualified Text.Regex.TDFA.IntArrTrieSet as Trie
 
-
 import Text.Regex.Base(RegexOptions(defaultCompOpt))
 import Text.Regex.TDFA.ReadRegex(parseRegex)
 
@@ -37,18 +37,11 @@ import Text.Regex.TDFA.ReadRegex(parseRegex)
 debug :: (Show a) => a -> s -> s
 debug _ s = s
 
-{-
-dlose :: DFA
-dwin  = DFA { d_id = ISet.singleton 0
-            , d_dt = Simple' { dt_win = IMap.singleton 0 (\j -> [(0,j)])
-                             , dt_trans = Map.empty
-                             , dt_other = Nothing } }
--}
 dlose :: DFA
 dlose = DFA { d_id = ISet.empty
-            , d_dt = Simple'{ dt_win = IMap.empty
-                            , dt_trans = Map.empty
-                            , dt_other = Nothing } }
+            , d_dt = Simple' { dt_win = IMap.empty
+                             , dt_trans = Map.empty
+                             , dt_other = Nothing } }
 
 -- Specilized utility
 ungroupBy :: (a->x) -> ([a]->y) -> [[a]] -> [(x,y)]
@@ -56,22 +49,19 @@ ungroupBy f g = map helper where
   helper [] = (error "empty group passed to ungroupBy",g [])
   helper x@(x1:_) = (f x1,g x)
 
+-- Used to create actions for Run
+
 askPre :: RunState Position
 askPre = asks fst
 
 askPost :: RunState Position
 askPost = asks fst
 
-getMap :: RunState (IntMap Position)
-getMap = get
-
-putMap :: IntMap Position -> RunState ()
-putMap x = seq x (put x)
-
 modifyMap :: (IntMap Position -> IntMap Position) -> RunState ()
 modifyMap f = do
-  m <- getMap
-  putMap (f m)
+  (m,s) <- get
+  let m' = f m in seq m' $ do
+  put (m',s)
 
 resetTag :: Tag -> RunState ()
 resetTag tag = modifyMap (IMap.delete tag)
@@ -90,130 +80,129 @@ enterOrbit :: Tag -> RunState ()
 enterOrbit tag = do
   pos <- askPre
   tell ["Entering Orbit "++show (tag,pos)]
-  modifyMap (IMap.insert tag (negate tag))
+  (m,s) <- get :: RunState (IntMap Position,[Orbits])
+  let v = negate tag
+      m' = IMap.insert tag (negate tag) m
+      s' = case s of
+             ( (t,orbits) : old ) | t==tag -> let orbits' = (S.|>) orbits pos
+                                              in seq orbits' $ (t,orbits'):old
+             _ -> (tag,S.singleton pos):s
+  seq v $ seq m' $ seq s' $ put (m',s')
 
 leaveOrbit :: Tag -> RunState ()
 leaveOrbit tag = do
   pos <- askPre
   tell ["Leaving Orbit "++show (tag,pos)]
-  resetTag tag
+  (m,s) <- get
+  let m' = IMap.delete tag m
+      s' = case s of
+             ( (t,orbits) : old ) | t==tag -> old
+             _ -> s
+  seq m' $ seq s' $ put (m',s')
 
+-- dumb smart constructor for tracing construction (I wanted to monitor laziness)
+makeDFA :: SetIndex -> DT -> DFA
+makeDFA i dt = debug ("\n>Making DFA "++show i++"<") $ DFA i dt
+
+-- Note that no CompOption parameter is needed.
 nfaToDFA :: ((Index,Array Index QNFA),Array Tag OP,Array PatternIndex [GroupInfo])
          -> (DFA,Index,Array Tag OP,Array PatternIndex [GroupInfo])
-nfaToDFA ((startIndex,aIndexQNFA),aTagOp,aGroupInfo) =
-  let trie :: TrieSet DFA
-      trie = Trie.fromSingles dlose mergeDFA (bounds aIndexQNFA) indexToDFA
+nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupInfo) where
+  dfa = indexesToDFA [startIndex]
 
-      op = (aTagOp!)  -- Maximize or Minimize the given Tag
-      indexToDFA = qnfaToDFA . (aIndexQNFA!)  -- used to seed the Trie
-      indexesToDFA = Trie.lookupAsc trie  -- Lookup in cache
+  indexesToDFA = Trie.lookupAsc trie  -- Lookup in cache
+    where trie :: TrieSet DFA
+          trie = Trie.fromSingles dlose mergeDFA (bounds aQNFA) indexToDFA
 
-      makeWinner :: Index -> WinTags -> IntMap {- Index -} (RunState ())
-      makeWinner i w | noWin w = IMap.empty
-                     | otherwise = IMap.singleton i . makeUpdater . cleanWin $ w
-
-      makeUpdater :: TagList -> RunState ()
-      makeUpdater spec = specRunState
-        where specRunState = sequence_ . map helper $ spec
-              helper (tag,update) = case update of
-                                       PreUpdate TagTask -> setPreTag tag
-                                       PreUpdate ResetTask -> resetTag tag
-                                       PreUpdate EnterOrbitTask -> enterOrbit tag
-                                       PreUpdate LeaveOrbitTask -> leaveOrbit tag
-                                       PostUpdate TagTask -> setPostTag tag
-                                       _ -> error ("Weird command in makeUpdater: "++show (tag,update,spec))
-{-
-      makeUpdater :: [(Tag,TagUpdate)] -> Delta
-      makeUpdater spec = sequence fspec -- Monad (Reader ((->) Tag))
-        where fspec = do (tag,update) <- spec -- Monad []
-                         return $ case update of
-                                    PreTag   -> (\j->(tag,j))
-                                    PostTag  -> (\j->(tag,succ j))
-                                    ResetTag -> (\_->(tag,updateReset))
-                                    EnterOrbit -> (\_ -> (tag,updateEnterOrbit))
-                                    LeaveOrbit -> (\_ -> (tag,updateLeaveOrbit))
--}
-      makeDFA i dt = debug ("\n>Making DFA "++show i++"<") $ DFA i dt
-
-      qnfaToDFA :: QNFA -> DFA
-      qnfaToDFA (QNFA {q_id = source,q_qt = qtIn}) = makeDFA (ISet.singleton source) (qtToDT qtIn)
+  indexToDFA :: Index -> DFA  -- used to seed the Trie from the NFA
+  indexToDFA i = makeDFA (ISet.singleton source) (qtToDT qtIn)
+    where
+      (QNFA {q_id = source,q_qt = qtIn}) = aQNFA!i
+      qtToDT :: QT -> DT
+      qtToDT (Testing {qt_test=wt, qt_dopas=dopas, qt_a=a, qt_b=b}) =
+          Testing' { dt_test = wt
+                   , dt_dopas = dopas
+                   , dt_a = qtToDT a
+                   , dt_b = qtToDT b }
+      qtToDT (Simple {qt_win=w, qt_trans=t, qt_other=o}) =
+        Simple' { dt_win = makeWinner
+                , dt_trans = fmap qtransToDFA t
+                , dt_other = if IMap.null o then Nothing else Just (qtransToDFA o)}
         where
-          f (dest,(dopa,spec)) = (dest,(source,(dopa,makeUpdater spec)))
+          makeWinner :: IntMap {- Index -} (RunState ())
+          makeWinner | noWin w = IMap.empty
+                     | otherwise = IMap.singleton source . makeUpdater . cleanWin $ w
 
-          qtToDT :: QT -> DT
-          qtToDT qt = case qt of
-                         Simple {qt_win=w, qt_trans=t, qt_other=o} ->
-                           Simple' { dt_win = makeWinner source w
-                                   , dt_trans = fmap qtransToDFA t
-                                   , dt_other = if IMap.null o then Nothing else Just (qtransToDFA o)}
-                         Testing {qt_test=wt, qt_dopas=dopas, qt_a=a, qt_b=b} ->
-                           Testing' { dt_test = wt
-                                    , dt_dopas = dopas
-                                    , dt_a = qtToDT a
-                                    , dt_b = qtToDT b }
+          makeUpdater :: TagList -> RunState ()
+          makeUpdater spec = specRunState
+            where specRunState = sequence_ . map helper $ spec
+                  helper (tag,update) = case update of
+                                           PreUpdate TagTask -> setPreTag tag
+                                           PreUpdate ResetTask -> resetTag tag
+                                           PreUpdate EnterOrbitTask -> enterOrbit tag
+                                           PreUpdate LeaveOrbitTask -> leaveOrbit tag
+                                           PostUpdate TagTask -> setPostTag tag
+                                           _ -> error ("Weird command in makeUpdater: "++show (tag,update,spec))
+
+          qtransToDFA :: QTrans -> (DFA,DTrans)
+          qtransToDFA qtrans = (indexesToDFA (IMap.keys dtrans),dtrans)
             where
-              qtransToDFA :: QTrans -> (DFA,DTrans)
-              qtransToDFA qtrans = (indexesToDFA (IMap.keys dtrans),dtrans)
-                where
-                  dtrans = qtransToDTrans qtrans
-                  qtransToDTrans :: QTrans -> DTrans
-                  qtransToDTrans = IMap.fromAscList . ungroupBy fst (IMap.fromList . (map snd))
-                                   . groupBy ((==) `on` fst) . sortBy (compare `on` fst)
-                                   . map f . pickQTrans op
+              dtrans = qtransToDTrans qtrans
+              qtransToDTrans :: QTrans -> DTrans
+              qtransToDTrans = IMap.fromAscList . ungroupBy fst (IMap.fromList . (map snd))
+                               . groupBy ((==) `on` fst) . sortBy (compare `on` fst)
+                               . map f . pickQTrans (aTagOp!)  -- Maximize or Minimize the given Tag (or Orbit)
+                where f (dest,(dopa,spec)) = (dest,(source,(dopa,makeUpdater spec)))
 
-      mergeDFA :: DFA -> DFA -> DFA
-      mergeDFA d1 d2 = makeDFA i dt
+  -- The DFA states are built up by merging the singleton ones converted from the NFA
+  mergeDFA :: DFA -> DFA -> DFA
+  mergeDFA d1 d2 = makeDFA i dt
+    where
+      i = d_id d1 `mappend` d_id d2
+      dt = d_dt d1 `mergeDT` d_dt d2
+      mergeDT,nestDT :: DT -> DT -> DT
+      mergeDT (Simple' w1 t1 o1) (Simple' w2 t2 o2) = Simple' w t o
         where
-          i = d_id d1 `mappend` d_id d2
-          dt = d_dt d1 `mergeDT` d_dt d2
-          mergeDT :: DT -> DT -> DT
-          mergeDT (Simple' w1 t1 o1) (Simple' w2 t2 o2) = Simple' w t o
+          w = w1 `mappend` w2
+          t = fuseDTrans t1 o1 t2 o2
+          o = case (o1,o2) of
+                (Just o1', Just o2') -> Just (mergeDTrans o1' o2')
+                _                    -> o1 `mplus` o2
+          -- This is very much like mergeQTrans
+          mergeDTrans :: (DFA,DTrans) -> (DFA,DTrans) -> (DFA,DTrans)
+          mergeDTrans (_,dt1) (_,dt2) = (indexesToDFA (IMap.keys dtrans),dtrans)
+            where dtrans = IMap.unionWith IMap.union dt1 dt2
+          -- This is very much like fuseQTrans
+          fuseDTrans :: Map Char (DFA,DTrans) -> Maybe (DFA,DTrans)
+                     -> Map Char (DFA,DTrans) -> Maybe (DFA,DTrans)
+                     -> Map Char (DFA,DTrans)
+          fuseDTrans t1 o1 t2 o2 = Map.fromDistinctAscList (fuse l1 l2)
             where
-              w = w1 `mappend` w2
-              t = fuseDTrans t1 o1 t2 o2
-              o = case (o1,o2) of (Just o1', Just o2') -> Just (mergeDTrans o1' o2')
-                                  _ -> o1 `mplus` o2
-          mergeDT dt1@(Testing' wt1 dopas1 a1 b1) dt2@(Testing' wt2 dopas2 a2 b2) =
-            case compare wt1 wt2 of
-              LT -> nestDT dt1 dt2
-              EQ -> Testing' { dt_test = wt1
-                             , dt_dopas = dopas1 `mappend` dopas2
-                             , dt_a = mergeDT a1 a2
-                             , dt_b = mergeDT b1 b2 }
-              GT -> nestDT dt2 dt1
-          mergeDT dt1@(Testing' {}) dt2 = nestDT dt1 dt2
-          mergeDT dt1 dt2@(Testing' {}) = nestDT dt2 dt1
-          nestDT dt1@(Testing' {dt_a=a,dt_b=b}) dt2 = dt1 { dt_a = mergeDT a dt2, dt_b = mergeDT b dt2 }
-          nestDT _ _ = error "nestDT called on Simple -- cannot happen"
-
-      mergeDTrans :: (DFA,DTrans) -> (DFA,DTrans) -> (DFA,DTrans)
-      mergeDTrans (_,dt1) (_,dt2) = (indexesToDFA (IMap.keys dtrans),dtrans)
-        where dtrans = IMap.unionWith IMap.union dt1 dt2
-
-      fuseDTrans :: Map Char (DFA,DTrans) -> Maybe (DFA,DTrans)
-                 -> Map Char (DFA,DTrans) -> Maybe (DFA,DTrans)
-                 -> Map Char (DFA,DTrans)
-      fuseDTrans t1 o1 t2 o2 = Map.fromDistinctAscList (fuse l1 l2)
-        where
-          l1 = Map.toAscList t1
-          l2 = Map.toAscList t2
-          merge_o1 = case o1 of Nothing -> id
-                                Just o1' -> mergeDTrans o1'
-          merge_o2 = case o2 of Nothing -> id
-                                Just o2' -> mergeDTrans o2'
-          fuse [] y = if isJust o1 then mapSnd merge_o1 y else y
-          fuse x [] = if isJust o2 then mapSnd merge_o2 x else x
-          fuse x@((xc,xa):xs) y@((yc,ya):ys) = 
-            case compare xc yc of
-              LT -> (xc,merge_o2 xa) : fuse xs y
-              EQ -> (xc,mergeDTrans xa ya) : fuse xs ys
-              GT -> (yc,merge_o1 ya) : fuse x ys
-
-      dfa = indexesToDFA [startIndex]
-      msg = unlines [ show aTagOp
-                    , show aGroupInfo
-                    ]
-  in debug msg $ (dfa,startIndex,aTagOp,aGroupInfo)
+              l1 = Map.toAscList t1
+              l2 = Map.toAscList t2
+              merge_o1 = case o1 of Nothing -> id
+                                    Just o1' -> mergeDTrans o1'
+              merge_o2 = case o2 of Nothing -> id
+                                    Just o2' -> mergeDTrans o2'
+              fuse [] y = if isJust o1 then mapSnd merge_o1 y else y
+              fuse x [] = if isJust o2 then mapSnd merge_o2 x else x
+              fuse x@((xc,xa):xs) y@((yc,ya):ys) = 
+                case compare xc yc of
+                  LT -> (xc,merge_o2 xa) : fuse xs y
+                  EQ -> (xc,mergeDTrans xa ya) : fuse xs ys
+                  GT -> (yc,merge_o1 ya) : fuse x ys
+      mergeDT dt1@(Testing' wt1 dopas1 a1 b1) dt2@(Testing' wt2 dopas2 a2 b2) =
+        case compare wt1 wt2 of
+          LT -> nestDT dt1 dt2
+          EQ -> Testing' { dt_test = wt1
+                         , dt_dopas = dopas1 `mappend` dopas2
+                         , dt_a = mergeDT a1 a2
+                         , dt_b = mergeDT b1 b2 }
+          GT -> nestDT dt2 dt1
+      mergeDT dt1@(Testing' {}) dt2 = nestDT dt1 dt2
+      mergeDT dt1 dt2@(Testing' {}) = nestDT dt2 dt1
+      nestDT dt1@(Testing' {dt_a=a,dt_b=b}) dt2 = dt1 { dt_a = mergeDT a dt2, dt_b = mergeDT b dt2 }
+      nestDT _ _ = error "nestDT called on Simple -- cannot happen"
 
 patternToDFA :: CompOption -> (Pattern,(PatternIndex, Int)) -> (DFA,Index,Array Tag OP,Array PatternIndex [GroupInfo])
 patternToDFA compOpt pattern = nfaToDFA (patternToNFA compOpt pattern)
@@ -299,7 +288,7 @@ showDT m (Simple' w t o) = "Simple' { dt_win = " ++ (show . map (\(i,rs) -> (i,s
                     . IMap.assocs $ z
           in mapSnd y x
         seeRS :: RunState () -> ([(Tag,Position)],[String])
-        seeRS rs = let (s,w) = execRWS rs (0,0) m
+        seeRS rs = let ((s,_),w) = execRWS rs (0,0) (m,[])
                    in (diffMap m s,w)
 
 showDT m (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt

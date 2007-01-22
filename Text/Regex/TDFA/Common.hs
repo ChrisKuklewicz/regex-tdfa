@@ -9,6 +9,7 @@ import Data.Map(Map)
 import Data.Set(Set)
 import Data.IntMap(IntMap)
 import Data.IntSet(IntSet)
+import Data.Sequence(Seq)
 
 --import Debug.Trace
 
@@ -141,5 +142,8 @@ data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord)  -- known predicates
 
 -- Run
 
-type RunState = RWS (Position,Position) [String] (IntMap Position)
+type RunState = RWS (Position,Position) [String] Scratch
+
+type Orbits = (Tag,Seq Position)
+type Scratch = (IntMap Position,[Orbits])
 

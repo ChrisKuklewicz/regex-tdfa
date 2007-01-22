@@ -277,6 +277,8 @@ bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
   canonical :: TagCommand -> TagCommand
   canonical (dopa,tcs) = (dopa,sort clean) -- keep only last setting or resetting
     where clean = nubBy ((==) `on` fst) . reverse $ tcs  -- ick, nub XXX
+
+  -- choose trests Orbit and Minimize as the same
   choose :: TagList -> TagList -> Ordering
   choose ((t1,b1):rest1) ((t2,b2):rest2) =
     case compare t1 t2 of -- find and examine the smaller of t1 and t2
