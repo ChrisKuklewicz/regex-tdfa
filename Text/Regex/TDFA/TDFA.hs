@@ -1,11 +1,12 @@
 module Text.Regex.TDFA.TDFA(DFA(..),DT(..)
+                           ,examineDFA
                            ,patternToDFA,nfaToDFA,dfaMap) where
 
 import Control.Arrow((***))
-import Data.Monoid
-import Control.Monad.Reader
-import Control.Monad.Writer
-import Control.Monad.State
+-- import Data.Monoid
+-- import Control.Monad.Reader
+-- import Control.Monad.Writer
+-- import Control.Monad.State
 import Control.Monad.RWS
 import Control.Monad.Instances
 import Data.List
@@ -13,8 +14,8 @@ import Data.Maybe
 import qualified Data.Sequence as S
 
 import Data.Array.IArray
-import Data.Set(Set)
-import qualified Data.Set as Set
+-- import Data.Set(Set)
+-- import qualified Data.Set as Set
 -- import Data.IntSet(IntSet)
 import qualified Data.IntSet as ISet
 import Data.Map(Map)
@@ -29,8 +30,8 @@ import Text.Regex.TDFA.Pattern
 import Text.Regex.TDFA.IntArrTrieSet(TrieSet)
 import qualified Text.Regex.TDFA.IntArrTrieSet as Trie
 
-import Text.Regex.Base(RegexOptions(defaultCompOpt))
-import Text.Regex.TDFA.ReadRegex(parseRegex)
+--import Text.Regex.Base(RegexOptions(defaultCompOpt))
+--import Text.Regex.TDFA.ReadRegex(parseRegex)
 
 -- import Debug.Trace
 
@@ -82,7 +83,7 @@ enterOrbit tag = do
   tell ["Entering Orbit "++show (tag,pos)]
   (m,s) <- get :: RunState (IntMap Position,[Orbits])
   let v = negate tag
-      m' = IMap.insert tag (negate tag) m
+      m' = IMap.insertWith (\_ old -> old) tag pos m
       s' = case s of
              ( (t,orbits) : old ) | t==tag -> let orbits' = (S.|>) orbits pos
                                               in seq orbits' $ (t,orbits'):old
@@ -96,7 +97,7 @@ leaveOrbit tag = do
   (m,s) <- get
   let m' = IMap.delete tag m
       s' = case s of
-             ( (t,orbits) : old ) | t==tag -> old
+             ( (t,_) : old ) | t==tag -> old
              _ -> s
   seq m' $ seq s' $ put (m',s')
 
@@ -164,7 +165,7 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
       mergeDT (Simple' w1 t1 o1) (Simple' w2 t2 o2) = Simple' w t o
         where
           w = w1 `mappend` w2
-          t = fuseDTrans t1 o1 t2 o2
+          t = fuseDTrans -- t1 o1 t2 o2
           o = case (o1,o2) of
                 (Just o1', Just o2') -> Just (mergeDTrans o1' o2')
                 _                    -> o1 `mplus` o2
@@ -173,10 +174,8 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
           mergeDTrans (_,dt1) (_,dt2) = (indexesToDFA (IMap.keys dtrans),dtrans)
             where dtrans = IMap.unionWith IMap.union dt1 dt2
           -- This is very much like fuseQTrans
-          fuseDTrans :: Map Char (DFA,DTrans) -> Maybe (DFA,DTrans)
-                     -> Map Char (DFA,DTrans) -> Maybe (DFA,DTrans)
-                     -> Map Char (DFA,DTrans)
-          fuseDTrans t1 o1 t2 o2 = Map.fromDistinctAscList (fuse l1 l2)
+          fuseDTrans :: Map Char (DFA,DTrans)
+          fuseDTrans = Map.fromDistinctAscList (fuse l1 l2)
             where
               l1 = Map.toAscList t1
               l2 = Map.toAscList t2
@@ -218,32 +217,6 @@ dfaMap = seen (Map.empty) where
 flattenDT :: DT -> [DFA]
 flattenDT (Simple' {dt_trans=mt,dt_other=mo}) = map fst . maybe id (:) mo . Map.elems $ mt
 flattenDT (Testing' {dt_a=a,dt_b=b}) = flattenDT a ++ flattenDT b
-
-{-
--- trebug
-
-Prelude Text.Regex.TRE Text.Regex.Base> let r=makeRegex  "((a)|(b*)|c(c*))*" :: Regex in match r "acbbacbb" :: MatchArray
-array (0,4) [(0,(0,8)),(1,(6,2)),(2,(-1,0)),(3,(6,2)),(4,(6,2))]
-
-Prelude Text.Regex.TRE Text.Regex.Base Text.Regex.Posix> let r=makeRegex  "(b*|c(c*))*" :: Text.Regex.TRE.Regex in match r "cbb" :: MatchArray
-array (0,2) [(0,(0,3)),(1,(1,2)),(2,(1,2))]
-
-The above is a bug.  the (c*) group should not match "bb".
-
--}
-
-{-
-      -- When a group is started we must clear its stop tag
-
-      reseter :: [Tag] -> ([(Tag,Position)]->[(Tag,Position)])
-      reseter tags = id -- foldr (\c->(((c,-1):).)) id tags'
-        where tags' = (concatMap (ar!) tags) \\ tags
-
-      ar :: Array Tag [Tag]
-      ar = accumArray (++) [] (bounds aTagOp) (map reset (elems aGroupInfo))
-        where reset (GroupInfo this parent start stop) = (start, [stop])
-
--}
 
 fillMap :: Tag -> IntMap Position
 fillMap tag = IMap.fromDistinctAscList [(t,-1) | t <- [0..tag] ]
@@ -288,8 +261,8 @@ showDT m (Simple' w t o) = "Simple' { dt_win = " ++ (show . map (\(i,rs) -> (i,s
                     . IMap.assocs $ z
           in mapSnd y x
         seeRS :: RunState () -> ([(Tag,Position)],[String])
-        seeRS rs = let ((s,_),w) = execRWS rs (0,0) (m,[])
-                   in (diffMap m s,w)
+        seeRS rs = let ((s,_),written) = execRWS rs (0,0) (m,[])
+                   in (diffMap m s,written)
 
 showDT m (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
                           ++ "\n         , dt_dopas = " ++ show d
@@ -299,5 +272,5 @@ showDT m (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
  where indent = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT m
        spaces = replicate 10 ' '
 
-toDFA = nfaToDFA . toNFA
+-- toDFA = nfaToDFA . toNFA
 -- display_DFA = mapM_ print . Map.elems . dfaMap . (\(x,_,_,_) -> x) . toDFA 

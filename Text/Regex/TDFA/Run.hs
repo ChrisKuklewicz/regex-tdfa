@@ -1,6 +1,6 @@
 module Text.Regex.TDFA.Run where -- (findMatch,findMatchAll,countMatchAll) where
 
-import Control.Monad
+--import Control.Monad
 import Control.Monad.RWS
 import Data.Array.IArray
 -- import Data.Map(Map)
@@ -10,6 +10,8 @@ import qualified Data.IntMap as IMap
 import Data.Monoid
 import Data.Maybe
 import Data.List
+import Data.Sequence(viewl,ViewL(..))
+import qualified Data.Sequence as S
 
 import Text.Regex.Base
 import Text.Regex.TDFA.Common
@@ -18,18 +20,18 @@ import Text.Regex.TDFA.CorePattern
 import Text.Regex.TDFA.TDFA
 import Text.Regex.TDFA.Wrap
 
-import Text.Regex.TDFA.TNFA (patternToNFA)
+--import Text.Regex.TDFA.TNFA (patternToNFA)
 
-import Debug.Trace
+-- import Debug.Trace
 
-
+{-
 toP = either (error.show) id . parseRegex 
 toQ = patternToQ defaultCompOpt . toP
 toNFA = patternToNFA defaultCompOpt . toP
 toDFA = nfaToDFA . toNFA
 display_NFA = mapM_ print . elems . (\(x,_,_) -> snd x) . toNFA 
 -- display_DFA = mapM_ print . Map.elems . dfaMap . (\(x,_,_,_) -> x) . toDFA 
-
+-}
 
 type TagValues = IntMap {- Tag -} Position
 -- type TagComparer = TagValues -> TagValues -> Ordering -- GT is the preferred one
@@ -39,6 +41,7 @@ type TagComparer = Scratch -> Scratch -> Ordering
 -- cases to be sure about all the Maximize cases.  The minimize cases
 -- look stranger to trigger, so I am leaving them as errors until I am
 -- certain what to put there.
+{-
 makeTagComparer :: Array Tag OP -> TagComparer
 -- XXX serious help with -Wall needed
 makeTagComparer tags = (\ tv1 tv2 ->
@@ -63,6 +66,52 @@ makeTagComparer tags = (\ tv1 tv2 ->
       comp [] ((t2,_):_) = case tags!t2 of
                               Maximize -> LT
                               Minimize -> errMsg "makeTagComparer: tv2 longer"
+  in comp tv1' tv2'
+ )
+-}
+makeTagComparer :: Array Tag OP -> TagComparer
+-- XXX serious help with -Wall needed
+makeTagComparer tags = (\ tv1 tv2 ->
+  let tv1' = IMap.toAscList . fst $ tv1
+      tv2' = IMap.toAscList . fst $ tv2
+      errMsg s = error $ s ++ " : " ++ unlines [show tags,show tv1,show tv2]
+      comp ((t1,v1):rest1) ((t2,v2):rest2) =
+        case compare t1 t2 of
+               EQ -> case tags!t1 of
+                       Minimize -> compare v2 v1 `mappend` comp rest1 rest2
+                       Maximize -> compare v1 v2 `mappend` comp rest1 rest2
+                       Orbit | v1 /= v2 -> errMsg "makeTagComparer: non-identical orbit pos"
+                             | otherwise -> compareOrbits (reverse $ snd tv1) (reverse $ snd tv2)
+                                            `mappend` comp rest1 rest2
+               LT -> case tags!t1 of
+                       Maximize -> GT
+                       Minimize -> errMsg "makeTagComparer: tv1 Minimize without tv2"
+                       Orbit -> errMsg "makeTagComparer: tv1 Orbit without tv2"
+               GT -> case tags!t2 of 
+                       Maximize -> LT
+                       Minimize -> errMsg "makeTagComparer: tv2 Minimize without tv1"
+                       Orbit -> errMsg "makeTagComparer: tv2 Orbit without tv1"
+      comp [] [] = EQ
+      comp ((t1,_):_) [] = case tags!t1 of
+                              Maximize -> GT
+                              Minimize -> errMsg "makeTagComparer: tv1 Minimize longer"
+                              Orbit -> errMsg "makeTagComparer: tv1 Orbit longer"
+      comp [] ((t2,_):_) = case tags!t2 of
+                              Maximize -> LT
+                              Minimize -> errMsg "makeTagComparer: tv2 Minimize longer"
+                              Orbit -> errMsg "makeTagComparer: tv2 Orbit longer"
+      compareOrbits [] [] = EQ
+      compareOrbits [] _ = errMsg "Off end of tv1 orbits list"
+      compareOrbits _ [] = errMsg "Off end of tv2 orbits list"
+      compareOrbits ((tag1,pos1):rest1) ((tag2,pos2):rest2) | tag1 /= tag2 =
+        errMsg "makeTagComparer: Orbits are not tagged the same"
+                                            | otherwise = comparePos (viewl pos1) (viewl pos2)
+                                                          `mappend` compareOrbits rest1 rest2
+      comparePos EmptyL EmptyL = EQ
+      comparePos EmptyL _ = GT
+      comparePos _ EmptyL = LT
+      comparePos (p1:<ps1) (p2:<ps2) = compare p1 p2 `mappend` comparePos (viewl ps1) (viewl ps2)
+        
   in comp tv1' tv2'
  )
 
@@ -202,7 +251,8 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
   runHere winning dt tags off prev input =
     let best (destIndex,mSourceDelta) = (destIndex
                                         ,maximumBy comp 
-                                         . map (\(m,w) -> trace ("\n>"++show destIndex++'\n':unlines w++"<") m)
+--                                         . map (\(m,w) -> trace ("\n>"++show destIndex++'\n':unlines w++"<") m)
+                                         . map fst
                                          . map (\(sourceIndex,(_,rs)) ->
                                                 update rs off (look sourceIndex tags))
                                          . IMap.toList $ mSourceDelta)
@@ -210,7 +260,8 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
          Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
            let winning' = if IMap.null w then winning
                             else Just . maximumBy comp
-                                      . map (\(m,w) -> trace ("\n>winning\n"++unlines w++"<") m)
+--                                      . map (\(m,written) -> trace ("\n>winning\n"++unlines written++"<") m)
+                                      . map fst
                                       . map (\(sourceIndex,rs) ->
                                                update rs off (look sourceIndex tags))
                                       . IMap.toList $ w

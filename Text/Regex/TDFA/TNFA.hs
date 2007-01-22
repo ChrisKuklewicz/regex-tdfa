@@ -19,7 +19,7 @@ This still requires ordering the tags instead of keeping them sorted.
 -}
 
 module Text.Regex.TDFA.TNFA(patternToNFA,pickQTrans,cleanWin,noWin
-                           ,toP,toQ,toNFA,display_NFA
+--                           ,toP,toQ,toNFA,display_NFA
                            ,QNFA(..),QT(..),QTrans,TagUpdate(..)) where
 
 import Text.Regex.TDFA.Pattern(Pattern(..))
@@ -27,9 +27,9 @@ import Text.Regex.TDFA.CorePattern(Q(..),P(..),OP(..),WhichTest,cleanNullView,Nu
                                  ,SetTestInfo(..),Wanted(..),TestInfo,cannotAccept,patternToQ)
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.Wrap
-import Text.Regex.Base(RegexOptions(defaultCompOpt))
+-- import Text.Regex.Base(RegexOptions(defaultCompOpt))
 -- (DoPa,Index,PatternIndex,GroupInfo,CompOption(..),on,mapFst,mapSnd,norep)
-import Text.Regex.TDFA.ReadRegex(decodePatternSet,parseRegex)
+import Text.Regex.TDFA.ReadRegex(decodePatternSet)
 
 import Data.Monoid
 import Control.Monad.State
@@ -277,7 +277,6 @@ bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
   canonical :: TagCommand -> TagCommand
   canonical (dopa,tcs) = (dopa,sort clean) -- keep only last setting or resetting
     where clean = nubBy ((==) `on` fst) . reverse $ tcs  -- ick, nub XXX
-
   -- choose trests Orbit and Minimize as the same
   choose :: TagList -> TagList -> Ordering
   choose ((t1,b1):rest1) ((t2,b2):rest2) =
@@ -443,13 +442,6 @@ qToNFA compOpt qTop = (q_id startingQNFA
     let post = promoteTasks PostUpdate tags
     return . fromQT $ acceptTrans mPre pat post i
 
-  modifyChars = if caseSensitive compOpt
-                  then id
-                  else norep . sort . ($ []) 
-                         . foldr (\c dl -> if isAlpha c
-                                             then (dl.(toUpper c:).(toLower c:))
-                                             else (dl.(c:))) id 
-  
   -- Alternative: Either (SetTag,QNFA) QT to send Tags that apply
   --  before going to the QNFA leftward, where they may someday reach
   --  a OneChar.  Essentially it accumulates postTags and preTags into
@@ -620,52 +612,37 @@ qToNFA compOpt qTop = (q_id startingQNFA
         return ac'
       _ -> error ("This case in Text.Regex.TNFA.TNFA.actNullableTagless cannot happen: "++show qIn)
 
-{- XXX change to getE which introduces the possibility of consuming an optimized mQNFA value from a different Star 
-       let contQT = prependTags' [(orbit,LeaveOrbit)] $
-                     case mAccepting of
-                       Nothing -> getQT eLoop
-                       Just accepting -> mergeQT (getQT eLoop) (getQT accepting)
-        (_,mE,_) <- act (this,Nothing,Nothing) q
-        let mqt = fmap (resetTags tags . getQT) mE
-        (this,mQNFA') <- if usesQNFA q
-                           then do qnfa <- newQNFA "actNullableTagless/Star" (maybe contQT (mergeQT contQT) mqt)
-                                   return (fromQNFA qnfa,Just (mempty,qnfa)) -- create optimized mQNFA' value
-                           else return $ (fromQT (maybe contQT (mergeQT contQT) mqt),Nothing)
-        let mAccepting' = case (mAccepting,mqt) of
-                            (Just eAccepting,Just qt) -> Just (fromQT $ mergeQT (getQT eAccepting) qt)
-                            _ -> (fmap fromQT mqt) `mplus` mAccepting
-        return (eLoop,mAccepting',mQNFA')
--}
+  dotTrans | multiline compOpt = Map.singleton '\n' mempty
+           | otherwise = mempty
 
-  dotTrans = if multiline compOpt 
-               then Map.singleton '\n' mempty
-               else mempty
+  addNewline | multiline compOpt = Set.insert '\n'
+             | otherwise = id
 
-  addNewline = if multiline compOpt
-                 then Set.insert '\n'
-                 else id
+  toMap dest | caseSensitive compOpt = Map.fromDistinctAscList . map (\c -> (c,dest))
+             | otherwise = Map.fromList . map (\c -> (c,dest)) . ($ []) 
+                             . foldr (\c dl -> if isAlpha c
+                                                 then (dl.(toUpper c:).(toLower c:))
+                                                 else (dl.(c:))) id 
 
   acceptTrans :: Maybe Tag -> Pattern -> TagList -> Index -> QT
   acceptTrans pre pIn post i =
     let target = IMap.singleton i $ Set.singleton (getDoPa pIn
                                                   ,maybe post (\tag->(tag,PreUpdate TagTask):post) pre)
-        tomap = Map.fromDistinctAscList . map (\c -> (c,target)) . modifyChars
     in case pIn of
          PChar _ char ->
-           let trans = tomap [char]
+           let trans = toMap target [char]
+           in Simple { qt_win = mempty, qt_trans = trans, qt_other = mempty }
+         PEscape _ char ->
+           let trans = toMap target [char]
            in Simple { qt_win = mempty, qt_trans = trans, qt_other = mempty }
          PDot _ -> Simple { qt_win = mempty, qt_trans = dotTrans, qt_other = target }
          PAny _ ps ->
-           let trans = tomap . Set.toAscList . decodePatternSet $ ps
+           let trans = toMap target . Set.toAscList . decodePatternSet $ ps
            in Simple { qt_win = mempty, qt_trans = trans, qt_other = mempty }
          PAnyNot _ ps ->
-           let trans = tomap . Set.toAscList . addNewline . decodePatternSet $ ps
+           let trans = toMap mempty . Set.toAscList . addNewline . decodePatternSet $ ps
            in Simple { qt_win = mempty, qt_trans = trans, qt_other = target }
-         PEscape _ char ->
-           let trans = tomap [char]
-           in Simple { qt_win = mempty, qt_trans = trans, qt_other = mempty }
          _ -> error ("Cannot acceptTrans pattern "++show pIn)
-
 
 {-
 showQT' :: (Tag -> OP) -> QT -> String
@@ -704,8 +681,9 @@ asQT :: E -> E
 asQT (tags,cont) = (tags,Right (either q_qt id cont))
 
 -}
-
+{-
 toP = either (error.show) id . parseRegex 
 toQ = patternToQ defaultCompOpt . toP
 toNFA = patternToNFA defaultCompOpt . toP
 display_NFA = mapM_ print . elems . (\(x,_,_) -> snd x) . toNFA 
+-}

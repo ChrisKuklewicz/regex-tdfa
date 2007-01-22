@@ -25,14 +25,14 @@ Exposed-Modules:        Text.Regex.TDFA.CorePattern
                         Text.Regex.TDFA.ReadRegex
                         Text.Regex.TDFA.Wrap
                         Text.Regex.TDFA.Run
-                        Text.Regex.TDFA.RunBS
-                        Text.Regex.TDFA.RunLBS
+--                        Text.Regex.TDFA.RunBS
+--                        Text.Regex.TDFA.RunLBS
                         Text.Regex.TDFA.IntArrTrieSet
                         Text.Regex.TDFA
                         Text.Regex.TDFA.String
-                        Text.Regex.TDFA.Sequence
-                        Text.Regex.TDFA.ByteString
-                        Text.Regex.TDFA.ByteString.Lazy
+--                        Text.Regex.TDFA.Sequence
+--                        Text.Regex.TDFA.ByteString
+--                        Text.Regex.TDFA.ByteString.Lazy
 Buildable:              True
 -- HS-Source-Dirs:         "."
 Extensions:             MultiParamTypeClasses, FunctionalDependencies

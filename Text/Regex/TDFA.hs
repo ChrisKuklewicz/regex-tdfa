@@ -26,14 +26,28 @@ Beyond posix:
 
 module Text.Regex.TDFA(module Text.Regex.TDFA.Wrap
                       ,module Text.Regex.TDFA.String
-                      ,module Text.Regex.TDFA.ByteString
-                      ,module Text.Regex.TDFA.ByteString.Lazy
-                      ,module Text.Regex.TDFA.Sequence
+--                      ,module Text.Regex.TDFA.ByteString
+--                      ,module Text.Regex.TDFA.ByteString.Lazy
+--                      ,module Text.Regex.TDFA.Sequence
                       ,module Text.Regex.Base) where
 
 import Text.Regex.TDFA.Wrap(Regex,CompOption(..),ExecOption(..),(=~),(=~~))
 import Text.Regex.TDFA.String()
-import Text.Regex.TDFA.Sequence()
-import Text.Regex.TDFA.ByteString()
-import Text.Regex.TDFA.ByteString.Lazy()
+--import Text.Regex.TDFA.Sequence()
+--import Text.Regex.TDFA.ByteString()
+--import Text.Regex.TDFA.ByteString.Lazy()
 import Text.Regex.Base
+
+
+{-
+-- trebug
+
+Prelude Text.Regex.TRE Text.Regex.Base> let r=makeRegex  "((a)|(b*)|c(c*))*" :: Regex in match r "acbbacbb" :: MatchArray
+array (0,4) [(0,(0,8)),(1,(6,2)),(2,(-1,0)),(3,(6,2)),(4,(6,2))]
+
+Prelude Text.Regex.TRE Text.Regex.Base Text.Regex.Posix> let r=makeRegex  "(b*|c(c*))*" :: Text.Regex.TRE.Regex in match r "cbb" :: MatchArray
+array (0,2) [(0,(0,3)),(1,(1,2)),(2,(1,2))]
+
+The above is a bug.  the (c*) group should not match "bb".
+
+-}
