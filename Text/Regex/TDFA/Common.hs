@@ -144,6 +144,5 @@ data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord)  -- known predicates
 
 type RunState = RWS (Position,Position) [String] Scratch
 
-type Orbits = (Tag,Seq Position)
-type Scratch = (IntMap Position,[Orbits])
-
+type Orbits = Seq Position
+type Scratch = (IntMap Position,IntMap {- Tag -} Orbits)

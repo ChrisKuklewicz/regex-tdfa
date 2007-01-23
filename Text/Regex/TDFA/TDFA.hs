@@ -80,25 +80,25 @@ setPostTag tag = do
 enterOrbit :: Tag -> RunState ()
 enterOrbit tag = do
   pos <- askPre
-  tell ["Entering Orbit "++show (tag,pos)]
-  (m,s) <- get :: RunState (IntMap Position,[Orbits])
+  let msg = ["Entering Orbit "++show (tag,pos)]
+  tell msg
+  (m,s) <- get :: RunState Scratch
   let v = negate tag
       m' = IMap.insertWith (\_ old -> old) tag pos m
-      s' = case s of
-             ( (t,orbits) : old ) | t==tag -> let orbits' = (S.|>) orbits pos
-                                              in seq orbits' $ (t,orbits'):old
-             _ -> (tag,S.singleton pos):s
+      s' = case IMap.lookup tag s of
+             Nothing -> IMap.singleton tag (S.singleton pos)
+             Just old -> let new = (S.|>) old pos
+                         in seq new $ IMap.insert tag new s
   seq v $ seq m' $ seq s' $ put (m',s')
 
 leaveOrbit :: Tag -> RunState ()
 leaveOrbit tag = do
   pos <- askPre
-  tell ["Leaving Orbit "++show (tag,pos)]
-  (m,s) <- get
+  let msg = ["Leaving Orbit "++show (tag,pos)]
+  tell msg
+  (m,s) <- get :: RunState Scratch
   let m' = IMap.delete tag m
-      s' = case s of
-             ( (t,_) : old ) | t==tag -> old
-             _ -> s
+      s' = IMap.delete tag s
   seq m' $ seq s' $ put (m',s')
 
 -- dumb smart constructor for tracing construction (I wanted to monitor laziness)
@@ -261,7 +261,7 @@ showDT m (Simple' w t o) = "Simple' { dt_win = " ++ (show . map (\(i,rs) -> (i,s
                     . IMap.assocs $ z
           in mapSnd y x
         seeRS :: RunState () -> ([(Tag,Position)],[String])
-        seeRS rs = let ((s,_),written) = execRWS rs (0,0) (m,[])
+        seeRS rs = let ((s,_),written) = execRWS rs (0,0) (m,mempty)
                    in (diffMap m s,written)
 
 showDT m (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt

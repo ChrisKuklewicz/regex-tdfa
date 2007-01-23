@@ -302,7 +302,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
            let accepts = canAccept q
            a <- if noTag m1 && accepts then uniq Minimize else return m1
            b <- if noTag m2 && accepts then uniq Maximize else return m2
-           c <- if varies q then uniq Orbit {-- XXX why not its own value? XXX -} else return NoTag
+           c <- if varies q || childGroups q then uniq Orbit else return NoTag
            -- end of each iteration is Maximize and is the beginning
            -- of the next so the start of each iteration should be a
            -- Maximize (except the first iteration, but this is taken

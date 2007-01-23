@@ -80,33 +80,28 @@ makeTagComparer tags = (\ tv1 tv2 ->
                EQ -> case tags!t1 of
                        Minimize -> compare v2 v1 `mappend` comp rest1 rest2
                        Maximize -> compare v1 v2 `mappend` comp rest1 rest2
-                       Orbit | v1 /= v2 -> errMsg "makeTagComparer: non-identical orbit pos"
-                             | otherwise -> compareOrbits (reverse $ snd tv1) (reverse $ snd tv2)
+                       Orbit | v1 /= v2 -> errMsg "makeTagComparer.comp: non-identical orbit pos"
+                             | otherwise -> compareOrbits (IMap.lookup t1 (snd tv1)) (IMap.lookup t2 (snd tv2))
                                             `mappend` comp rest1 rest2
                LT -> case tags!t1 of
                        Maximize -> GT
-                       Minimize -> errMsg "makeTagComparer: tv1 Minimize without tv2"
-                       Orbit -> errMsg "makeTagComparer: tv1 Orbit without tv2"
+                       Minimize -> errMsg "makeTagComparer.comp: tv1 Minimize without tv2"
+                       Orbit -> errMsg "makeTagComparer.comp: tv1 Orbit without tv2"
                GT -> case tags!t2 of 
                        Maximize -> LT
-                       Minimize -> errMsg "makeTagComparer: tv2 Minimize without tv1"
-                       Orbit -> errMsg "makeTagComparer: tv2 Orbit without tv1"
+                       Minimize -> errMsg "makeTagComparer.comp: tv2 Minimize without tv1"
+                       Orbit -> errMsg "makeTagComparer.comp: tv2 Orbit without tv1"
       comp [] [] = EQ
       comp ((t1,_):_) [] = case tags!t1 of
                               Maximize -> GT
-                              Minimize -> errMsg "makeTagComparer: tv1 Minimize longer"
-                              Orbit -> errMsg "makeTagComparer: tv1 Orbit longer"
+                              Minimize -> errMsg "makeTagComparer.comp: tv1 Minimize longer"
+                              Orbit -> errMsg "makeTagComparer.comp: tv1 Orbit longer"
       comp [] ((t2,_):_) = case tags!t2 of
                               Maximize -> LT
-                              Minimize -> errMsg "makeTagComparer: tv2 Minimize longer"
-                              Orbit -> errMsg "makeTagComparer: tv2 Orbit longer"
-      compareOrbits [] [] = EQ
-      compareOrbits [] _ = errMsg "Off end of tv1 orbits list"
-      compareOrbits _ [] = errMsg "Off end of tv2 orbits list"
-      compareOrbits ((tag1,pos1):rest1) ((tag2,pos2):rest2) | tag1 /= tag2 =
-        errMsg "makeTagComparer: Orbits are not tagged the same"
-                                            | otherwise = comparePos (viewl pos1) (viewl pos2)
-                                                          `mappend` compareOrbits rest1 rest2
+                              Minimize -> errMsg "makeTagComparer.comp: tv2 Minimize longer"
+                              Orbit -> errMsg "makeTagComparer.comp: tv2 Orbit longer"
+      compareOrbits (Just pos1) (Just pos2) = comparePos (viewl pos1) (viewl pos2)
+      compareOrbits _ _ = errMsg "makeTagComparer.compareOrbits: Nothing found in Scratch"
       comparePos EmptyL EmptyL = EQ
       comparePos EmptyL _ = GT
       comparePos _ EmptyL = LT
@@ -122,7 +117,9 @@ look key imap = IMap.findWithDefault (error ("key "++show key++" not found in Te
 
 {-# INLINE tagsToGroups #-}
 tagsToGroups :: Array PatternIndex [GroupInfo] -> Scratch -> MatchArray
-tagsToGroups aGroups (tags,[]) = groups -- trace (">><<< "++show (tags,filler)) groups
+tagsToGroups aGroups (tags,orbits) | not (IMap.null orbits) =
+  error ("tagsToGroups non null orbits :"++show (aGroups,tags,orbits))
+                                   | otherwise = groups -- trace (">><<< "++show (tags,filler)) groups
   where groups = array (0,snd (bounds aGroups)) filler
         filler = wholeMatch : map checkAll (assocs aGroups)
         wholeMatch = (0,(startPos,stopPos-startPos)) -- will not fail to return good positions
@@ -133,7 +130,6 @@ tagsToGroups aGroups (tags,[]) = groups -- trace (">><<< "++show (tags,filler)) 
                           startPos <- IMap.lookup start tags
                           stopPos <- IMap.lookup stop tags
                           return (startPos,stopPos-startPos)
-tagsToGroups aGroups (tags,orbits) = error ("tagsToGroups non null orbits :"++show (aGroups,tags,orbits)) -- XXX
 
 {-
 tagsToGroups :: Array PatternIndex [GroupInfo] -> IntMap Position -> MatchArray
@@ -232,7 +228,7 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
                     Nothing -> Nothing
                     Just offsetEnd -> Just (array (0,0) [(0,(offsetIn,offsetEnd-offsetIn))])
 
-  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 offsetIn,[])
+  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 offsetIn,mempty)
   comp = makeTagComparer (regex_tags regexIn)
 
   test_multiline wt _ prev input =

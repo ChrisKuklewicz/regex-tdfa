@@ -1,5 +1,5 @@
 Name:                   regex-tdfa
-Version:                0.10
+Version:                0.21
 -- Cabal-Version:       >=1.1.6
 License:                BSD3
 License-File:           LICENSE
@@ -17,23 +17,24 @@ Build-Depends:          regex-base, base >= 2.0, parsec, mtl
 -- Data-Files:
 -- Extra-Source-Files:
 -- Extra-Tmp-Files:
-Exposed-Modules:        Text.Regex.TDFA.CorePattern
+Exposed-Modules:        Text.Regex.TDFA.Common
+                        Text.Regex.TDFA.IntArrTrieSet
                         Text.Regex.TDFA.TNFA
                         Text.Regex.TDFA.TDFA
-                        Text.Regex.TDFA.Common
                         Text.Regex.TDFA.Pattern
                         Text.Regex.TDFA.ReadRegex
-                        Text.Regex.TDFA.Wrap
+                        Text.Regex.TDFA.CorePattern
                         Text.Regex.TDFA.Run
---                        Text.Regex.TDFA.RunBS
---                        Text.Regex.TDFA.RunLBS
-                        Text.Regex.TDFA.IntArrTrieSet
-                        Text.Regex.TDFA
+                        Text.Regex.TDFA.RunBS
+                        Text.Regex.TDFA.RunLBS
                         Text.Regex.TDFA.String
---                        Text.Regex.TDFA.Sequence
---                        Text.Regex.TDFA.ByteString
---                        Text.Regex.TDFA.ByteString.Lazy
+                        Text.Regex.TDFA.Sequence
+                        Text.Regex.TDFA.ByteString
+                        Text.Regex.TDFA.ByteString.Lazy
+                        Text.Regex.TDFA.Wrap
+                        Text.Regex.TDFA
 Buildable:              True
+-- Other-Modules:
 -- HS-Source-Dirs:         "."
 Extensions:             MultiParamTypeClasses, FunctionalDependencies
 -- GHC-Options:            -Wall
