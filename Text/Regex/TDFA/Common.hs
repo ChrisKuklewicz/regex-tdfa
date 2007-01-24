@@ -106,11 +106,17 @@ data QT = Simple {qt_win :: WinTags
                   ,qt_a,qt_b :: QT}
 
 -- during contruction
-data TagTask = ResetTask | TagTask | EnterOrbitTask | LeaveOrbitTask deriving (Show,Eq,Ord)
+data TagTask = ResetTask | TagTask | EnterOrbitTask | LeaveOrbitTask deriving (Show,Eq) -- Ord details are unimportant
 type TagTasks = [(Tag,TagTask)]
 
+instance Ord TagTask where
+    compare a b | a==b = EQ
+    compare TagTask ResetTask = GT  -- "x" =~ "((x?)?x)*" :: MatchArray should prefer inner ?'s Empty to outer ?'s Empty
+    compare ResetTask TagTask = LT 
+    compare a b = error ("Ord instance for TagTask (called from TNFA.bestTrans.choose EQ branch) found " ++ show (a,b))
+
 -- for QTrans
-data TagUpdate = PreUpdate TagTask | PostUpdate TagTask deriving (Show,Eq,Ord)
+data TagUpdate = PreUpdate TagTask | PostUpdate TagTask deriving (Show,Eq,Ord) -- PostUpdate is better than PreUpdate
 type TagList = [(Tag,TagUpdate)]
 type TagCommand = (DoPa,TagList)
 

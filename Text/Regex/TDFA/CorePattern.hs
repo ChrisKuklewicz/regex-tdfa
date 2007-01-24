@@ -73,14 +73,6 @@ emptyNull tags = (mempty, tags) : []
 testNull :: TestInfo -> WinTags -> NullView
 testNull (w,d) tags = (SetTestInfo (Map.singleton w (Set.singleton d)), tags) : []
 
-seqTake :: (Int, Maybe Int) -> (Int, Maybe Int) -> (Int, Maybe Int)
-seqTake (x1,y1) (x2,y2) = (x1+x2,liftM2 (+) y1 y2)
-
-orTakes :: [(Int, Maybe Int)] -> (Int,Maybe Int)
-orTakes [] = (0,Just 0)
-orTakes ts = let (xs,ys) = unzip ts
-             in (minimum xs, foldl1 (liftM2 max) ys)
-
 cleanNullView :: NullView -> NullView
 cleanNullView [] = []
 cleanNullView (first@(SetTestInfo sti,_):rest) | Map.null sti = first : []
@@ -94,6 +86,20 @@ mergeNullViews s1 s2 = do
   (test1,tag1) <- s1
   (test2,tag2) <- s2
   return (mappend test1 test2,mappend tag1 tag2)
+
+addTagsToNullView :: WinTags -> NullView -> NullView
+addTagsToNullView [] nv = nv
+addTagsToNullView tags nv= do
+  (test,tags') <- nv
+  return (test,tags `mappend` tags')
+
+seqTake :: (Int, Maybe Int) -> (Int, Maybe Int) -> (Int, Maybe Int)
+seqTake (x1,y1) (x2,y2) = (x1+x2,liftM2 (+) y1 y2)
+
+orTakes :: [(Int, Maybe Int)] -> (Int,Maybe Int)
+orTakes [] = (0,Just 0)
+orTakes ts = let (xs,ys) = unzip ts
+             in (minimum xs, foldl1 (liftM2 max) ys)
 
 -- Invariant: apply (toAdvice _ ) == mempty
 apply :: HandleTag -> Maybe Tag
@@ -286,37 +292,39 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
                                  (True,False) -> WantsQNFA
                                  (False,True) -> WantsQT
                                  (False,False) -> WantsEither
-           let ans = Q (cleanNullView . concatMap nullQ $ qs)
+               nullView = addTagsToNullView (winTags (apply a) (apply b)) . cleanNullView . concatMap nullQ $ qs
+           let ans = Q nullView
                        (orTakes . map takes $ qs)
                        (apply a) (apply b) canVary (any childGroups qs) wanted
                        (Or qs)
            return ans
          PConcat [] -> nil
          PConcat ps -> combineConcat ps m1 m2 -- unsafe to pass [] to combineConcat
-         PStar p -> mdo
-           -- ideal order of decision
-           --  min start of PStar
-           --  max end of PStar
-           --  min iterations of PStar
-           --  max start of last iteration
-           let accepts = canAccept q
-           a <- if noTag m1 && accepts then uniq Minimize else return m1
-           b <- if noTag m2 && accepts then uniq Maximize else return m2
-           c <- if varies q || childGroups q then uniq Orbit else return NoTag
-           -- end of each iteration is Maximize and is the beginning
-           -- of the next so the start of each iteration should be a
-           -- Maximize (except the first iteration, but this is taken
-           -- care of by 'a' above').  To keep the interior pattern
-           -- from making a Minimize tag and breaking the logic, a
-           -- Maximize tag is always passed as the first tag
-           (q,resetGroups) <- listens (concatMap (\g -> map stopTag . (aGroups!) . thisIndex $ g))
-                                      (go p NoTag NoTag)
-           let ans = Q (emptyNull (maybe mempty (\tag->[(tag,PreUpdate TagTask)]) $ apply m2))
-                       (0,if accepts then Nothing else (Just 0))
-                       (apply a) (apply b)
-                       accepts (not (null resetGroups)) WantsQT
-                       (Star (apply c) resetGroups q)
-           return ans
+         PStar p -> do
+           q1 <- mdo
+             let accepts = canAccept q
+             a <- if noTag m1 && accepts then uniq Minimize else return m1
+             b <- if noTag m2 && accepts then uniq Maximize else return m2
+             c <- if varies q || childGroups q then uniq Orbit else return NoTag
+             -- end of each iteration is Maximize and is the beginning
+             -- of the next so the start of each iteration should be a
+             -- Maximize (except the first iteration, but this is taken
+             -- care of by 'a' above').  To keep the interior pattern
+             -- from making a Minimize tag and breaking the logic, a
+             -- Maximize tag is always passed as the first tag
+             (q,resetGroups) <- listens (concatMap (\g -> map stopTag . (aGroups!) . thisIndex $ g))
+                                        (go p NoTag NoTag)
+             let nullView = emptyNull (winTags (apply a) (apply b)
+--                                       ++ map (\tag -> (tag,PreUpdate ResetTask)) resetGroups
+--                                       ++ maybe [] (\tag -> [(tag,PreUpdate LeaveOrbitTask)]) (apply c)
+                                      )
+             let ans = Q nullView
+                         (0,if accepts then Nothing else (Just 0))
+                         (apply a) (apply b)
+                         accepts (not (null resetGroups)) WantsQT
+                         (Star (apply c) resetGroups q)
+             return ans
+           return q1
          PCarat dopa -> test (Test_BOL,dopa)
          PDollar dopa -> test (Test_EOL,dopa)
          PChar {} -> one

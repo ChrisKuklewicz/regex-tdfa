@@ -75,7 +75,7 @@ makeTagComparer tags = (\ tv1 tv2 ->
   let tv1' = IMap.toAscList . fst $ tv1
       tv2' = IMap.toAscList . fst $ tv2
       errMsg s = error $ s ++ " : " ++ unlines [show tags,show tv1,show tv2]
-      comp ((t1,v1):rest1) ((t2,v2):rest2) =
+      comp e1@((t1,v1):rest1) e2@((t2,v2):rest2) =
         case compare t1 t2 of
                EQ -> case tags!t1 of
                        Minimize -> compare v2 v1 `mappend` comp rest1 rest2
@@ -91,6 +91,9 @@ makeTagComparer tags = (\ tv1 tv2 ->
                        Maximize -> LT
                        Minimize -> errMsg "makeTagComparer.comp: tv2 Minimize without tv1"
                        Orbit -> errMsg "makeTagComparer.comp: tv2 Orbit without tv1"
+        where                         
+          compareOrbits (Just pos1) (Just pos2) = comparePos (viewl pos1) (viewl pos2)
+          compareOrbits _ _ = errMsg ("makeTagComparer.compareOrbits: Nothing found in Scratch"++show (e1,e2))
       comp [] [] = EQ
       comp ((t1,_):_) [] = case tags!t1 of
                               Maximize -> GT
@@ -100,8 +103,6 @@ makeTagComparer tags = (\ tv1 tv2 ->
                               Maximize -> LT
                               Minimize -> errMsg "makeTagComparer.comp: tv2 Minimize longer"
                               Orbit -> errMsg "makeTagComparer.comp: tv2 Orbit longer"
-      compareOrbits (Just pos1) (Just pos2) = comparePos (viewl pos1) (viewl pos2)
-      compareOrbits _ _ = errMsg "makeTagComparer.compareOrbits: Nothing found in Scratch"
       comparePos EmptyL EmptyL = EQ
       comparePos EmptyL _ = GT
       comparePos _ EmptyL = LT
@@ -247,8 +248,8 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
   runHere winning dt tags off prev input =
     let best (destIndex,mSourceDelta) = (destIndex
                                         ,maximumBy comp 
---                                         . map (\(m,w) -> trace ("\n>"++show destIndex++'\n':unlines w++"<") m)
                                          . map fst
+--                                       . map (\(m,w) -> trace ("\n>"++show destIndex++'\n':unlines w++"<") (m,w))
                                          . map (\(sourceIndex,(_,rs)) ->
                                                 update rs off (look sourceIndex tags))
                                          . IMap.toList $ mSourceDelta)
@@ -256,8 +257,8 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
          Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
            let winning' = if IMap.null w then winning
                             else Just . maximumBy comp
---                                      . map (\(m,written) -> trace ("\n>winning\n"++unlines written++"<") m)
                                       . map fst
+--                                    . map (\(m,written) -> trace ("\n>winning\n"++unlines written++"<") (m,w))
                                       . map (\(sourceIndex,rs) ->
                                                update rs off (look sourceIndex tags))
                                       . IMap.toList $ w

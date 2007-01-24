@@ -64,6 +64,8 @@ modifyMap f = do
   let m' = f m in seq m' $ do
   put (m',s)
 
+----
+
 resetTag :: Tag -> RunState ()
 resetTag tag = modifyMap (IMap.delete tag)
 
@@ -77,28 +79,30 @@ setPostTag tag = do
   pos <- askPost
   let pos' = succ pos in seq pos' $ modifyMap (IMap.insert tag pos')
 
+----
+
 enterOrbit :: Tag -> RunState ()
 enterOrbit tag = do
   pos <- askPre
-  let msg = ["Entering Orbit "++show (tag,pos)]
-  tell msg
   (m,s) <- get :: RunState Scratch
   let v = negate tag
-      m' = IMap.insertWith (\_ old -> old) tag pos m
+      m' = IMap.insertWith (\ _ {-new-} old -> old) tag pos m
       s' = case IMap.lookup tag s of
-             Nothing -> IMap.singleton tag (S.singleton pos)
+             Nothing -> IMap.insert tag (S.singleton pos) s
              Just old -> let new = (S.|>) old pos
                          in seq new $ IMap.insert tag new s
+--let msg = ["Entering Orbit "++show (tag,pos,(m,s),(m',s'))]
+--tell msg
   seq v $ seq m' $ seq s' $ put (m',s')
 
 leaveOrbit :: Tag -> RunState ()
 leaveOrbit tag = do
-  pos <- askPre
-  let msg = ["Leaving Orbit "++show (tag,pos)]
-  tell msg
   (m,s) <- get :: RunState Scratch
   let m' = IMap.delete tag m
       s' = IMap.delete tag s
+--pos <- askPre
+--let msg = ["Leaving Orbit "++show (tag,pos,(m,s),(m',s'))]
+--tell msg
   seq m' $ seq s' $ put (m',s')
 
 -- dumb smart constructor for tracing construction (I wanted to monitor laziness)
@@ -219,7 +223,7 @@ flattenDT (Simple' {dt_trans=mt,dt_other=mo}) = map fst . maybe id (:) mo . Map.
 flattenDT (Testing' {dt_a=a,dt_b=b}) = flattenDT a ++ flattenDT b
 
 fillMap :: Tag -> IntMap Position
-fillMap tag = IMap.fromDistinctAscList [(t,-1) | t <- [0..tag] ]
+fillMap tag = IMap.fromDistinctAscList [(t,-99) | t <- [0..tag] ]
 
 diffMap :: IntMap Position -> IntMap Position -> [(Index,Position)]
 diffMap old new = IMap.toList (IMap.differenceWith (\a b -> if a==b then Nothing else Just b) old new)
@@ -271,6 +275,3 @@ showDT m (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
                           ++ "\n         }"
  where indent = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT m
        spaces = replicate 10 ' '
-
--- toDFA = nfaToDFA . toNFA
--- display_DFA = mapM_ print . Map.elems . dfaMap . (\(x,_,_,_) -> x) . toDFA 

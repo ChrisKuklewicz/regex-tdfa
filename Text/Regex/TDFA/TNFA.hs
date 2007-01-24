@@ -147,7 +147,7 @@ listTestInfo qt s = execState (helper qt) s
           modify (Set.insert wt)
           helper a
           helper b
-
+{-
 applyNullViews :: NullView -> QT -> QT
 applyNullViews [] win = win
 applyNullViews nvs win = foldl' dominate qtlose (reverse $ cleanNullView nvs) where
@@ -175,6 +175,46 @@ applyNullViews nvs win = foldl' dominate qtlose (reverse $ cleanNullView nvs) wh
                             ,qt_b = useTest tests allD wB lB}
         useTest [] _ _  _ = error "This case in Text.Regex.TNFA.TNFA.applyNullViews.useText cannot happen"
     in useTest (Set.toList allTests) (Map.assocs sti) win' lose
+-}
+
+-- This is used to view "win" only through NullView
+applyNullViews :: NullView -> QT -> QT
+applyNullViews [] win = win
+applyNullViews nvs win = foldl' (dominate win winTests) qtlose (reverse $ cleanNullView nvs) where
+  winTests = listTestInfo win $ mempty
+
+-- This is used to prefer to view "win" through NullView.  Losing is
+-- replaced by the plain win.  This is employed by Star patterns to
+-- express that the first iteration is allowed to match null, but
+-- skipping the NullView occurs if the match fails.
+preferNullViews :: NullView -> QT -> QT
+preferNullViews [] win = win
+preferNullViews nvs win = foldl' (dominate win winTests) win (reverse $ cleanNullView nvs) where
+  winTests = listTestInfo win $ mempty
+
+dominate :: QT -> Set WhichTest -> QT -> (SetTestInfo,WinTags) -> QT
+dominate win winTests lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x) $
+  let -- The winning states are reached through the SetTag
+      win' = prependTags' tags win
+      -- get the SetTestInfo 
+      allTests = (listTestInfo lose $ Map.keysSet sti) `mappend` winTests
+      useTest _ [] w _ = w -- no more dominating tests to fail to choose lose, so just choose win
+      useTest (aTest:tests) allD@((dTest,dopas):ds) w l =
+        let (wA,wB,wD) = branches w
+            (lA,lB,lD) = branches l
+            branches qt@(Testing {}) | aTest==qt_test qt = (qt_a qt,qt_b qt,qt_dopas qt)
+            branches qt = (qt,qt,mempty)
+        in if aTest == dTest
+             then Testing {qt_test = aTest
+                          ,qt_dopas = (dopas `mappend` wD) `mappend` lD
+                          ,qt_a = useTest tests ds wA lA
+                          ,qt_b = lB}
+             else Testing {qt_test = aTest
+                          ,qt_dopas = wD `mappend` lD
+                          ,qt_a = useTest tests allD wA lA
+                          ,qt_b = useTest tests allD wB lB}
+      useTest [] _ _  _ = error "This case in Text.Regex.TNFA.TNFA.applyNullViews.useText cannot happen"
+  in useTest (Set.toList allTests) (Map.assocs sti) win' lose
 
 applyTest :: TestInfo -> QT -> QT
 applyTest (wt,dopa) qt | nullQT qt = qt
@@ -201,7 +241,7 @@ mergeAltQT q1 q2 | nullQT q1 = q2  -- prefer winning with w1 then with w2
                  | otherwise = mergeQTWith (\w1 w2 -> if noWin w1 then w2 else w1) q1 q2
 mergeQT q1 q2 | nullQT q1 = q2  -- union wins
               | nullQT q2 = q1  -- union wins
-              | otherwise = mergeQTWith mappend q1 q2 -- no preference, win with combined SetTag
+              | otherwise = mergeQTWith mappend q1 q2 -- no preference, win with combined SetTag XXX is the wrong thing! "(.?)*"
 
 mergeQTWith :: (WinTags -> WinTags -> WinTags) -> QT -> QT -> QT
 mergeQTWith mergeWins = merge where
@@ -247,6 +287,8 @@ type S = State (Index                              -- Next available QNFA index
 type E = (TagTasks            -- Things to de before the Either QNFA QT
          ,Either QNFA QT)     -- The future, packged in the best way
 
+type ActCont = (E, Maybe E, Maybe (TagTasks,QNFA))
+
 newQNFA :: String -> QT -> S QNFA
 newQNFA s qt = do
   (thisI,oldQs) <- get
@@ -278,15 +320,21 @@ bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
   canonical (dopa,tcs) = (dopa,sort clean) -- keep only last setting or resetting
     where clean = nubBy ((==) `on` fst) . reverse $ tcs  -- ick, nub XXX
   -- choose trests Orbit and Minimize as the same
+  errMsg msg = error (msg ++ " : " ++ show s)
   choose :: TagList -> TagList -> Ordering
   choose ((t1,b1):rest1) ((t2,b2):rest2) =
     case compare t1 t2 of -- find and examine the smaller of t1 and t2
-      LT -> if Maximize == op t1 then GT else LT
-      EQ -> (if Maximize == op t1 then compare else flip compare) b1 b2 `mappend` choose rest1 rest2
-      GT -> if Maximize == op t2 then LT else GT
-  choose ((t1,_):_) [] = if Maximize == op t1 then GT else LT
-  choose [] ((t2,_):_) = if Maximize == op t2 then LT else GT
+      LT -> if Maximize == op t1 then GT else errMsg $ "WTF 1 < 2 : " ++ show (t1,t2) -- LT
+      EQ -> (if Maximize == op t1 then compare else flip compare) b1 b2 -- PostUpdate _ > PreUpdate _
+            `mappend` choose rest1 rest2
+      GT -> if Maximize == op t2 then LT else errMsg $ "WTF 2 > 1 : " ++ show (t1,t2) -- GT 
+  choose ((t1,_):_) [] = if Maximize == op t1 then GT
+                         else errMsg $ "WTF 1 w/o 2 : " ++ show t1 -- LT
+  choose [] ((t2,_):_) = if Maximize == op t2 then LT
+                         else GT --  errMsg $ "WTF 2 w/o 1 : " ++ show t2 -- GT 
+                                 -- Case of "(x?)*x" being nullview or not. also "xx" =~ "((x*)*x)"
   choose [] [] = EQ
+
 
 noWin :: TagList -> Bool
 noWin = null
@@ -377,24 +425,27 @@ enterOrbitQT :: Maybe Tag -> QT -> QT
 enterOrbitQT Nothing qt = qt
 enterOrbitQT (Just tag) qt = prependTags' [(tag,PreUpdate EnterOrbitTask)] qt
 
-leaveOrbitQT :: Maybe Tag -> E -> QT
-leaveOrbitQT mt qt = getQT . leaveOrbit mt $ qt
+leaveOrbitQT :: Maybe Tag -> E -> E
+leaveOrbitQT mt qt = leaveOrbit mt $ qt
   where leaveOrbit :: Maybe Tag -> E -> E
         leaveOrbit Nothing e = e
         leaveOrbit (Just tag) (tags,cont) = ((tag,LeaveOrbitTask):tags,cont)
 
-type ActCont = (E, Maybe E, Maybe (TagTasks,QNFA))
-
 addTestAC :: TestInfo -> ActCont -> ActCont
 addTestAC ti (e,mE,_) = (addTest ti e
-                            ,fmap (addTest ti) mE
-                            ,Nothing)
+                        ,fmap (addTest ti) mE
+                        ,Nothing)
 
 addTagAC :: Maybe Tag -> ActCont -> ActCont
 addTagAC Nothing ac = ac
 addTagAC (Just tag) (e,mE,mQNFA) = (addTag' tag e
                                    ,fmap (addTag' tag) mE
                                    ,fmap (addTag' tag) mQNFA)
+
+addWinTagsAC :: WinTags -> ActCont -> ActCont
+addWinTagsAC wtags (e,mE,mQNFA) = (addWinTags wtags e
+                                  ,fmap (addWinTags wtags) mE
+                                  ,fmap (addWinTags wtags) mQNFA)
 
 getE :: ActCont -> E
 getE (_,_,Just (tags,qnfa)) = (tags, Left qnfa)  -- consume optimized mQNFA value returned by Star
@@ -467,18 +518,26 @@ qToNFA compOpt qTop = (q_id startingQNFA
                   else sequence [ getTrans q e | q <- qs ]
         let qts = map getQT eqts
         return (fromQT (foldr1 mergeAltQT qts))
-      Star mOrbit tags q | cannotAccept q -> return e -- XXX may not by POSIX correct
-                        | otherwise -> mdo
+      Star mOrbit tags q ->
+        let (e',clear) = -- trace ("\n>"++show e++"\n"++show q++"\n<") $
+              if notNullable q then (e,True)
+                else case maybeOnlyEmpty q of
+                       Just [] -> (e,True)
+                       Just tagList -> (addWinTags tagList e,False)
+                       _ -> (fromQT . preferNullViews (nullQ q) . getQT $ e,False)
+        in if cannotAccept q then return e' else mdo
         mqt <- inStar q this
-        this <- case mqt of
-                  Nothing -> error ("Weird pattern in getTransTagless/Star: " ++ show qIn)
-                  Just qt ->
-                    let qt' = addResets tags . enterOrbitQT mOrbit $ qt
-                        thisQT = mergeQT qt' . leaveOrbitQT mOrbit $ e
-                    in if usesQNFA q
-                         then return . fromQNFA =<< newQNFA "getTransTagless/Star" thisQT
-                         else return . fromQT $ thisQT
-        return this
+        (this,ans) <- case mqt of
+                        Nothing -> error ("Weird pattern in getTransTagless/Star: " ++ show qIn)
+                        Just qt -> do
+                          let qt' = addResets tags . enterOrbitQT mOrbit $ qt
+                              thisQT = mergeQT qt' . getQT . leaveOrbitQT mOrbit $ e -- tell child to leave via leaveOrbit/e
+                              ansE = fromQT . mergeQT qt' . getQT $ e' -- tell world to skip via e'
+                          thisE <- if usesQNFA q
+                                  then return . fromQNFA =<< newQNFA "getTransTagless/Star" thisQT
+                                  else return . fromQT $ thisQT
+                          return (thisE,ansE)
+        return (if clear then this else ans)
       _ -> error ("This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen" ++ show qIn)
 
   inStar,inStarTagless :: Q -> E -> S (Maybe QT)
@@ -594,22 +653,40 @@ qToNFA compOpt qTop = (q_id startingQNFA
                        else Nothing
         return (eLoop',mAccepting',mQNFA')
 
-      Star mOrbit tags q | cannotAccept q -> return ac
-                         | otherwise -> mdo
-        (_,mE,_) <- act q  (this,Nothing,Nothing)
-        ac'@(this,_,_) <- 
-          case mE of
-            Nothing -> error ("Weird pattern in getTransTagless/Star: " ++ show qIn)
-            Just e -> let qt' = addResets tags . enterOrbitQT mOrbit . getQT $ e
-                          thisQT = mergeQT qt' . leaveOrbitQT mOrbit . getE $ ac
-                          mAccepting' = case mAccepting of
-                                          Just eAccepting -> Just . fromQT . mergeQT qt' . getQT $ eAccepting
-                                          Nothing -> Just . fromQT $ qt'
-                      in if usesQNFA q
-                           then do qnfa <- newQNFA "actNullableTagless/Star" thisQT
-                                   return (fromQNFA qnfa, mAccepting', Just (mempty,qnfa))
-                           else return (fromQT thisQT, mAccepting', Nothing)
-        return ac'
+      Star mOrbit tags q -> do
+        let (ac0@(_,mAccepting0,_),clear) =
+              if notNullable q
+                then (ac,True)
+                else case maybeOnlyEmpty q of
+                       Just [] -> (ac,True)
+                       Just tagList -> (addWinTagsAC tagList ac,False)
+                       _ -> let nQ = fromQT . preferNullViews (nullQ q) . getQT
+                            in ((nQ eLoop,fmap nQ mAccepting,Nothing),False)
+        if cannotAccept q then return ac0 else mdo
+          (_,mChildAccepting,mChildQNFA) <- act q (this,Nothing,Nothing)
+  -- XXX  if clear && isJust mChildQNFA then (childQNFA,Just (getQT childQNFA),(mempty,childQNFA))
+          (thisAC@(this,_,_),ansAC) <- 
+            case mChildAccepting of
+              Nothing -> error ("Weird pattern in getTransTagless/Star: " ++ show qIn)
+              Just childAccepting -> do
+                let childQT = addResets tags . enterOrbitQT mOrbit . getQT $ childAccepting
+                    thisQT = mergeQT childQT . getQT . leaveOrbitQT mOrbit . getE $ ac
+                    thisAccepting =
+                      case mAccepting of
+                        Just futureAccepting -> Just . fromQT . mergeQT childQT . getQT $ futureAccepting
+                        Nothing -> Just . fromQT $ childQT
+                thisAll <- if usesQNFA q
+                             then do thisQNFA <- newQNFA "actNullableTagless/Star" thisQT
+                                     return (fromQNFA thisQNFA, thisAccepting, Just (mempty,thisQNFA))
+                             else return (fromQT thisQT, thisAccepting, Nothing)
+                let skipQT = mergeQT childQT . getQT . getE $ ac0  -- for first iteration the continuation uses NullView
+                    skipAccepting =
+                      case mAccepting0 of
+                        Just futureAccepting0 -> Just . fromQT . mergeQT childQT . getQT $ futureAccepting0
+                        Nothing -> Just . fromQT $ childQT
+                    ansAll = (fromQT skipQT, skipAccepting, Nothing)
+                return (thisAll,ansAll)
+          return (if clear then thisAC else ansAC)
       _ -> error ("This case in Text.Regex.TNFA.TNFA.actNullableTagless cannot happen: "++show qIn)
 
   dotTrans | multiline compOpt = Map.singleton '\n' mempty
@@ -680,10 +757,4 @@ nullE (_,cont) = nullQT . either q_qt id $ cont
 asQT :: E -> E
 asQT (tags,cont) = (tags,Right (either q_qt id cont))
 
--}
-{-
-toP = either (error.show) id . parseRegex 
-toQ = patternToQ defaultCompOpt . toP
-toNFA = patternToNFA defaultCompOpt . toP
-display_NFA = mapM_ print . elems . (\(x,_,_) -> snd x) . toNFA 
 -}
