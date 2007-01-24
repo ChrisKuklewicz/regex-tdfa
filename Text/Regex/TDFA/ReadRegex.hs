@@ -46,8 +46,8 @@ p_group = lookAhead (char '(') >> do
 
 -- p_post_atom takes the previous atom as a parameter
 p_post_atom atom = (char '?' >> return (PQuest atom))
-               <|> (char '+' >> return (PPlus  atom))
-               <|> (char '*' >> return (PStar  atom))
+               <|> (char '+' >> return (PPlus atom))
+               <|> (char '*' >> return (PStar True atom))
                <|> p_bound atom 
                <|> return atom
 

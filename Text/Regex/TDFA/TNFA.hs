@@ -521,7 +521,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                   else sequence [ getTrans q e | q <- qs ]
         let qts = map getQT eqts
         return (fromQT (foldr1 mergeAltQT qts))
-      Star mOrbit tags q ->
+      Star mOrbit tags mayFirstBeNull q ->
         let (e',clear) = -- trace ("\n>"++show e++"\n"++show q++"\n<") $
               if notNullable q then (e,True)
                 else case maybeOnlyEmpty q of
@@ -540,7 +540,8 @@ qToNFA compOpt qTop = (q_id startingQNFA
                                   then return . fromQNFA =<< newQNFA "getTransTagless/Star" thisQT
                                   else return . fromQT $ thisQT
                           return (thisE,ansE)
-        return (if clear then this else ans)
+        return (if mayFirstBeNull then (if clear then this else ans)
+                  else this)
       _ -> error ("This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen" ++ show qIn)
 
   inStar,inStarTagless :: Q -> E -> S (Maybe QT)
@@ -656,7 +657,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                        else Nothing
         return (eLoop',mAccepting',mQNFA')
 
-      Star mOrbit tags q -> do
+      Star mOrbit tags mayFirstBeNull q -> do
         let (ac0@(_,mAccepting0,_),clear) =
               if notNullable q
                 then (ac,True)
@@ -689,7 +690,8 @@ qToNFA compOpt qTop = (q_id startingQNFA
                         Nothing -> Just . fromQT $ childQT
                     ansAll = (fromQT skipQT, skipAccepting, Nothing)
                 return (thisAll,ansAll)
-          return (if clear then thisAC else ansAC)
+          return (if mayFirstBeNull then (if clear then thisAC else ansAC)
+                    else thisAC)
       _ -> error ("This case in Text.Regex.TNFA.TNFA.actNullableTagless cannot happen: "++show qIn)
 
 

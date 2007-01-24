@@ -35,7 +35,7 @@ data Pattern = PEmpty
              | PConcat [Pattern]
              | PQuest  Pattern
              | PPlus   Pattern
-             | PStar   Pattern
+             | PStar   Bool Pattern
              | PBound  Int (Maybe Int) Pattern
              -- The rest of these need an index of where in the regex string it is from
              | PCarat  {getDoPa::DoPa}
@@ -57,7 +57,7 @@ showPattern pIn =
     PConcat ps -> concatMap showPattern ps
     PQuest p -> (showPattern p)++"?"
     PPlus p -> (showPattern p)++"+"
-    PStar p -> (showPattern p)++"*"
+    PStar _ p -> (showPattern p)++"*"
     PBound i (Just j) p | i==j -> showPattern p ++ ('{':show i)++"}"
     PBound i mj p -> showPattern p ++ ('{':show i) ++ maybe ",}" (\j -> ',':show j++"}") mj
     --
@@ -135,7 +135,7 @@ dfsPattern f = dfs
                        PGroup i p -> unary (PGroup i) p
                        PQuest p -> unary PQuest p
                        PPlus p -> unary PPlus p
-                       PStar p -> unary PStar p
+                       PStar i p -> unary (PStar i) p
                        PBound i mi p -> unary (PBound i mi) p
                        _ -> f pattern
 
@@ -144,12 +144,12 @@ starTrans' pIn =
   case pIn of
     -- We know that "p" has been simplified in each of these cases:
     PQuest p -> POr [p,PEmpty]
-    PPlus  p -> PConcat [p,simplify' $ PStar p]
+    PPlus  p -> PConcat [p,simplify' $ PStar False p]
     PBound i _        _ | i<0 -> PEmpty  -- malformed
     PBound i (Just j) _ | i>j -> PEmpty  -- malformed
     PBound _ (Just 0) _ -> PEmpty
-    PBound 0 Nothing  p -> PStar p
-    PBound i Nothing  p -> PConcat $ apply (p:) i [simplify' $ PStar p]
+    PBound 0 Nothing  p -> PStar True p
+    PBound i Nothing  p -> PConcat $ apply (p:) i [simplify' $ PStar False p]
     PBound 0 (Just 1) p -> POr [p,PEmpty]
     PBound 0 (Just j) p -> apply (quest' . (concat' p)) (pred j) (quest' p)
     PBound i (Just j) p | i == j    -> PConcat (replicate i p)
@@ -191,7 +191,7 @@ simplify' x@(PConcat _) =
        [] -> PEmpty
        [p] -> p
        _ -> x -- PConcat ps'
-simplify' (PStar PEmpty) = PEmpty
+simplify' (PStar _ PEmpty) = PEmpty
 simplify' other = other
 
 -- | Function to flatten nested POr or nested PConcat applicataions.

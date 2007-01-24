@@ -69,6 +69,13 @@ modifyMap f = do
 resetTag :: Tag -> RunState ()
 resetTag tag = modifyMap (IMap.delete tag)
 
+resetOrbit :: Tag -> RunState ()
+resetOrbit tag = do
+  (m,s) <- get
+  let m' = IMap.delete tag m
+      s' = IMap.delete tag s
+  seq m' $ seq s' $ put (m',s')
+
 setPreTag :: Tag -> RunState ()
 setPreTag tag = do
   pos <- askPre
@@ -96,16 +103,19 @@ enterOrbit tag = do
                                Just old -> let new = (S.|>) old pos
                                            in seq new $ IMap.insert tag new s
                             )
-  let msg = ["Entering Orbit "++show (tag,pos)] -- ,(m,s),(m',s'))]
-  tell msg
+--  let msg = ["Entering Orbit "++show (tag,pos)] -- ,(m,s),(m',s'))]
+--  tell msg
   seq m' $ seq s' $ put (m',s')
 
 leaveOrbit :: Tag -> RunState ()
+leaveOrbit _ = return ()
+{-
 leaveOrbit tag = do
   pos <- askPre
   let msg = ["Leaving Orbit "++show (tag,pos)]
   tell msg
   -- seq m' $ seq s' $ put (m',s')
+-}
 
 -- dumb smart constructor for tracing construction (I wanted to monitor laziness)
 makeDFA :: SetIndex -> DT -> DFA
@@ -145,7 +155,9 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
             where specRunState = sequence_ . map helper $ spec
                   helper (tag,update) = case update of
                                            PreUpdate TagTask -> setPreTag tag
-                                           PreUpdate ResetTask -> resetTag tag
+                                           PreUpdate ResetTask -> case aTagOp!tag of
+                                                                    Orbit -> resetOrbit tag
+                                                                    _ -> resetTag tag
                                            PreUpdate EnterOrbitTask -> enterOrbit tag
                                            PreUpdate LeaveOrbitTask -> leaveOrbit tag
                                            PostUpdate TagTask -> setPostTag tag

@@ -29,6 +29,7 @@ data P = Empty
        | Seq Q Q
        | Star { getOrbit :: Maybe Tag  -- tag to prioritize the need to keep track of length of each pass though q
               , reset :: [Tag]         -- need to reset the contained groups by resetting these closing tags
+              , firstNull :: Bool      -- Usually True meaning the first pass may match 0 characters
               , unStar :: Q}
        | Test TestInfo
        | OneChar Pattern
@@ -320,7 +321,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
            return ans
          PConcat [] -> nil
          PConcat ps -> combineConcat ps m1 m2 -- unsafe to pass [] to combineConcat
-         PStar p -> do
+         PStar mayFirstBeNull p -> do
            q1 <- mdo
              let accepts = canAccept q
              a <- if noTag m1 && accepts then uniq Minimize else return m1
@@ -341,7 +342,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
                          (0,if accepts then Nothing else (Just 0))
                          (apply a) (apply b)
                          accepts (childGroups q) WantsQT
-                         (Star c (norep . sort $ resetTags) q)
+                         (Star c (norep . sort $ resetTags) mayFirstBeNull q)
              return ans
            return q1
          PCarat dopa -> test (Test_BOL,dopa)
