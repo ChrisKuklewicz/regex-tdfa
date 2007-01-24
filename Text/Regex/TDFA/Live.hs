@@ -79,6 +79,8 @@ regress = regressOP (tdfa)
 
 regressTRE = regressOP (TRE.=~)
 
+full = putStr . unlines . fullspec
+
 fullspec s = [s
              ,show s
              ,show . starTrans . fst . toP $ s

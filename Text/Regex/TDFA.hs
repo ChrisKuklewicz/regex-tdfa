@@ -42,7 +42,7 @@ import Text.Regex.Base
 import Data.Version(Version(..))
 
 getVersion :: Version
-getVersion = Version { versionBranch = [0,38]
+getVersion = Version { versionBranch = [0,40]
                      , versionTags = ["tdfa","unstable"]
                      }
 
@@ -1035,5 +1035,156 @@ You cannot win with tag 4 unset unless you are against ""
 [0,1,2,3] -> 1/#3/0 -> [0,1,2,3] <>
 [0,1,2,3] -> 0/#4/3 -> [0,1,2,3] PostUpdate
 [0,1,2,3] -> 1/#4/3 -> [0,1,2,3] PostUpdate
+
+-}
+
+{-
+*Text.Regex.TDFA> "aaaaaa" =~ "(a*)+" :: MatchArray
+
+array *** Exception: makeTagComparer.comp: non-identical orbit pos :
+array (0,5) [(0,Minimize),(1,Maximize),(2,Maximize),(3,Orbit),(4,Minimize),(5,Maximize)]
+(fromList [(0,0),(3,0),(4,1)],fromList [(3,fromList [0,1])])
+(fromList [(0,0),(3,1),(4,1)],fromList [(3,fromList [1])])
+
+*Text.Regex.TDFA.Live> putStr . unlines . fullspec $ "(a*)+"
+
+(a*)+
+
+"(a*)+"
+
+PConcat [PConcat [PGroup 1 (PStar True (PChar {getDoPa = #1, getPatternChar = 'a'}))
+                 ,PStar False (PGroup 1 (PStar True (PChar {getDoPa = #1, getPatternChar = 'a'})))]]
+
+(Q { nullQ = [(SetTestInfo [],[(2,PreUpdate TagTask),(1,PreUpdate TagTask)])]
+  , takes = (0,Nothing)
+  , preTag = Nothing
+  , postTag = Nothing
+  , tagged = True
+  , wants = WantsQT
+  , unQ = Seq Q { nullQ = [(SetTestInfo [],[(2,PreUpdate TagTask)])]
+            , takes = (0,Nothing)
+            , preTag = Nothing
+stop 1      , postTag = Just 2
+            , tagged = True
+            , wants = WantsQT
+            , unQ = Star {getOrbit = Nothing, reset = [], firstNull = True, unStar = Q { nullQ = []
+                      , takes = (1,Just 1)
+                      , preTag = Nothing
+                      , postTag = Nothing
+                      , tagged = False
+                      , wants = WantsQNFA
+                      , unQ = OneChar (PChar {getDoPa = #1, getPatternChar = 'a'})
+                     }}
+           } Q { nullQ = [(SetTestInfo [],[(1,PreUpdate TagTask)])]
+            , takes = (0,Nothing)
+            , preTag = Nothing
+            , postTag = Just 1
+            , tagged = True
+            , wants = WantsQT
+            , unQ = Star {getOrbit = Just 3, reset = [2,5], firstNull = False, unStar = Q { nullQ = [(SetTestInfo [],[(5,PreUpdate TagTask),(4,PreUpdate TagTask)])]
+                      , takes = (0,Nothing)
+start 1               , preTag = Just 4
+stop 1                , postTag = Just 5
+                      , tagged = True
+                      , wants = WantsQT
+                      , unQ = Star {getOrbit = Nothing, reset = [], firstNull = True, unStar = Q { nullQ = []
+                                , takes = (1,Just 1)
+                                , preTag = Nothing
+                                , postTag = Nothing
+                                , tagged = False
+                                , wants = WantsQNFA
+                                , unQ = OneChar (PChar {getDoPa = #1, getPatternChar = 'a'})
+                               }}
+                     }}
+           }
+ },
+
+array (0,5) [(0,Minimize),(1,Maximize),(2,Maximize),(3,Orbit),(4,Minimize),(5,Maximize)],
+
+array (1,1) [(1,[GroupInfo {thisIndex = 1, parentIndex = 0, startTag = 4, stopTag = 5}
+                ,GroupInfo {thisIndex = 1, parentIndex = 0, startTag = 0, stopTag = 2}])])
+
+QNFA {q_id = 0
+     ,q_qt = {qt_win=[(5,PreUpdate TagTask),(3,PreUpdate LeaveOrbitTask),(1,PreUpdate TagTask),(1,PreUpdate TagTask)]
+, qt_trans=[('a',[(0,[(#1,[])
+                     ,(#1,[(5,PreUpdate TagTask),(2,PreUpdate ResetTask),(5,PreUpdate ResetTask),(3,PreUpdate EnterOrbitTask),(4,PreUpdate TagTask)])])])]
+, qt_other=[]}
+}
+QNFA {q_id = 1
+     ,q_qt = {qt_win=[(2,PreUpdate TagTask),(3,PreUpdate LeaveOrbitTask),(1,PreUpdate TagTask),(1,PreUpdate TagTask)]
+, qt_trans=[('a',[(0,[(#1,[(2,PreUpdate TagTask),(2,PreUpdate ResetTask),(5,PreUpdate ResetTask),(3,PreUpdate EnterOrbitTask),(4,PreUpdate TagTask)])])
+                 ,(1,[(#1,[])])])]
+, qt_other=[]}
+}
+
+----
+
+DFA {d_id = [0,1]
+    ,d_dt = Simple' { dt_win = [(0,([(1,0),(5,0)],["Leaving Orbit (3,0)"]))
+                               ,(1,([(1,0),(2,0)],["Leaving Orbit (3,0)"]))]
+        , dt_trans = ('a',([0,1],[(0,[(0,(#1,([(2,-1),(4,0),(5,-1)],["Entering Orbit (3,0)"])))
+                                     ,(1,(#1,([(2,-1),(4,0),(5,-1)],["Entering Orbit (3,0)"])))])
+                                 ,(1,[(1,(#1,([],[])))])]))
+
+        , dt_other = None
+        }
+}
+DFA {d_id = [1]
+    ,d_dt = Simple' { dt_win = [(1,([(1,0),(2,0)],["Leaving Orbit (3,0)"]))]
+        , dt_trans = ('a',([0,1],[(0,[(1,(#1,([(2,-1),(4,0),(5,-1)],["Entering Orbit (3,0)"])))])
+                                 ,(1,[(1,(#1,([],[])))])]))
+
+        , dt_other = None
+        }
+}
+
+*Text.Regex.TDFA.Live> 
+
+*Text.Regex.TDFA.Live> "aaaaaa" =~  "(a*)+" :: MatchArray
+array 
+@@@ (0
+    ,fromList [(1
+               ,(fromList [(0,0)]
+                ,fromList []))]
+    ,Just (fromList [(0,0),(1,0),(2,0)]
+          ,fromList []))
+
+@@@ (1
+    ,fromList [(0,(fromList [(0,0),(3,0),(4,0)]
+                  ,fromList [(3
+                             ,fromList [0])]))
+              ,(1,(fromList [(0,0)]
+                  ,fromList []))]
+    ,Just (fromList [(0,0),(1,1),(2,1)]
+          ,fromList []))
+
+*** Exception: makeTagComparer.comp: non-identical orbit pos :
+array (0,5) [(0,Minimize),(1,Maximize),(2,Maximize),(3,Orbit),(4,Minimize),(5,Maximize)]
+(fromList [(0,0),(3,0),(4,1)],fromList [(3,fromList [0,1])])
+(fromList [(0,0),(3,1),(4,1)],fromList [(3,fromList [1])])
+
+*Text.Regex.TDFA.Live> 
+
+With some fixing it looks much more like "(a*)(a*)*" case:
+
+DFA {d_id = [0,1]
+    ,d_dt = Simple' { dt_win = [(0,([(1,0),(5,0)],["Leaving Orbit (3,0)"]))
+                               ,(1,([(1,0),(2,0)],["Leaving Orbit (3,0)"]))]
+        , dt_trans = ('a',([0,1],[(0,[(0,(#1,([],[])))
+                                     ,(1,(#1,([(2,-1),(4,0),(5,-1)],["Entering Orbit (3,0)"])))])
+                                 ,(1,[(1,(#1,([],[])))])]))
+
+        , dt_other = None
+        }
+}
+DFA {d_id = [1]
+    ,d_dt = Simple' { dt_win = [(1,([(1,0),(2,0)],["Leaving Orbit (3,0)"]))]
+        , dt_trans = ('a',([0,1],[(0,[(1,(#1,([(2,-1),(4,0),(5,-1)],["Entering Orbit (3,0)"])))])
+                                 ,(1,[(1,(#1,([],[])))])]))
+
+        , dt_other = None
+        }
+}
+
 
 -}

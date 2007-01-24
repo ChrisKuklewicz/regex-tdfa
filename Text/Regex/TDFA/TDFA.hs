@@ -103,19 +103,19 @@ enterOrbit tag = do
                                Just old -> let new = (S.|>) old pos
                                            in seq new $ IMap.insert tag new s
                             )
---  let msg = ["Entering Orbit "++show (tag,pos)] -- ,(m,s),(m',s'))]
---  tell msg
+  let msg = ["Entering Orbit "++show (tag,pos)] -- ,(m,s),(m',s'))]
+  tell msg
   seq m' $ seq s' $ put (m',s')
 
 leaveOrbit :: Tag -> RunState ()
-leaveOrbit _ = return ()
-{-
+-- leaveOrbit _ = return ()
+
 leaveOrbit tag = do
   pos <- askPre
   let msg = ["Leaving Orbit "++show (tag,pos)]
   tell msg
   -- seq m' $ seq s' $ put (m',s')
--}
+
 
 -- dumb smart constructor for tracing construction (I wanted to monitor laziness)
 makeDFA :: SetIndex -> DT -> DFA

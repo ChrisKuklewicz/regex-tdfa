@@ -17,6 +17,9 @@ module Text.Regex.TDFA.Pattern
     ,newDoPa
     ,showPattern
     ,starTrans
+    ,simplify'
+    ,dfsPattern
+    ,starTrans'
     ) where
 
 {- By Chris Kuklewicz, 2006. BSD License, see the LICENSE file. -}
@@ -190,7 +193,7 @@ simplify' x@(PConcat _) =
   in case ps' of
        [] -> PEmpty
        [p] -> p
-       _ -> x -- PConcat ps'
+       _ -> PConcat ps' -- PConcat ps'
 simplify' (PStar _ PEmpty) = PEmpty
 simplify' other = other
 

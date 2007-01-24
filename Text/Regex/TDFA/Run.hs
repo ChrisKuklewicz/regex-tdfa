@@ -20,7 +20,7 @@ import Text.Regex.TDFA.CorePattern
 import Text.Regex.TDFA.TDFA
 import Text.Regex.TDFA.Wrap
 
---import Debug.Trace
+-- import Debug.Trace
 
 type TagValues = IntMap {- Tag -} Position
 type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the preferred one
@@ -33,7 +33,7 @@ makeTagComparer :: Array Tag OP -> TagComparer
 makeTagComparer tags = (\ tv1 tv2 ->
   let tv1' = IMap.toAscList . fst $ tv1
       tv2' = IMap.toAscList . fst $ tv2
-      errMsg s = error $ s ++ " : " ++ unlines [show tags,show tv1,show tv2]
+      errMsg s = error $ "Text.Regex.TDFA.Run." ++ s ++ " : " ++ unlines [show tags,show tv1,show tv2]
       comp e1@((t1,v1):rest1) e2@((t2,v2):rest2) =
         case compare t1 t2 of
                LT -> case tags!t1 of
@@ -43,7 +43,15 @@ makeTagComparer tags = (\ tv1 tv2 ->
                EQ -> case tags!t1 of
                        Minimize -> compare v2 v1 `mappend` comp rest1 rest2
                        Maximize -> compare v1 v2 `mappend` comp rest1 rest2
-                       Orbit | v1 /= v2 -> errMsg "makeTagComparer.comp: non-identical orbit pos"
+                       Orbit | v1 /= v2 -> -- trace ("&&& : "++show (tags,(tv1,tv2),(e1,e2))) $
+                                           (compare) v1 v2
+ -- always want to start earlier, but the v1/=v2 case was exposed due
+ -- to some Reset as end of group/beginning of Star and this implies
+ -- it should have been convered by that Maximize tag, so use compare
+ -- and not (flip compare).  But I know of no cases that depend on
+ -- flip yet!
+                             -- errMsg "makeTagComparer.comp: non-identical orbit pos"
+                             -- "aaaaaa" =~ "(a*)+"
                              | otherwise -> compareOrbits (IMap.lookup t1 (snd tv1)) (IMap.lookup t2 (snd tv2))
                                             `mappend` comp rest1 rest2
                GT -> case tags!t2 of 
@@ -183,7 +191,7 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
   test = if multiline (regex_compOptions regexIn) then test_multiline else test_singleline
   
   runHere :: Maybe Scratch -> DT -> IntMap Scratch -> Position -> Char -> a -> Maybe Scratch
-  runHere winning dt tags off prev input =
+  runHere winning dt tags off prev input = 
     let best (destIndex,mSourceDelta) = (destIndex
                                         ,maximumBy comp 
                                          . map fst
@@ -204,7 +212,7 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
                                                   update rs off scratch)
                                       . IMap.toList $ w
        
-           in seq winning' $ -- trace ("\n@@@ " ++ show (off,winning')) $
+           in seq winning' $ -- trace ("\n@@@ " ++ show (off,tags,winning')) $
               if isNull input then winning' else
                 let (c,input') = headTail input
                 in case Map.lookup c t `mplus` o of

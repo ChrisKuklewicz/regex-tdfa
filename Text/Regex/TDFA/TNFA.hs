@@ -303,6 +303,19 @@ pickQTrans op tr = mapSnd (bestTrans op) . IMap.toList $ tr
 cleanWin :: WinTags -> WinTags
 cleanWin = sort . nubBy ((==) `on` fst) . reverse   -- ick, nub XXX
 
+ignoreCommand :: TagUpdate -> Bool
+ignoreCommand tc = 
+  case tc of
+    PostUpdate task -> case task of
+                         TagTask -> False
+                         _ -> error $ "Unclassified PostUpdate task:  Text.Regex.TNFA.ignoreCommand " ++ show tc
+    PreUpdate task -> case task of
+                        TagTask -> False
+                        ResetTask -> True
+                        EnterOrbitTask -> error $ "Should not get here: Text.Regex.TNFA.ignoreCommand " ++ show tc
+                        LeaveOrbitTask -> error $ "Should not get here: Text.Regex.TNFA.ignoreCommand " ++ show tc
+
+
 bestTrans :: (Tag -> OP) -> Set TagCommand -> TagCommand
 bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
                | len == 1 = canonical $ head l
@@ -322,11 +335,15 @@ bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
   -- choose trests Orbit and Minimize as the same
   errMsg msg = error (msg ++ " : " ++ show s)
   choose :: TagList -> TagList -> Ordering
-  choose ((t1,b1):rest1) ((t2,b2):rest2) =
+  choose all1@((t1,b1):rest1) all2@((t2,b2):rest2) =
     case compare t1 t2 of -- find and examine the smaller of t1 and t2
       LT -> case op t1 of
-              Maximize -> GT
-              Minimize -> GT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 < 2 : " ++ show (t1,t2) -- LT ?
+              Maximize -> if ignoreCommand b1
+                            then choose rest1 all2  -- sym
+                            else GT
+              Minimize -> if ignoreCommand b1 -- cosistent with Maximize case
+                            then errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 < 2 unclassified : "++ show (all1,all2)
+                            else LT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 < 2 : " ++ show (t1,t2) -- LT ?
               Orbit -> LT -- consistent with t2 without t1 case
       EQ -> case op t1 of -- PostUpdate _ > PreUpdate _ 
               Maximize -> compare b1 b2 `mappend` choose rest1 rest2
@@ -334,16 +351,30 @@ bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
               Orbit | b1 == b2 -> choose rest1 rest2
                     | otherwise -> errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Unequal Orbit values" ++ show ((t1,b1),(t2,b2))
       GT -> case op t2 of
-              Maximize -> LT
-              Minimize -> GT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 2 > 1 : " ++ show (t1,t2) -- GT 
+              Maximize -> if ignoreCommand b2
+                            then choose all1 rest2 -- sym.
+                            else LT
+              Minimize -> if ignoreCommand b2
+                            then errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 > 2 unclassified : "++ show (all1,all2)
+                            else GT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 > 2 : " ++ show (t1,t2) -- GT 
               Orbit -> GT -- consistent with t2 without t1 case
-  choose ((t1,_):_) [] = case op t1 of
-                           Maximize -> GT
-                           Minimize -> LT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 w/o 2 : " ++ show t1 -- LT ?
+  choose ((t1,b1):rest1) [] = case op t1 of
+                           Maximize -> if ignoreCommand b1
+                                         then choose rest1 [] -- sym.
+                                         else GT
+                           Minimize -> if ignoreCommand b1
+                                         then choose rest1 [] -- sym.
+                                         else LT
+                           -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 w/o 2 : " ++ show t1 -- LT ?
                            Orbit -> LT -- symmetric to t2 without t1 case
-  choose [] ((t2,_):_) = case op t2 of
-                           Maximize -> LT
-                           Minimize -> GT -- errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 2 w/o 1 : " ++ show t2 -- GT ?
+  choose [] ((t2,b2):rest2) = case op t2 of
+                           Maximize -> if ignoreCommand b2
+                                         then choose [] rest2 -- setup to try and fix "(a*)+" DFA
+                                         else LT
+                           Minimize -> if ignoreCommand b2
+                                         then choose [] rest2
+                                         else GT
+                           -- errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 2 w/o 1 : " ++ show t2 -- GT ?
                                         -- Policy source: set lastStarGreedy to True and run "xx" =~ "((x*)*x)"
                            Orbit -> GT  -- Policy source: Case of "(x?)*x" being nullview or not, triggered by "xx" =~ "((x*)*x)"
   choose [] [] = EQ
