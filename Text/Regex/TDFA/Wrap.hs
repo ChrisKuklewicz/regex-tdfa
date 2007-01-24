@@ -21,6 +21,7 @@ instance RegexOptions Regex CompOption ExecOption where
                               , lastStarGreedy = False
                               }
   defaultExecOpt = ExecOption { captureGroups = True
+                              , testMatch = False
                               }
   setExecOpts e r = r {regex_execOptions=e}
   getExecOpts r = regex_execOptions r

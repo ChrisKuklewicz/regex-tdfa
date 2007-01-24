@@ -7,6 +7,7 @@ import Text.Regex.TDFA.Common -- (Tag,GroupInfo(..),PatternIndex,Position,WinTag
 import Text.Regex.TDFA.Pattern(Pattern(..),starTrans)
 
 import Data.Maybe
+import Data.List
 import Data.Array.IArray
 import Data.Set(Set)
 import qualified Data.Set as Set
@@ -171,7 +172,7 @@ getChildTags :: Q -> [Tag]
 getChildTags q = maybe id (:) (preTag q) $ maybe (childTags q) (:childTags q) (postTag q)
 -}
 
-type PM = RWS PatternIndex [GroupInfo] ([OP]->[OP],Tag) 
+type PM = RWS PatternIndex [Either Tag GroupInfo] ([OP]->[OP],Tag) 
 type HHQ = HandleTag  -- m1 : info about left or pre-tag, currently NoTag or Advice and never Apply
         -> HandleTag  -- m2 : info about right or post-tag, currently NoTag or Apply, and top-level Advice
         -> PM Q
@@ -180,11 +181,23 @@ makeGroupArray :: PatternIndex -> [GroupInfo] -> Array PatternIndex [GroupInfo]
 makeGroupArray maxPatternIndex groups = accumArray (\earlier later -> later:earlier) [] (1,maxPatternIndex) filler
     where filler = map (\gi -> (thisIndex gi,gi)) groups
 
+fromRight :: [Either Tag GroupInfo] -> [GroupInfo]
+fromRight [] = []
+fromRight ((Right x):xs) = x:fromRight xs
+fromRight ((Left _):xs) = fromRight xs
+
+partEither :: [Either Tag GroupInfo] -> ([Tag],[GroupInfo])
+partEither = helper id id where
+  helper :: ([Tag]->[Tag]) -> ([GroupInfo]->[GroupInfo]) -> [Either Tag GroupInfo] -> ([Tag],[GroupInfo])
+  helper ls rs [] = (ls [],rs [])
+  helper ls rs ((Right x):xs) = helper  ls      (rs.(x:)) xs
+  helper ls rs ((Left  x):xs) = helper (ls.(x:)) rs       xs
+
 patternToQ :: CompOption -> (Pattern,(PatternIndex,Int)) -> (Q,Array Tag OP,Array PatternIndex [GroupInfo])
 patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
   (tnfa,(tag_dlist,nextTag),groups) = runRWS monad startReader startState
   aTags = listArray (0,pred nextTag) (tag_dlist [])
-  aGroups = makeGroupArray maxPatternIndex groups
+  aGroups = makeGroupArray maxPatternIndex (fromRight groups)
   -- implicitly inside a PGroup 0 converted into a GroupInfo 0 undefined 0 1
   monad = go (starTrans pOrig) (Advice 0) (Apply 1)
   startReader :: PatternIndex
@@ -194,7 +207,13 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
   -- Give the operations more meaningful names
   getParentIndex = ask
   withParent i = local (const i)
-  makeGroup = tell . (:[])
+  makeGroup = tell . (:[]) . Right
+  makeOrbit = do Apply x <- uniq Orbit
+                 tell [Left x]
+                 return (Just x)
+  hearResets x = let (ts,gs) = partEither x
+                     gs' = norep . sort .  map thisIndex $ gs
+                 in ts ++ concatMap (map stopTag . (aGroups!)) gs'
 
   uniq newOp = do (op,s) <- get                -- generate the next tag with bias newOp
                   let op' = op . (newOp:)
@@ -295,7 +314,8 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
                nullView = addTagsToNullView (winTags (apply a) (apply b)) . cleanNullView . concatMap nullQ $ qs
            let ans = Q nullView
                        (orTakes . map takes $ qs)
-                       (apply a) (apply b) canVary (any childGroups qs) wanted
+                       (apply a) (apply b)
+                       canVary (any childGroups qs) wanted
                        (Or qs)
            return ans
          PConcat [] -> nil
@@ -305,15 +325,14 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
              let accepts = canAccept q
              a <- if noTag m1 && accepts then uniq Minimize else return m1
              b <- if noTag m2 && accepts then uniq Maximize else return m2
-             c <- if varies q || childGroups q then uniq Orbit else return NoTag
+             c <- if varies q || childGroups q then makeOrbit else return Nothing
              -- end of each iteration is Maximize and is the beginning
              -- of the next so the start of each iteration should be a
              -- Maximize (except the first iteration, but this is taken
              -- care of by 'a' above').  To keep the interior pattern
              -- from making a Minimize tag and breaking the logic, a
              -- Maximize tag is always passed as the first tag
-             (q,resetGroups) <- listens (concatMap (\g -> map stopTag . (aGroups!) . thisIndex $ g))
-                                        (go p NoTag NoTag)
+             (q,resetTags) <- listens hearResets $ go p NoTag NoTag
              let nullView = emptyNull (winTags (apply a) (apply b)
 --                                       ++ map (\tag -> (tag,PreUpdate ResetTask)) resetGroups
 --                                       ++ maybe [] (\tag -> [(tag,PreUpdate LeaveOrbitTask)]) (apply c)
@@ -321,8 +340,8 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
              let ans = Q nullView
                          (0,if accepts then Nothing else (Just 0))
                          (apply a) (apply b)
-                         accepts (not (null resetGroups)) WantsQT
-                         (Star (apply c) resetGroups q)
+                         accepts (childGroups q) WantsQT
+                         (Star c (norep . sort $ resetTags) q)
              return ans
            return q1
          PCarat dopa -> test (Test_BOL,dopa)
@@ -347,4 +366,3 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
          PPlus {} -> die
          PQuest {} -> die
          PBound {} -> die
-

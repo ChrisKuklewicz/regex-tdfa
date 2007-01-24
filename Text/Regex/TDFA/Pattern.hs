@@ -30,7 +30,7 @@ import Text.Regex.TDFA.Common(DoPa,newDoPa,PatternIndex)
 -- type PatternIndex = Int
 
 data Pattern = PEmpty
-             | PGroup  PatternIndex Pattern
+             | PGroup  PatternIndex Pattern -- (-1) pattern index to indicate non capturing?
              | POr     [Pattern]
              | PConcat [Pattern]
              | PQuest  Pattern
@@ -143,13 +143,14 @@ starTrans' :: Pattern -> Pattern
 starTrans' pIn =
   case pIn of
     -- We know that "p" has been simplified in each of these cases:
-    PQuest p -> quest' p
-    PPlus  p -> concat' p (simplify' $ PStar p)
+    PQuest p -> POr [p,PEmpty]
+    PPlus  p -> PConcat [p,simplify' $ PStar p]
     PBound i _        _ | i<0 -> PEmpty  -- malformed
     PBound i (Just j) _ | i>j -> PEmpty  -- malformed
     PBound _ (Just 0) _ -> PEmpty
+    PBound 0 Nothing  p -> PStar p
     PBound i Nothing  p -> PConcat $ apply (p:) i [simplify' $ PStar p]
-    PBound 0 (Just 1) p -> quest' p
+    PBound 0 (Just 1) p -> POr [p,PEmpty]
     PBound 0 (Just j) p -> apply (quest' . (concat' p)) (pred j) (quest' p)
     PBound i (Just j) p | i == j    -> PConcat (replicate i p)
                         | otherwise -> PConcat $

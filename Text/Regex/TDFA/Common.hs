@@ -57,7 +57,8 @@ data CompOption = CompOption { caseSensitive :: Bool
                              , rightAssoc :: Bool
                              , lastStarGreedy ::  Bool
                              }
-data ExecOption = ExecOption { captureGroups::Bool
+data ExecOption = ExecOption { captureGroups :: Bool
+                             , testMatch :: Bool
                              }
 
 -- | 'MatchedStrings' is an IntMap where the keys are PatternIndex

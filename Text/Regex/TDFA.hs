@@ -7,6 +7,7 @@ you should do so with qualified imports, perhaps renamed for
 convenience.
 
 Todo:
+  runBool case for aborting on shortest match
   frontAnchored
   Cleanup locations of helper functions
   Decide whether to nix DoPa or just replace with Int
@@ -41,7 +42,7 @@ import Text.Regex.Base
 import Data.Version(Version(..))
 
 getVersion :: Version
-getVersion = Version { versionBranch = [0,30]
+getVersion = Version { versionBranch = [0,35]
                      , versionTags = ["tdfa","unstable"]
                      }
 
@@ -442,4 +443,597 @@ DFA {d_id = [2]
         }
 }
 *Text.Regex.TDFA.Live> 
+-}
+
+{-
+
+*Text.Regex.TDFA.Live> mapM_ putStrLn $ fullspec "((..)|(.)){2}"
+((..)|(.)){2}
+PConcat [PConcat [PGroup 1 (POr [PGroup 2 (PConcat [PDot {getDoPa = #1},PDot {getDoPa = #2}]),PGroup 3 (PDot {getDoPa = #3})]),PGroup 1 (POr [PGroup 2 (PConcat [PDot {getDoPa = #1},PDot {getDoPa = #2}]),PGroup 3 (PDot {getDoPa = #3})])]]
+(Q { nullQ = []
+  , takes = (2,Just 4)
+  , preTag = Nothing
+  , postTag = Nothing
+  , tagged = True
+  , wants = WantsQNFA
+  , unQ = Seq Q { nullQ = []
+            , takes = (1,Just 2)
+            , preTag = Nothing
+            , postTag = Just 2
+            , tagged = True
+            , wants = WantsQNFA
+            , unQ = Or [Q { nullQ = []
+                      , takes = (2,Just 2)
+                      , preTag = Nothing
+                      , postTag = Nothing
+                      , tagged = True
+                      , wants = WantsQNFA
+                      , unQ = Seq Q { nullQ = []
+                                , takes = (1,Just 1)
+                                , preTag = Nothing
+                                , postTag = Nothing
+                                , tagged = False
+                                , wants = WantsQNFA
+                                , unQ = OneChar (PDot {getDoPa = #1})
+                               } Q { nullQ = []
+                                , takes = (1,Just 1)
+                                , preTag = Nothing
+stop 2                          , postTag = Just 3
+                                , tagged = False
+                                , wants = WantsQNFA
+                                , unQ = OneChar (PDot {getDoPa = #2})
+                               }
+                     },Q { nullQ = []
+                      , takes = (1,Just 1)
+                      , preTag = Nothing
+                      , postTag = Just 4
+                      , tagged = True
+                      , wants = WantsQNFA
+                      , unQ = OneChar (PDot {getDoPa = #3})
+                     }]
+           } Q { nullQ = []
+            , takes = (1,Just 2)
+            , preTag = Nothing
+            , postTag = Just 1
+            , tagged = True
+            , wants = WantsQNFA
+            , unQ = Or [Q { nullQ = []
+                      , takes = (2,Just 2)
+                      , preTag = Nothing
+                      , postTag = Nothing
+                      , tagged = True
+                      , wants = WantsQNFA
+                      , unQ = Seq Q { nullQ = []
+                                , takes = (1,Just 1)
+                                , preTag = Nothing
+                                , postTag = Nothing
+                                , tagged = False
+                                , wants = WantsQNFA
+                                , unQ = OneChar (PDot {getDoPa = #1})
+                               } Q { nullQ = []
+                                , takes = (1,Just 1)
+                                , preTag = Nothing
+stop 2                          , postTag = Just 5
+                                , tagged = False
+                                , wants = WantsQNFA
+                                , unQ = OneChar (PDot {getDoPa = #2})
+                               }
+                     },Q { nullQ = []
+                      , takes = (1,Just 1)
+                      , preTag = Nothing
+                      , postTag = Just 6
+                      , tagged = True
+                      , wants = WantsQNFA
+                      , unQ = OneChar (PDot {getDoPa = #3})
+                     }]
+           }
+ },
+array (0,6) [(0,Minimize),(1,Maximize),(2,Maximize),(3,Maximize),(4,Maximize),(5,Maximize),(6,Maximize)],
+array (1,3) [(1,[GroupInfo {thisIndex = 1, parentIndex = 0, startTag = 2, stopTag = 1}
+                ,GroupInfo {thisIndex = 1, parentIndex = 0, startTag = 0, stopTag = 2}])
+            ,(2,[GroupInfo {thisIndex = 2, parentIndex = 1, startTag = 2, stopTag = 5}
+                ,GroupInfo {thisIndex = 2, parentIndex = 1, startTag = 0, stopTag = 3}])
+            ,(3,[GroupInfo {thisIndex = 3, parentIndex = 1, startTag = 2, stopTag = 6}
+                ,GroupInfo {thisIndex = 3, parentIndex = 1, startTag = 0, stopTag = 4}])])
+QNFA {q_id = 0
+     ,q_qt = {qt_win=[(1,PreUpdate TagTask)]
+, qt_trans=[]
+, qt_other=[]}
+}
+QNFA {q_id = 1
+     ,q_qt = {qt_win=[]
+, qt_trans=[('\n',[])]
+, qt_other=[(0,[(#2,[(5,PostUpdate TagTask),(1,PostUpdate TagTask)])])]}
+}
+QNFA {q_id = 2
+     ,q_qt = {qt_win=[]
+, qt_trans=[('\n',[])]
+, qt_other=[(0,[(#3,[(6,PostUpdate TagTask),(1,PostUpdate TagTask)])]),(1,[(#1,[])])]}
+}
+QNFA {q_id = 3
+     ,q_qt = {qt_win=[]
+, qt_trans=[('\n',[])]
+, qt_other=[(2,[(#2,[(3,PostUpdate TagTask),(2,PostUpdate TagTask)])])]}
+}
+QNFA {q_id = 4
+     ,q_qt = {qt_win=[]
+, qt_trans=[('\n',[])]
+, qt_other=[(2,[(#3,[(4,PostUpdate TagTask),(2,PostUpdate TagTask)])]),(3,[(#1,[])])]}
+}
+
+DFA {d_id = []
+    ,d_dt = Simple' { dt_win = []
+        , dt_trans = 
+        , dt_other = None
+        }
+}
+DFA {d_id = [0]
+    ,d_dt = Simple' { dt_win = [(0,([(1,0)],[]))]
+        , dt_trans = 
+        , dt_other = None
+        }
+}
+DFA {d_id = [0,1]
+    ,d_dt = Simple' { dt_win = [(0,([(1,0)],[]))]
+        , dt_trans = ('\n',([],[]))
+
+        , dt_other = ([0] , (0,[(1,(#2,([(1,1),(5,1)],[])))])
+)
+        }
+}
+DFA {d_id = [0,1,2]
+    ,d_dt = Simple' { dt_win = [(0,([(1,0)],[]))]
+        , dt_trans = ('\n',([],[]))
+
+        , dt_other = ([0,1] , (0,[(1,(#2,([(1,1),(5,1)],[]))),(2,(#3,([(1,1),(6,1)],[])))])
+(1,[(2,(#1,([],[])))])
+)
+        }
+}
+DFA {d_id = [2,3]
+    ,d_dt = Simple' { dt_win = []
+        , dt_trans = ('\n',([],[]))
+
+        , dt_other = ([0,1,2] , (0,[(2,(#3,([(1,1),(6,1)],[])))])
+(1,[(2,(#1,([],[])))])
+(2,[(3,(#2,([(2,1),(3,1)],[])))])
+)
+        }
+}
+DFA {d_id = [4]
+    ,d_dt = Simple' { dt_win = []
+        , dt_trans = ('\n',([],[]))
+
+        , dt_other = ([2,3] , (2,[(4,(#3,([(2,1),(4,1)],[])))])
+(3,[(4,(#1,([],[])))])
+)
+        }
+}
+
+*Text.Regex.TDFA.Live> 
+
+*Text.Regex.TDFA.Live> "aaa" =~  "((..)|(.)){2}" :: (String,MatchText String,String)
+(""
+,array (0,3) [(0,("aaa",(0,3)))
+             ,(1,("a",(2,1)))
+             ,(2,("aa",(0,2)))
+             ,(3,("a",(2,1)))]
+,"")
+
+Note that  group 2 is not being reset properly
+Checking parents:
+(""
+,array (0,3) [(0,("aaa",(0,3)))
+             ,(1,("a",(2,1)))
+             ,(2,("",(-1,0)))
+             ,(3,("a",(2,1)))]
+,"")
+
+-}
+
+{-
+http://www.research.att.com/~gsf/testregex/
+http://www.research.att.com/~gsf/testregex/categorize.dat
+
+*Text.Regex.TDFA.Live> "xxxxxx" =~ "(...?.?)*" :: MatchArray
+array (0,1) [(0,(0,6)),(1,(3,3))]
+
+?E	(...?.?)*		xxxxxx	(0,6)(4,6)				REPEAT_LONGEST=first
+|E	(...?.?)*		xxxxxx	(0,6)(2,6)				REPEAT_LONGEST=last
+|E	(...?.?)*		xxxxxx	OK					REPEAT_LONGEST=unknown
+;										REPEAT_LONGEST=bug
+
+So what the hell is going on?  Turn on tracing:
+
+*Text.Regex.TDFA.Live> "xxxxxx" =~ "(...?.?)*" :: MatchArray
+array 
+>2
+Entering Orbit (2,0
+               ,(fromList [(0,0)      ],fromList [])
+               ,(fromList [(0,0),(2,0)],fromList [(2,fromList [0])]))
+<
+
+>1
+<
+
+>0
+<
+
+>2
+Entering Orbit (2,3
+               ,(fromList [(0,0),(2,0),(3,0),(5,3),(6,2),(7,3)],fromList [(2,fromList [0])])
+               ,(fromList [(0,0),(2,0),(3,0),(5,3),(6,2),(7,3)],fromList [(2,fromList [0,3])]))
+<
+
+>3
+<
+
+>2
+Entering Orbit (2,3
+               ,(fromList [(0,0),(2,0),(3,0),(4,3),(5,2),(6,2),(8,3)],fromList [(2,fromList [0])])
+               ,(fromList [(0,0),(2,0),(3,0),(4,3),(5,2),(6,2),(8,3)],fromList [(2,fromList [0,3])]))
+<
+
+>1
+<
+
+>0
+<
+
+>winning
+Leaving Orbit (2,6
+              ,(fromList [(0,0),(1,6),(2,0),(3,3),(5,6),(6,5),(7,6)],fromList [(2,fromList [0,3])])
+              ,(fromList [(0,0),(1,6)      ,(3,3),(5,6),(6,5),(7,6)],fromList []))
+<
+
+>2
+Entering Orbit (2,2
+               ,(fromList [(0,0),(2,0),(3,0),(6,2)],fromList [(2,fromList [0])])
+               ,(fromList [(0,0),(2,0),(3,0),(6,2)],fromList [(2,fromList [0,2])]))
+<
+
+>1
+<
+
+>2
+Entering Orbit (2,4
+               ,(fromList [(0,0),(2,0),(3,2),(5,2),(6,4)],fromList [(2,fromList [0,2])])
+               ,(fromList [(0,0),(2,0),(3,2),(5,2),(6,4)],fromList [(2,fromList [0,2,4])]))
+<
+
+>3
+<
+
+>2
+Entering Orbit (2,4
+               ,(fromList [(0,0),(2,0),(3,0),(4,4),(5,3),(6,2),(7,3),(8,4)],fromList [(2,fromList [0])])
+               ,(fromList [(0,0),(2,0),(3,0),(4,4),(5,3),(6,2),(7,3),(8,4)],fromList [(2,fromList [0,4])]))
+<
+
+>1
+<
+
+>winning
+Leaving Orbit (2,6
+              ,(fromList [(0,0),(1,6),(2,0),(3,4),(5,3),(6,6),(7,3),(8,4)],fromList [(2,fromList [0,4])])
+              ,(fromList [(0,0),(1,6)      ,(3,4),(5,3),(6,6),(7,3),(8,4)],fromList []))
+<
+
+>0
+<
+
+>3
+<
+
+>3
+<
+
+>winning
+Leaving Orbit (2,6
+              ,(fromList [(0,0),(1,6),(2,0),(3,3),(4,6),(5,5),(6,5),(7,3),(8,6)],fromList [(2,fromList [0,3])])
+              ,(fromList [(0,0),(1,6)      ,(3,3),(4,6),(5,5),(6,5),(7,3),(8,6)],fromList []))
+<
+(0,1) [(0,(0,6)),(1,(3,3))]
+*Text.Regex.TDFA.Live> 
+
+(...?.?)*
+"(...?.?)*"
+
+PStar (PGroup 1 (PConcat [PDot {getDoPa = #1}
+                         ,PDot {getDoPa = #2}
+                         ,POr [PDot {getDoPa = #3}
+                              ,PEmpty]
+                         ,POr [PDot {getDoPa = #4}
+                              ,PEmpty]]))
+
+(Q { nullQ = [(SetTestInfo [],[(1,PreUpdate TagTask)])]
+  , takes = (0,Nothing)
+  , preTag = Nothing
+  , postTag = Just 1
+  , tagged = True
+  , wants = WantsQT
+  , unQ = Star {getOrbit = Just 2, reset = [4], unStar = Q { nullQ = []
+            , takes = (2,Just 4)
+            , preTag = Nothing
+            , postTag = Nothing
+            , tagged = True
+            , wants = WantsQNFA
+            , unQ = Seq Q { nullQ = []
+                      , takes = (2,Just 3)
+                      , preTag = Nothing
+                      , postTag = Nothing
+                      , tagged = False
+                      , wants = WantsQNFA
+                      , unQ = Seq Q { nullQ = []
+                                , takes = (2,Just 2)
+                                , preTag = Nothing
+                                , postTag = Nothing
+                                , tagged = False
+                                , wants = WantsQNFA
+                                , unQ = Seq Q { nullQ = []
+                                          , takes = (1,Just 1)
+start 1                                   , preTag = Just 3
+                                          , postTag = Nothing
+                                          , tagged = False
+                                          , wants = WantsQNFA
+                                          , unQ = OneChar (PDot {getDoPa = #1})
+                                         } Q { nullQ = []
+                                          , takes = (1,Just 1)
+                                          , preTag = Nothing
+                                          , postTag = Just 6
+                                          , tagged = False
+                                          , wants = WantsQNFA
+                                          , unQ = OneChar (PDot {getDoPa = #2})
+                                         }
+                               } Q { nullQ = [(SetTestInfo [],[(5,PreUpdate TagTask)])]
+                                , takes = (0,Just 1)
+                                , preTag = Nothing
+                                , postTag = Just 5
+                                , tagged = True
+                                , wants = WantsQNFA
+                                , unQ = Or [Q { nullQ = []
+                                          , takes = (1,Just 1)
+                                          , preTag = Nothing
+                                          , postTag = Just 7
+                                          , tagged = False
+                                          , wants = WantsQNFA
+                                          , unQ = OneChar (PDot {getDoPa = #3})
+                                         },Q { nullQ = [(SetTestInfo [],[])]
+                                          , takes = (0,Just 0)
+                                          , preTag = Nothing
+                                          , postTag = Nothing
+                                          , tagged = False
+                                          , wants = WantsEither
+                                          , unQ = Empty
+                                         }]
+                               }
+                     } Q { nullQ = [(SetTestInfo [],[(4,PreUpdate TagTask)])]
+                      , takes = (0,Just 1)
+                      , preTag = Nothing
+stop 1                , postTag = Just 4
+                      , tagged = True
+                      , wants = WantsQNFA
+                      , unQ = Or [Q { nullQ = []
+                                , takes = (1,Just 1)
+                                , preTag = Nothing
+                                , postTag = Just 8
+                                , tagged = False
+                                , wants = WantsQNFA
+                                , unQ = OneChar (PDot {getDoPa = #4})
+                               },Q { nullQ = [(SetTestInfo [],[])]
+                                , takes = (0,Just 0)
+                                , preTag = Nothing
+                                , postTag = Nothing
+                                , tagged = False
+                                , wants = WantsEither
+                                , unQ = Empty
+                               }]
+                     }
+           }}
+ },
+
+array (0,8) [(0,Minimize),(1,Maximize),(2,Orbit),(3,Minimize),(4,Maximize),(5,Maximize),(6,Maximize),(7,Maximize),(8,Maximize)],
+
+array (1,1) [(1,[GroupInfo {thisIndex = 1, parentIndex = 0, startTag = 3, stopTag = 4}])])
+
+QNFA {q_id = 0
+     ,q_qt = {qt_win=[(4,PreUpdate TagTask),(2,PreUpdate LeaveOrbitTask),(1,PreUpdate TagTask),(1,PreUpdate TagTask)]
+, qt_trans=[('\n',[])]
+, qt_other=[(2,[(#1,[(4,PreUpdate TagTask),(4,PreUpdate ResetTask),(2,PreUpdate EnterOrbitTask),(3,PreUpdate TagTask)])])
+           ,(3,[(#4,[(8,PostUpdate TagTask),(4,PostUpdate TagTask)])])]}
+}
+QNFA {q_id = 1
+     ,q_qt = {qt_win=[(5,PreUpdate TagTask),(4,PreUpdate TagTask),(2,PreUpdate LeaveOrbitTask),(1,PreUpdate TagTask),(1,PreUpdate TagTask)]
+, qt_trans=[('\n',[])]
+, qt_other=[(0,[(#3,[(7,PostUpdate TagTask),(5,PostUpdate TagTask)])])
+           ,(2,[(#1,[(5,PreUpdate TagTask),(4,PreUpdate TagTask),(4,PreUpdate ResetTask),(2,PreUpdate EnterOrbitTask),(3,PreUpdate TagTask)])])
+           ,(3,[(#4,[(5,PreUpdate TagTask),(8,PostUpdate TagTask),(4,PostUpdate TagTask)])])]}
+}
+QNFA {q_id = 2
+     ,q_qt = {qt_win=[]
+, qt_trans=[('\n',[])]
+, qt_other=[(1,[(#2,[(6,PostUpdate TagTask)])])]}
+}
+QNFA {q_id = 3
+     ,q_qt = {qt_win=[(2,PreUpdate LeaveOrbitTask),(1,PreUpdate TagTask),(1,PreUpdate TagTask)]
+, qt_trans=[('\n',[])]
+, qt_other=[(2,[(#1,[(4,PreUpdate ResetTask),(2,PreUpdate EnterOrbitTask),(3,PreUpdate TagTask)])])]}
+}
+
+---------
+
+DFA {d_id = []
+    ,d_dt = Simple' { dt_win = []
+        , dt_trans = 
+        , dt_other = None
+        }
+}
+DFA {d_id = [0,1,2,3]
+    ,d_dt = Simple' { dt_win = [(0,([(1,0),(2,-1),(4,0)],["Leaving Orbit (2,0)"]))
+                               ,(1,([(1,0),(2,-1),(4,0),(5,0)],["Leaving Orbit (2,0)"]))
+                               ,(3,([(1,0),(2,-1)],["Leaving Orbit (2,0)"]))]
+        , dt_other = ([0,1,2,3] ,
+                      (0,[(1,(#3,([(5,1),(7,1)],[])))])
+                      (1,[(2,(#2,([(6,1)],[])))])
+                      (2,[(0,(#1,([(3,0),(4,-1)],["Entering Orbit (2,0)"])))
+                         ,(1,(#1,([(3,0),(4,-1),(5,0)],["Entering Orbit (2,0)"])))
+                         ,(3,(#1,([(3,0),(4,-1)],["Entering Orbit (2,0)"])))])
+                      (3,[(0,(#4,([(4,1),(8,1)],[])))
+                         ,(1,(#4,([(4,1),(5,0),(8,1)],[])))])
+)
+        }
+}
+DFA {d_id = [0,2,3]
+    ,d_dt = Simple' { dt_win = [(0,([(1,0),(2,-1),(4,0)],["Leaving Orbit (2,0)"]))
+                               ,(3,([(1,0),(2,-1)],["Leaving Orbit (2,0)"]))]
+        , dt_other = ([1,2,3] ,
+                      (1,[(2,(#2,([(6,1)],[])))])
+                      (2,[(0,(#1,([(3,0),(4,-1)],["Entering Orbit (2,0)"])))
+                         ,(3,(#1,([(3,0),(4,-1)],["Entering Orbit (2,0)"])))])
+                      (3,[(0,(#4,([(4,1),(8,1)],[])))])
+)
+        }
+}
+DFA {d_id = [1]
+    ,d_dt = Simple' { dt_win = [(1,([(1,0),(2,-1),(4,0),(5,0)],["Leaving Orbit (2,0)"]))]
+        , dt_other = ([0,2,3] ,
+                      (0,[(1,(#3,([(5,1),(7,1)],[])))])
+                      (2,[(1,(#1,([(3,0),(4,-1),(5,0)],["Entering Orbit (2,0)"])))])
+                      (3,[(1,(#4,([(4,1),(5,0),(8,1)],[])))])
+)
+        }
+}
+DFA {d_id = [1,2,3]
+    ,d_dt = Simple' { dt_win = [(1,([(1,0),(2,-1),(4,0),(5,0)],["Leaving Orbit (2,0)"]))
+                               ,(3,([(1,0),(2,-1)],["Leaving Orbit (2,0)"]))]
+        , dt_other = ([0,1,2,3] ,
+                      (0,[(1,(#3,([(5,1),(7,1)],[])))])
+                      (1,[(2,(#2,([(6,1)],[])))])
+                      (2,[(1,(#1,([(3,0),(4,-1),(5,0)],["Entering Orbit (2,0)"])))
+                         ,(3,(#1,([(3,0),(4,-1)],["Entering Orbit (2,0)"])))])
+                      (3,[(1,(#4,([(4,1),(5,0),(8,1)],[])))])
+)
+        }
+}
+DFA {d_id = [2]
+    ,d_dt = Simple' { dt_win = []
+        , dt_other = ([1] , (1,[(2,(#2,([(6,1)],[])))])
+)
+        }
+}
+DFA {d_id = [3]
+    ,d_dt = Simple' { dt_win = [(3,([(1,0),(2,-1)],["Leaving Orbit (2,0)"]))]
+        , dt_other = ([2] , (2,[(3,(#1,([(3,0),(4,-1)],["Entering Orbit (2,0)"])))])
+)
+        }
+}
+
+3 [3] 3/#1/2 [2] 2/#2/1 [1] 1/#3/0 [0,2,3] 0/#4/3 [1,2,3] 3/#1/2 [0,1,2,3] 2/#2/1 [0,1,2,3] 1/win
+
+after accepting 5 characters this is at the [0,1,2,3] fixed point
+
+winning stages:
+
+array ___ (3,(fromList [(0,0)],fromList []))
+(fromList [(0,0),(1,0)],fromList [])
+
+
+@@@ (0,Just (fromList [(0,0),(1,0)],fromList []))
+
+@@@ (1,Just (fromList [(0,0),(1,0)],fromList []))
+___ (1,(fromList [(0,0),(2,0),(3,0),(6,2)],fromList [(2,fromList [0])]))
+(fromList [(0,0),(1,2),(3,0),(4,2),(5,2),(6,2)],fromList [])
+
+
+@@@ (2,Just (fromList [(0,0),(1,2),(3,0),(4,2),(5,2),(6,2)],fromList []))
+___ (0,(fromList [(0,0),(2,0),(3,0),(5,3),(6,2),(7,3)],fromList [(2,fromList [0])]))
+___ (3,(fromList [(0,0),(2,0),(3,0),(4,3),(5,2),(6,2),(8,3)],fromList [(2,fromList [0])]))
+(fromList [(0,0),(1,3),(3,0),(4,3),(5,3),(6,2),(7,3)],fromList [])
+(fromList [(0,0),(1,3),(3,0),(4,3),(5,2),(6,2),(8,3)],fromList [])
+
+
+@@@ (3,Just (fromList [(0,0),(1,3),(3,0),(4,3),(5,3),(6,2),(7,3)],fromList []))
+___ (1,(fromList [(0,0),(2,0),(3,2),(5,2),(6,4)],fromList [(2,fromList [0,2])]))
+___ (3,(fromList [(0,0),(2,0),(3,0),(4,4),(5,3),(6,2),(7,3),(8,4)],fromList [(2,fromList [0])]))
+(fromList [(0,0),(1,4),(3,2),(4,4),(5,4),(6,4)],fromList [])
+(fromList [(0,0),(1,4),(3,0),(4,4),(5,3),(6,2),(7,3),(8,4)],fromList [])
+
+
+@@@ (4,Just (fromList [(0,0),(1,4),(3,0),(4,4),(5,3),(6,2),(7,3),(8,4)],fromList []))
+___ (0,(fromList [(0,0),(2,0),(3,2),(5,5),(6,4),(7,5)],fromList [(2,fromList [0,2])]))
+___ (1,(fromList [(0,0),(2,0),(3,3),(5,3),(6,5),(7,3)],fromList [(2,fromList [0,3])]))
+___ (3,(fromList [(0,0),(2,0),(3,2),(4,5),(5,4),(6,4),(8,5)],fromList [(2,fromList [0,2])]))
+(fromList [(0,0),(1,5),(3,2),(4,5),(5,5),(6,4),(7,5)],fromList [])
+(fromList [(0,0),(1,5),(3,3),(4,5),(5,5),(6,5),(7,3)],fromList [])
+(fromList [(0,0),(1,5),(3,2),(4,5),(5,4),(6,4),(8,5)],fromList [])
+
+
+@@@ (5,Just (fromList [(0,0),(1,5),(3,2),(4,5),(5,5),(6,4),(7,5)],fromList []))
+___ (0,(fromList [(0,0),(2,0),(3,3),(5,6),(6,5),(7,6)],fromList [(2,fromList [0,3])]))
+___ (1,(fromList [(0,0),(2,0),(3,4),(5,3),(6,6),(7,3),(8,4)],fromList [(2,fromList [0,4])]))
+___ (3,(fromList [(0,0),(2,0),(3,3),(4,6),(5,5),(6,5),(7,3),(8,6)],fromList [(2,fromList [0,3])]))
+(fromList [(0,0),(1,6),(3,3),(4,6),(5,6),(6,5),(7,6)],fromList [])
+(fromList [(0,0),(1,6),(3,4),(4,6),(5,6),(6,6),(7,3),(8,4)],fromList [])
+(fromList [(0,0),(1,6),(3,3),(4,6),(5,5),(6,5),(7,3),(8,6)],fromList [])
+
+
+@@@ (6,Just (fromList [(0,0),(1,6),(3,3),(4,6),(5,6),(6,5),(7,6)],fromList []))
+array (fromList [(0,0),(1,0)],fromList [])
+
+array (0,8) [(0,Minimize),(1,Maximize),(2,Orbit),(3,Minimize),(4,Maximize),(5,Maximize),(6,Maximize),(7,Maximize),(8,Maximize)],
+array (1,1) [(1,[GroupInfo {thisIndex = 1, parentIndex = 0, startTag = 3, stopTag = 4}])])
+
+Shit -- how did it win without setting tag 4?  QNFA transitions and tag 4
+
+3 -> win <>
+3 -> 2   Reset        #1
+
+2 -> 1   <>           #2
+
+1 -> win PreUpdate
+1 -> 2   Reset        #1
+1 -> 0   <>           #3
+1 -> 3   PostUpdate   #4
+
+0 -> win PreUpdate
+0 -> 2   Reset        #1
+0 -> 3   PostUpdate   #4
+
+Against "" it goes 3->win with blank tag 4
+Winning in 1 or 0 sets tag 4
+Going 1 or 0 to 3 sets tag 4
+
+You cannot win with tag 4 unset unless you are against ""
+
+[3] -> win <>
+[3] -> 3/#1/2 -> [2] Reset
+[2] -> 2/#2/1 -> [1] <>
+[1] -> 1/win             PreUpdate
+[1] -> 1/#1/2 -> [0,2,3] Reset
+[1] -> 1/#3/0 -> [0,2,3] <>
+[1] -> 1/#4/3 -> [0,2,3] PostUpdate
+[0,2,3] -> 0/win             PreUpdate
+[0,2,3] -> 3/win             <>
+[0,2,3] -> 0/#1/2 -> [1,2,3] Reset
+[0,2,3] -> 3/#1/2 -> [1,2,3] Reset
+[0,2,3] -> 2/#2/1 -> [1,2,3] <>
+[0,2,3] -> 0/#4/3 -> [1,2,3] PostUpdate
+[1,2,3] -> 1/win               PreUpdate
+[1,2,3] -> 3/win               <>
+[1,2,3] -> 1/#1/2 -> [0,1,2,3] Reset
+[1,2,3] -> 3/#1/2 -> [0,1,2,3] Reset
+[1,2,3] -> 2/#2/1 -> [0,1,2,3] <>
+[1,2,3] -> 1/#3/0 -> [0,1,2,3] <>
+[1,2,3] -> 1/#4/3 -> [0,1,2,3] PostUpdate
+[0,1,2,3] -> 0/win               PreUpdate
+[0,1,2,3] -> 1/win               PreUpdate
+[0,1,2,3] -> 3/win               <>
+[0,1,2,3] -> 0/#1/2 -> [0,1,2,3] Reset
+[0,1,2,3] -> 1/#1/2 -> [0,1,2,3] Reset
+[0,1,2,3] -> 3/#1/2 -> [0,1,2,3] Reset
+[0,1,2,3] -> 2/#2/1 -> [0,1,2,3] <>
+[0,1,2,3] -> 1/#3/0 -> [0,1,2,3] <>
+[0,1,2,3] -> 0/#4/3 -> [0,1,2,3] PostUpdate
+[0,1,2,3] -> 1/#4/3 -> [0,1,2,3] PostUpdate
+
 -}

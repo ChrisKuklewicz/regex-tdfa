@@ -20,57 +20,16 @@ import Text.Regex.TDFA.CorePattern
 import Text.Regex.TDFA.TDFA
 import Text.Regex.TDFA.Wrap
 
---import Text.Regex.TDFA.TNFA (patternToNFA)
-
--- import Debug.Trace
-
-{-
-toP = either (error.show) id . parseRegex 
-toQ = patternToQ defaultCompOpt . toP
-toNFA = patternToNFA defaultCompOpt . toP
-toDFA = nfaToDFA . toNFA
-display_NFA = mapM_ print . elems . (\(x,_,_) -> snd x) . toNFA 
--- display_DFA = mapM_ print . Map.elems . dfaMap . (\(x,_,_,_) -> x) . toDFA 
--}
+--import Debug.Trace
 
 type TagValues = IntMap {- Tag -} Position
--- type TagComparer = TagValues -> TagValues -> Ordering -- GT is the preferred one
-type TagComparer = Scratch -> Scratch -> Ordering
+type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the preferred one
 
 -- Returns GT if the first item is preferred. I could generate test
 -- cases to be sure about all the Maximize cases.  The minimize cases
 -- look stranger to trigger, so I am leaving them as errors until I am
 -- certain what to put there.
-{-
 makeTagComparer :: Array Tag OP -> TagComparer
--- XXX serious help with -Wall needed
-makeTagComparer tags = (\ tv1 tv2 ->
-  let tv1' = IMap.toAscList . fst $ tv1
-      tv2' = IMap.toAscList . fst $ tv2
-      errMsg s = error $ s ++ " : " ++ show (tags,tv1,tv2)
-      comp ((t1,v1):rest1) ((t2,v2):rest2) =
-        case compare t1 t2 of
-               EQ -> case tags!t1 of
-                       Minimize -> compare v2 v1 `mappend` comp rest1 rest2
-                       Maximize -> compare v1 v2 `mappend` comp rest1 rest2
-               LT -> case tags!t1 of
-                       Maximize -> GT
-                       Minimize -> errMsg "makeTagComparer: tv1 without tv2"
-               GT -> case tags!t2 of 
-                       Maximize -> LT
-                       Minimize -> errMsg "makeTagComparer: tv2 without tv1"
-      comp [] [] = EQ
-      comp ((t1,_):_) [] = case tags!t1 of
-                              Maximize -> GT
-                              Minimize -> errMsg "makeTagComparer: tv1 longer"
-      comp [] ((t2,_):_) = case tags!t2 of
-                              Maximize -> LT
-                              Minimize -> errMsg "makeTagComparer: tv2 longer"
-  in comp tv1' tv2'
- )
--}
-makeTagComparer :: Array Tag OP -> TagComparer
--- XXX serious help with -Wall needed
 makeTagComparer tags = (\ tv1 tv2 ->
   let tv1' = IMap.toAscList . fst $ tv1
       tv2' = IMap.toAscList . fst $ tv2
@@ -118,7 +77,7 @@ look key imap = IMap.findWithDefault (error ("key "++show key++" not found in Te
 
 {-# INLINE tagsToGroups #-}
 tagsToGroups :: Array PatternIndex [GroupInfo] -> Scratch -> MatchArray
-tagsToGroups aGroups (tags,orbits) | not (IMap.null orbits) =
+tagsToGroups aGroups (tags,orbits) | False && not (IMap.null orbits) = -- XXX disable this check
   error ("tagsToGroups non null orbits :"++show (aGroups,tags,orbits))
                                    | otherwise = groups -- trace (">><<< "++show (tags,filler)) groups
   where groups = array (0,snd (bounds aGroups)) filler
@@ -127,25 +86,15 @@ tagsToGroups aGroups (tags,orbits) | not (IMap.null orbits) =
           where startPos = look 0 tags
                 stopPos = look 1 tags
         checkAll (this_index,these_groups) = (this_index,if null good then (-1,0) else head good)
-          where good = do (GroupInfo _ _ start stop) <- these_groups -- Monad []
+          where good = do (GroupInfo _ parent start stop) <- these_groups -- Monad []
                           startPos <- IMap.lookup start tags
                           stopPos <- IMap.lookup stop tags
+                          let (startParent,lengthParent) = groups!parent
+                          guard (0 <= startParent &&
+                                 0 <= lengthParent &&
+                                 startParent <= startPos &&
+                                 stopPos <= startPos + lengthParent)
                           return (startPos,stopPos-startPos)
-
-{-
-tagsToGroups :: Array PatternIndex [GroupInfo] -> IntMap Position -> MatchArray
-tagsToGroups aGroups tags = groups -- trace (">><<< "++show (tags,filler)) groups
-  where groups = array (0,snd (bounds aGroups)) filler
-        filler = wholeMatch : map checkAll (assocs aGroups)
-        wholeMatch = (0,(startPos,stopPos-startPos)) -- will not fail to return good positions
-          where startPos = look 0 tags
-                stopPos = look 1 tags
-        checkAll (this_index,these_groups) = (this_index,if null good then (-1,0) else head good)
-          where good = do (GroupInfo _ _ start stop) <- these_groups
-                          startPos <- IMap.lookup start tags
-                          stopPos <- IMap.lookup stop tags
-                          return (startPos,stopPos-startPos)
- -}
 
 {-# INLINE findMatch #-}
 findMatch :: (Extract a) => (a -> Bool) -> (a->(Char,a)) 
@@ -184,7 +133,7 @@ findMatchAll isNull headTail regexIn stringIn = loop 0 '\n' stringIn where
 countMatchAll :: (Extract a) => (a -> Bool) -> (a->(Char,a))
               -> Regex -> a -> Int
 countMatchAll isNull headTail regexIn stringIn = loop 0 '\n' stringIn $! 0 where
-  regex = setExecOpts (ExecOption {captureGroups = False}) regexIn
+  regex = setExecOpts (ExecOption {captureGroups = False,testMatch = False}) regexIn
   loop offset prev input count =
     case matchHere isNull headTail regex offset prev input of
       Nothing -> if isNull input then count
@@ -194,7 +143,7 @@ countMatchAll isNull headTail regexIn stringIn = loop 0 '\n' stringIn $! 0 where
                            loop offset' prev' input' $! count
       Just ma -> let (start,len) = ma!0
                  in if isNull input then count
-                      else let offset' = start + len          -- start >= offset; len > 0
+                      else let offset' = start + len     -- start >= offset; len > 0
                                skip = (offset' - offset) -- skip >= 0
                                post = after (pred skip) input
                                (prev',input') = headTail post
@@ -204,17 +153,6 @@ countMatchAll isNull headTail regexIn stringIn = loop 0 '\n' stringIn $! 0 where
 {-# INLINE update #-}
 update :: RunState () -> Position -> Scratch -> (Scratch,[String])
 update rs p sIn = execRWS rs (p,succ p) sIn
-{- XXX
-update :: Delta -> Position -> IntMap Position -> (IntMap Position,[String])
-update delta off oldMap = foldl (\(m,w) (tag,pos) ->
-   case () of
-     _ | 0 <= pos -> (IMap.insert tag pos m,w)
-       | updateReset == pos -> (IMap.delete tag m,w)
-       | updateEnterOrbit == pos -> (IMap.insert tag (-tag) m,w++["Enter orbit at "++show (tag,pos)])
-       | updateLeaveOrbit == pos -> (IMap.delete tag m,w++["Leave orbit at "++show (tag,pos)])
-       | otherwise -> error ("There was a weird update pos: "++show (tag,pos))
-                                ) (oldMap,[]) (delta off)
--}
 
 {-# INLINE matchHere #-}
 matchHere ::  forall a. (Extract a) => (a -> Bool) -> (a->(Char,a)) 
@@ -257,13 +195,16 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
          Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
            let winning' = if IMap.null w then winning
                             else Just . maximumBy comp
+--                                    . (\wins -> trace (unlines . map show $ wins) wins)
                                       . map fst
 --                                    . map (\(m,written) -> trace ("\n>winning\n"++unlines written++"<") (m,w))
                                       . map (\(sourceIndex,rs) ->
-                                               update rs off (look sourceIndex tags))
+                                               let scratch = look sourceIndex tags
+                                               in -- trace ("### " ++ show (sourceIndex,scratch)) $
+                                                  update rs off scratch)
                                       . IMap.toList $ w
-        
-           in seq winning' $
+       
+           in seq winning' $ -- trace ("\n@@@ " ++ show (off,winning')) $
               if isNull input then winning' else
                 let (c,input') = headTail input
                 in case Map.lookup c t `mplus` o of

@@ -19,6 +19,7 @@ import qualified Text.Regex.TRE as TRE
 toP = either (error.show) id . parseRegex 
 toQ = patternToQ defaultCompOpt . toP
 toNFA = patternToNFA defaultCompOpt . toP
+show_NFA = unlines . map show . elems . (\(x,_,_) -> snd x) . toNFA 
 display_NFA = mapM_ print . elems . (\(x,_,_) -> snd x) . toNFA 
 
 toDFA = nfaToDFA . toNFA
@@ -63,7 +64,7 @@ checkTest op (n,regex,input,output) =
 checkTests op = fmap concat (mapM (checkTest op) =<< load)
 
 tdfa x r = let q :: Text.Regex.TDFA.Wrap.Regex
-               q = makeRegexOpts (defaultCompOpt { rightAssoc = True, lastStarGreedy = True }) defaultExecOpt r
+               q = makeRegexOpts (defaultCompOpt { rightAssoc = True, lastStarGreedy = False }) defaultExecOpt r
            in match q x
 
 regressOP op =
@@ -77,3 +78,11 @@ regressOP op =
 regress = regressOP (tdfa)
 
 regressTRE = regressOP (TRE.=~)
+
+fullspec s = [s
+             ,show s
+             ,show . starTrans . fst . toP $ s
+             ,show . toQ $ s
+             ,show_NFA $ s
+             ,examineDFA . toDFA $ s
+             ]

@@ -85,25 +85,27 @@ enterOrbit :: Tag -> RunState ()
 enterOrbit tag = do
   pos <- askPre
   (m,s) <- get :: RunState Scratch
-  let v = negate tag
-      m' = IMap.insertWith (\ _ {-new-} old -> old) tag pos m
-      s' = case IMap.lookup tag s of
-             Nothing -> IMap.insert tag (S.singleton pos) s
-             Just old -> let new = (S.|>) old pos
-                         in seq new $ IMap.insert tag new s
---let msg = ["Entering Orbit "++show (tag,pos,(m,s),(m',s'))]
---tell msg
-  seq v $ seq m' $ seq s' $ put (m',s')
+  let (m',s') = case IMap.lookup tag m of
+                  Nothing -> (IMap.insert tag pos m
+                             ,IMap.insert tag (S.singleton pos) s
+                             ) -- start new stack
+                  Just _ -> (m
+                            ,case IMap.lookup tag s of
+                               Nothing -> IMap.insert tag (S.singleton pos) s
+                               -- error $ "enterOrbit could not find old Seq"++show (tag,off,pos,m,s)
+                               Just old -> let new = (S.|>) old pos
+                                           in seq new $ IMap.insert tag new s
+                            )
+  let msg = ["Entering Orbit "++show (tag,pos)] -- ,(m,s),(m',s'))]
+  tell msg
+  seq m' $ seq s' $ put (m',s')
 
 leaveOrbit :: Tag -> RunState ()
 leaveOrbit tag = do
-  (m,s) <- get :: RunState Scratch
-  let m' = IMap.delete tag m
-      s' = IMap.delete tag s
---pos <- askPre
---let msg = ["Leaving Orbit "++show (tag,pos,(m,s),(m',s'))]
---tell msg
-  seq m' $ seq s' $ put (m',s')
+  pos <- askPre
+  let msg = ["Leaving Orbit "++show (tag,pos)]
+  tell msg
+  -- seq m' $ seq s' $ put (m',s')
 
 -- dumb smart constructor for tracing construction (I wanted to monitor laziness)
 makeDFA :: SetIndex -> DT -> DFA
@@ -223,7 +225,7 @@ flattenDT (Simple' {dt_trans=mt,dt_other=mo}) = map fst . maybe id (:) mo . Map.
 flattenDT (Testing' {dt_a=a,dt_b=b}) = flattenDT a ++ flattenDT b
 
 fillMap :: Tag -> IntMap Position
-fillMap tag = IMap.fromDistinctAscList [(t,-99) | t <- [0..tag] ]
+fillMap tag = IMap.fromDistinctAscList [(t,-1) | t <- [0..tag] ]
 
 diffMap :: IntMap Position -> IntMap Position -> [(Index,Position)]
 diffMap old new = IMap.toList (IMap.differenceWith (\a b -> if a==b then Nothing else Just b) old new)
