@@ -324,15 +324,28 @@ bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
   choose :: TagList -> TagList -> Ordering
   choose ((t1,b1):rest1) ((t2,b2):rest2) =
     case compare t1 t2 of -- find and examine the smaller of t1 and t2
-      LT -> if Maximize == op t1 then GT else errMsg $ "WTF 1 < 2 : " ++ show (t1,t2) -- LT
-      EQ -> (if Maximize == op t1 then compare else flip compare) b1 b2 -- PostUpdate _ > PreUpdate _
-            `mappend` choose rest1 rest2
-      GT -> if Maximize == op t2 then LT else errMsg $ "WTF 2 > 1 : " ++ show (t1,t2) -- GT 
-  choose ((t1,_):_) [] = if Maximize == op t1 then GT
-                         else errMsg $ "WTF 1 w/o 2 : " ++ show t1 -- LT
-  choose [] ((t2,_):_) = if Maximize == op t2 then LT
-                         else GT --  errMsg $ "WTF 2 w/o 1 : " ++ show t2 -- GT 
-                                 -- Case of "(x?)*x" being nullview or not. also "xx" =~ "((x*)*x)"
+      LT -> case op t1 of
+              Maximize -> GT
+              Minimize -> GT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 < 2 : " ++ show (t1,t2) -- LT ?
+              Orbit -> LT -- consistent with t2 without t1 case
+      EQ -> case op t1 of -- PostUpdate _ > PreUpdate _ 
+              Maximize -> compare b1 b2 `mappend` choose rest1 rest2
+              Minimize -> (flip compare) b1 b2 `mappend` choose rest1 rest2
+              Orbit | b1 == b2 -> choose rest1 rest2
+                    | otherwise -> errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Unequal Orbit values" ++ show ((t1,b1),(t2,b2))
+      GT -> case op t2 of
+              Maximize -> LT
+              Minimize -> GT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 2 > 1 : " ++ show (t1,t2) -- GT 
+              Orbit -> GT -- consistent with t2 without t1 case
+  choose ((t1,_):_) [] = case op t1 of
+                           Maximize -> GT
+                           Minimize -> LT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 w/o 2 : " ++ show t1 -- LT ?
+                           Orbit -> LT -- symmetric to t2 without t1 case
+  choose [] ((t2,_):_) = case op t2 of
+                           Maximize -> LT
+                           Minimize -> GT -- errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 2 w/o 1 : " ++ show t2 -- GT ?
+                                        -- Policy source: set lastStarGreedy to True and run "xx" =~ "((x*)*x)"
+                           Orbit -> GT  -- Policy source: Case of "(x?)*x" being nullview or not, triggered by "xx" =~ "((x*)*x)"
   choose [] [] = EQ
 
 
@@ -420,16 +433,6 @@ enterOrbit Nothing e = e
 enterOrbit (Just tag) (tags,cont) = ((tag,EnterOrbitTask):tags,cont)
 
 -}
-
-enterOrbitQT :: Maybe Tag -> QT -> QT
-enterOrbitQT Nothing qt = qt
-enterOrbitQT (Just tag) qt = prependTags' [(tag,PreUpdate EnterOrbitTask)] qt
-
-leaveOrbitQT :: Maybe Tag -> E -> E
-leaveOrbitQT mt qt = leaveOrbit mt $ qt
-  where leaveOrbit :: Maybe Tag -> E -> E
-        leaveOrbit Nothing e = e
-        leaveOrbit (Just tag) (tags,cont) = ((tag,LeaveOrbitTask):tags,cont)
 
 addTestAC :: TestInfo -> ActCont -> ActCont
 addTestAC ti (e,mE,_) = (addTest ti e
@@ -688,6 +691,22 @@ qToNFA compOpt qTop = (q_id startingQNFA
                 return (thisAll,ansAll)
           return (if clear then thisAC else ansAC)
       _ -> error ("This case in Text.Regex.TNFA.TNFA.actNullableTagless cannot happen: "++show qIn)
+
+
+  enterOrbitQT :: Maybe Tag -> QT -> QT
+  enterOrbitQT | lastStarGreedy compOpt = (\_ qt -> qt)
+               | otherwise = maybe id (\tag->prependTags' [(tag,PreUpdate EnterOrbitTask)])
+
+  leaveOrbitQT :: Maybe Tag -> E -> E
+  leaveOrbitQT | lastStarGreedy compOpt = (\_ qt -> qt)
+               | otherwise = maybe id (\tag->(\(tags,cont)->((tag,LeaveOrbitTask):tags,cont)))
+{-
+leaveOrbitQT mt qt = 
+leaveOrbit mt $ qt
+    where leaveOrbit :: Maybe Tag -> E -> E
+          leaveOrbit Nothing e = e
+          leaveOrbit (Just tag) (tags,cont) = 
+-}
 
   dotTrans | multiline compOpt = Map.singleton '\n' mempty
            | otherwise = mempty

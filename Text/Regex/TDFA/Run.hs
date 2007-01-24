@@ -77,36 +77,36 @@ makeTagComparer tags = (\ tv1 tv2 ->
       errMsg s = error $ s ++ " : " ++ unlines [show tags,show tv1,show tv2]
       comp e1@((t1,v1):rest1) e2@((t2,v2):rest2) =
         case compare t1 t2 of
+               LT -> case tags!t1 of
+                       Maximize -> GT
+                       Minimize -> errMsg "makeTagComparer.comp: tv1 Minimize without tv2, bestCase LT"
+                       Orbit -> errMsg "makeTagComparer.comp: tv1 Orbit without tv2, bestCase LT"
                EQ -> case tags!t1 of
                        Minimize -> compare v2 v1 `mappend` comp rest1 rest2
                        Maximize -> compare v1 v2 `mappend` comp rest1 rest2
                        Orbit | v1 /= v2 -> errMsg "makeTagComparer.comp: non-identical orbit pos"
                              | otherwise -> compareOrbits (IMap.lookup t1 (snd tv1)) (IMap.lookup t2 (snd tv2))
                                             `mappend` comp rest1 rest2
-               LT -> case tags!t1 of
-                       Maximize -> GT
-                       Minimize -> errMsg "makeTagComparer.comp: tv1 Minimize without tv2"
-                       Orbit -> errMsg "makeTagComparer.comp: tv1 Orbit without tv2"
                GT -> case tags!t2 of 
                        Maximize -> LT
-                       Minimize -> errMsg "makeTagComparer.comp: tv2 Minimize without tv1"
-                       Orbit -> errMsg "makeTagComparer.comp: tv2 Orbit without tv1"
+                       Minimize -> errMsg "makeTagComparer.comp: tv2 Minimize without tv1, bestCase GT"
+                       Orbit -> errMsg "makeTagComparer.comp: tv2 Orbit without tv1, bestCase GT"
         where                         
           compareOrbits (Just pos1) (Just pos2) = comparePos (viewl pos1) (viewl pos2)
+            where comparePos EmptyL EmptyL = EQ
+                  comparePos EmptyL _ = GT
+                  comparePos _ EmptyL = LT
+                  comparePos (p1:<ps1) (p2:<ps2) = compare p1 p2 `mappend` comparePos (viewl ps1) (viewl ps2)
           compareOrbits _ _ = errMsg ("makeTagComparer.compareOrbits: Nothing found in Scratch"++show (e1,e2))
-      comp [] [] = EQ
       comp ((t1,_):_) [] = case tags!t1 of
                               Maximize -> GT
-                              Minimize -> errMsg "makeTagComparer.comp: tv1 Minimize longer"
-                              Orbit -> errMsg "makeTagComparer.comp: tv1 Orbit longer"
+                              Minimize -> errMsg "makeTagComparer.comp: tv1 Minimize longer, bestCase LT"
+                              Orbit -> errMsg "makeTagComparer.comp: tv1 Orbit longer, bestCase LT"
       comp [] ((t2,_):_) = case tags!t2 of
                               Maximize -> LT
-                              Minimize -> errMsg "makeTagComparer.comp: tv2 Minimize longer"
-                              Orbit -> errMsg "makeTagComparer.comp: tv2 Orbit longer"
-      comparePos EmptyL EmptyL = EQ
-      comparePos EmptyL _ = GT
-      comparePos _ EmptyL = LT
-      comparePos (p1:<ps1) (p2:<ps2) = compare p1 p2 `mappend` comparePos (viewl ps1) (viewl ps2)
+                              Minimize -> errMsg "makeTagComparer.comp: tv2 Minimize longer, bestCase GT"
+                              Orbit -> errMsg "makeTagComparer.comp: tv2 Orbit longer, bestCase GT"
+      comp [] [] = EQ
         
   in comp tv1' tv2'
  )

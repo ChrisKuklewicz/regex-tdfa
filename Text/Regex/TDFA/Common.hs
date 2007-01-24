@@ -52,8 +52,13 @@ type PatternIndex = Int
 -- | 'RegexOption' control whether the pattern is multiline or
 -- case-sensitive like Text.Regex and whether to capture the subgroups
 -- (\1, \2, etc).
-data CompOption = CompOption {caseSensitive :: Bool,multiline :: Bool, rightAssoc :: Bool}
-data ExecOption = ExecOption {captureGroups::Bool}
+data CompOption = CompOption { caseSensitive :: Bool
+                             , multiline :: Bool
+                             , rightAssoc :: Bool
+                             , lastStarGreedy ::  Bool
+                             }
+data ExecOption = ExecOption { captureGroups::Bool
+                             }
 
 -- | 'MatchedStrings' is an IntMap where the keys are PatternIndex
 -- numbers and the values are completed substring captures.

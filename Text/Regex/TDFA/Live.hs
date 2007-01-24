@@ -14,6 +14,8 @@ import Text.Regex.TDFA.TDFA
 import Text.Regex.TDFA.Wrap
 import Text.Regex.TDFA.Run
 
+import qualified Text.Regex.TRE as TRE
+
 toP = either (error.show) id . parseRegex 
 toQ = patternToQ defaultCompOpt . toP
 toNFA = patternToNFA defaultCompOpt . toP
@@ -61,12 +63,17 @@ checkTest op (n,regex,input,output) =
 checkTests op = fmap concat (mapM (checkTest op) =<< load)
 
 tdfa x r = let q :: Text.Regex.TDFA.Wrap.Regex
-               q = makeRegexOpts (defaultCompOpt { rightAssoc = True }) defaultExecOpt r
+               q = makeRegexOpts (defaultCompOpt { rightAssoc = True, lastStarGreedy = True }) defaultExecOpt r
            in match q x
 
-regress = let mult = ["","?","*"]
-              test = [ "((x"++a++")"++b++"x)"++c | a <- mult, b <- mult, c <- mult ]
-              source = inits "xxxxx"
-              results :: [(MatchArray,String,String)]
-              results = [ (s =~ r,s,r) | s <- source, r <- test ]
-          in putStr . unlines . map show $ results
+regressOP op =
+  let mult = ["","?","*"]
+      test = [ "((x"++a++")"++b++"x)"++c | a <- mult, b <- mult, c <- mult ]
+      source = inits "xxxxx"
+      results :: [(MatchArray,String,String)]
+      results = [ (s `op` r,s,r) | s <- source, r <- test ]
+  in putStr . unlines . map show $ results
+
+regress = regressOP (tdfa)
+
+regressTRE = regressOP (TRE.=~)

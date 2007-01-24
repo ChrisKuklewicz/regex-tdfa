@@ -15,8 +15,13 @@ import Text.Regex.TDFA.Common(CompOption(..),ExecOption(..),Regex(..))
 instance RegexOptions Regex CompOption ExecOption where
   blankCompOpt = defaultCompOpt
   blankExecOpt = defaultExecOpt
-  defaultCompOpt = CompOption {caseSensitive = True,multiline = True, rightAssoc = False}
-  defaultExecOpt = ExecOption {captureGroups = True}
+  defaultCompOpt = CompOption { caseSensitive = True
+                              , multiline = True
+                              , rightAssoc = False
+                              , lastStarGreedy = False
+                              }
+  defaultExecOpt = ExecOption { captureGroups = True
+                              }
   setExecOpts e r = r {regex_execOptions=e}
   getExecOpts r = regex_execOptions r
 

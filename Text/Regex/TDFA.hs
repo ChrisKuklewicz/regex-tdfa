@@ -41,7 +41,7 @@ import Text.Regex.Base
 import Data.Version(Version(..))
 
 getVersion :: Version
-getVersion = Version { versionBranch = [0,21]
+getVersion = Version { versionBranch = [0,30]
                      , versionTags = ["tdfa","unstable"]
                      }
 
@@ -332,4 +332,114 @@ QNFA {q_id = 2
 *** Exception: WTF 2 w/o 1
 *Text.Regex.TDFA.Live> 
 
+-}
+
+{-
+Turning off orbit with lastStarGreedy = True and running regress reveals:
+
+("xx","((x*)*x)",array *** Exception: Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 2 w/o 1 : 4 : fromList [(#1,[]),(#1,[(5,PreUpdate TagTask),(5,PreUpdate ResetTask),(4,PreUpdate TagTask)])]
+
+*Text.Regex.TDFA.Live> starTrans . fst . toP $ "((x*)*x)"
+
+PGroup 1 (PConcat [PStar (PGroup 2 (PStar (PChar {getDoPa = #1, getPatternChar = 'x'}))),PChar {getDoPa = #2, getPatternChar = 'x'}])
+
+*Text.Regex.TDFA.Live> toQ $ "((x*)*x)"
+
+(Q { nullQ = []
+  , takes = (1,Nothing)
+  , preTag = Nothing
+  , postTag = Nothing
+  , tagged = True
+  , wants = WantsQNFA
+  , unQ = Seq Q { nullQ = [(SetTestInfo [],[(2,PreUpdate TagTask)])]
+            , takes = (0,Nothing)
+            , preTag = Nothing
+            , postTag = Just 2
+            , tagged = True
+            , wants = WantsQT
+            , unQ = Star {getOrbit = Just 3, reset = [5], unStar = Q { nullQ = [(SetTestInfo [],[(5,PreUpdate TagTask),(4,PreUpdate TagTask)])]
+                      , takes = (0,Nothing)
+                      , preTag = Just 4
+                      , postTag = Just 5
+                      , tagged = True
+                      , wants = WantsQT
+                      , unQ = Star {getOrbit = Nothing, reset = [], unStar = Q { nullQ = []
+                                , takes = (1,Just 1)
+                                , preTag = Nothing
+                                , postTag = Nothing
+                                , tagged = False
+                                , wants = WantsQNFA
+                                , unQ = OneChar (PChar {getDoPa = #1, getPatternChar = 'x'})
+                               }}
+                     }}
+           } Q { nullQ = []
+            , takes = (1,Just 1)
+            , preTag = Nothing
+            , postTag = Just 1
+            , tagged = False
+            , wants = WantsQNFA
+            , unQ = OneChar (PChar {getDoPa = #2, getPatternChar = 'x'})
+           }
+ },
+array (0,5) [(0,Minimize),(1,Maximize),(2,Maximize),(3,Orbit),(4,Minimize),(5,Maximize)],
+array (1,2) [(1,[GroupInfo {thisIndex = 1, parentIndex = 0, startTag = 0, stopTag = 1}])
+            ,(2,[GroupInfo {thisIndex = 2, parentIndex = 1, startTag = 4, stopTag = 5}])])
+
+*Text.Regex.TDFA.Live> display_NFA $ "((x*)*x)"
+
+QNFA {q_id = 0
+     ,q_qt = {qt_win=[(1,PreUpdate TagTask)]
+, qt_trans=[]
+, qt_other=[]}
+}
+QNFA {q_id = 1
+     ,q_qt = {qt_win=[]
+, qt_trans=[('x',[(0,[(#2,[(5,PreUpdate TagTask),(3,PreUpdate LeaveOrbitTask),(2,PreUpdate TagTask),(1,PostUpdate TagTask)])])
+                 ,(1,[(#1,[])
+                     ,(#1,[(5,PreUpdate TagTask),(5,PreUpdate ResetTask),(3,PreUpdate EnterOrbitTask),(4,PreUpdate TagTask)])])])]
+
+aka
+
+, qt_trans=[('x',[(0,[(#2,[(5,PreUpdate TagTask),(2,PreUpdate TagTask),(1,PostUpdate TagTask)])])
+                 ,(1,[(#1,[])
+                     ,(#1,[(5,PreUpdate TagTask),(5,PreUpdate ResetTask),(4,PreUpdate TagTask)])])])]
+
+The merging of the above causes the error.
+Tag 4 is the smalled tag that is different and only the second has it and it is Minimized.
+Clearly the first is preferred, as it uses the inner *, while the second loops the outer *.
+So the absence of the tag is preferred.
+
+, qt_other=[]}
+}
+QNFA {q_id = 2
+     ,q_qt = {qt_win=[]
+, qt_trans=[('x',[(0,[(#2,[(5,PreUpdate TagTask),(4,PreUpdate TagTask),(2,PreUpdate TagTask),(1,PostUpdate TagTask)])])
+                 ,(1,[(#1,[(5,PreUpdate ResetTask),(3,PreUpdate EnterOrbitTask),(4,PreUpdate TagTask)])])])]
+
+aka
+
+, qt_trans=[('x',[(0,[(#2,[(5,PreUpdate TagTask),(4,PreUpdate TagTask),(2,PreUpdate TagTask),(1,PostUpdate TagTask)])])
+                 ,(1,[(#1,[(5,PreUpdate ResetTask),(4,PreUpdate TagTask)])])])]
+
+, qt_other=[]}
+}
+
+
+*Text.Regex.TDFA.Live> putStr . examineDFA . toDFA $ "((x*)*x)"
+
+DFA {d_id = [0,1]
+    ,d_dt = Simple' { dt_win = [(0,([(1,0)],[]))]
+        , dt_trans = ('x',([0,1],[(0,[(1,(#2,([(1,1),(2,0),(3,-99),(5,0)],[])))]),(1,[(1,(#1,([],[])))])]))
+
+        , dt_other = None
+        }
+}
+DFA {d_id = [2]
+    ,d_dt = Simple' { dt_win = []
+        , dt_trans = ('x',([0,1],[(0,[(2,(#2,([(1,1),(2,0),(4,0),(5,0)],[])))]),(1,[(2,(#1,([(4,0),(5,-99)],[])))])]))
+
+        , dt_other = None
+        }
+}
+*Text.Regex.TDFA.Live> 
 -}
