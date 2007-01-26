@@ -42,7 +42,7 @@ import Text.Regex.Base
 import Data.Version(Version(..))
 
 getVersion :: Version
-getVersion = Version { versionBranch = [0,40]
+getVersion = Version { versionBranch = [0,45]
                      , versionTags = ["tdfa","unstable"]
                      }
 
