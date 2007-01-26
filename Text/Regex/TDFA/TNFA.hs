@@ -18,8 +18,9 @@ closing group captures.
 This still requires ordering the tags instead of keeping them sorted.
 -}
 
-module Text.Regex.TDFA.TNFA(patternToNFA,pickQTrans,cleanWin,noWin
---                           ,toP,toQ,toNFA,display_NFA
+module Text.Regex.TDFA.TNFA(patternToNFA -- ,pickQTrans,cleanWin
+                           ,noWin
+                           -- ,toP,toQ,toNFA,display_NFA
                            ,QNFA(..),QT(..),QTrans,TagUpdate(..)) where
 
 import Text.Regex.TDFA.Pattern(Pattern(..))
@@ -28,7 +29,7 @@ import Text.Regex.TDFA.CorePattern(Q(..),P(..),OP(..),WhichTest,cleanNullView,Nu
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.Wrap
 -- import Text.Regex.Base(RegexOptions(defaultCompOpt))
--- (DoPa,Index,PatternIndex,GroupInfo,CompOption(..),on,mapFst,mapSnd,norep)
+-- (DoPa,Index,GroupIndex,GroupInfo,CompOption(..),on,mapFst,mapSnd,norep)
 import Text.Regex.TDFA.ReadRegex(decodePatternSet)
 
 import Data.Monoid
@@ -48,6 +49,8 @@ import qualified Data.Map as Map
 import qualified Data.IntMap as IMap
 
 -- import Debug.Trace
+
+err t = common_error "Text.Regex.TDFA.TNFA" t
 
 debug :: (Show a) => a -> s -> s
 debug _ s = s
@@ -74,7 +77,7 @@ foo :: Map Char QTrans -> [(Char,[(Index,[TagCommand])])]
 foo = mapSnd foo' . Map.toAscList
 
 foo' :: QTrans -> [(Index,[TagCommand])]
-foo' = mapSnd Set.toList . IMap.toList 
+foo' = IMap.toList 
 
 instance Eq QT where
   t1@(Testing {}) == t2@(Testing {}) =
@@ -99,10 +102,10 @@ qtwin = Simple {qt_win=[(1,PreUpdate TagTask)],qt_trans=mempty,qt_other=mempty}
 qtlose = Simple {qt_win=mempty,qt_trans=mempty,qt_other=mempty}
 
 patternToNFA :: CompOption
-             -> (Text.Regex.TDFA.Pattern.Pattern,(PatternIndex, Int))
+             -> (Text.Regex.TDFA.Pattern.Pattern,(GroupIndex, Int))
              -> ((Index,Array Index QNFA)
                 ,Array Tag OP
-                ,Array PatternIndex [GroupInfo])
+                ,Array GroupIndex [GroupInfo])
 patternToNFA compOpt pattern =
   let (q,tags,groups) = patternToQ compOpt pattern
       msg = unlines [ show q ]
@@ -147,36 +150,6 @@ listTestInfo qt s = execState (helper qt) s
           modify (Set.insert wt)
           helper a
           helper b
-{-
-applyNullViews :: NullView -> QT -> QT
-applyNullViews [] win = win
-applyNullViews nvs win = foldl' dominate qtlose (reverse $ cleanNullView nvs) where
-  winTests = listTestInfo win $ mempty
-  dominate :: QT -> (SetTestInfo,WinTags) -> QT
-  dominate lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x) $
-    let -- The winning states are reached through the SetTag
-        win' = prependTags' tags win
-        -- get the SetTestInfo 
-        allTests = (listTestInfo lose $ Map.keysSet sti) `mappend` winTests
-        useTest _ [] w _ = w -- no more dominating tests to fail to choose lose, so just choose win
-        useTest (aTest:tests) allD@((dTest,dopas):ds) w l =
-          let (wA,wB,wD) = branches w
-              (lA,lB,lD) = branches l
-              branches qt@(Testing {}) | aTest==qt_test qt = (qt_a qt,qt_b qt,qt_dopas qt)
-              branches qt = (qt,qt,mempty)
-          in if aTest == dTest
-               then Testing {qt_test = aTest
-                            ,qt_dopas = (dopas `mappend` wD) `mappend` lD
-                            ,qt_a = useTest tests ds wA lA
-                            ,qt_b = lB}
-               else Testing {qt_test = aTest
-                            ,qt_dopas = wD `mappend` lD
-                            ,qt_a = useTest tests allD wA lA
-                            ,qt_b = useTest tests allD wB lB}
-        useTest [] _ _  _ = error "This case in Text.Regex.TNFA.TNFA.applyNullViews.useText cannot happen"
-    in useTest (Set.toList allTests) (Map.assocs sti) win' lose
--}
-
 -- This is used to view "win" only through NullView
 applyNullViews :: NullView -> QT -> QT
 applyNullViews [] win = win
@@ -213,7 +186,7 @@ dominate win winTests lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x
                           ,qt_dopas = wD `mappend` lD
                           ,qt_a = useTest tests allD wA lA
                           ,qt_b = useTest tests allD wB lB}
-      useTest [] _ _  _ = error "This case in Text.Regex.TNFA.TNFA.applyNullViews.useText cannot happen"
+      useTest [] _ _  _ = err "This case in applyNullViews.useText cannot happen"
   in useTest (Set.toList allTests) (Map.assocs sti) win' lose
 
 applyTest :: TestInfo -> QT -> QT
@@ -297,120 +270,8 @@ newQNFA s qt = do
   put (futureI, oldQs . ((thisI,qnfa):))
   return qnfa
 
-pickQTrans :: (Tag -> OP) -> QTrans -> [({-Destination-}Index,TagCommand)]
-pickQTrans op tr = mapSnd (bestTrans op) . IMap.toList $ tr
-
-cleanWin :: WinTags -> WinTags
-cleanWin = sort . nubBy ((==) `on` fst) . reverse   -- ick, nub XXX
-
-ignoreCommand :: TagUpdate -> Bool
-ignoreCommand tc = 
-  case tc of
-    PostUpdate task -> case task of
-                         TagTask -> False
-                         _ -> error $ "Unclassified PostUpdate task:  Text.Regex.TNFA.ignoreCommand " ++ show tc
-    PreUpdate task -> case task of
-                        TagTask -> False
-                        ResetTask -> True
-                        EnterOrbitTask -> error $ "Should not get here: Text.Regex.TNFA.ignoreCommand " ++ show tc
-                        LeaveOrbitTask -> error $ "Should not get here: Text.Regex.TNFA.ignoreCommand " ++ show tc
-
-
-bestTrans :: (Tag -> OP) -> Set TagCommand -> TagCommand
-bestTrans op s | len == 0 = error "There were no transitions in bestTrans"
-               | len == 1 = canonical $ head l
-               | otherwise = foldl' pick (canonical $ head l) (tail l) where
-  len = Set.size s
-  l = Set.toList s
-  pick :: TagCommand -> TagCommand -> TagCommand
-  pick t1_can@(_,tcs1_can) t2@(_,_) =
-    let t2_can@(_,tcs2_can) = canonical t2
-    in case choose tcs1_can tcs2_can of
-         GT -> t1_can
-         EQ -> t1_can
-         LT -> t2_can
-  canonical :: TagCommand -> TagCommand
-  canonical (dopa,tcs) = (dopa,sort clean) -- keep only last setting or resetting
-    where clean = nubBy ((==) `on` fst) . reverse $ tcs  -- ick, nub XXX
-  -- choose trests Orbit and Minimize as the same
-  errMsg msg = error (msg ++ " : " ++ show s)
-  choose :: TagList -> TagList -> Ordering
-  choose all1@((t1,b1):rest1) all2@((t2,b2):rest2) =
-    case compare t1 t2 of -- find and examine the smaller of t1 and t2
-      LT -> case op t1 of
-              Maximize -> if ignoreCommand b1
-                            then choose rest1 all2  -- sym
-                            else GT
-              Minimize -> if ignoreCommand b1 -- cosistent with Maximize case
-                            then errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 < 2 unclassified : "++ show (all1,all2)
-                            else LT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 < 2 : " ++ show (t1,t2) -- LT ?
-              Orbit -> LT -- consistent with t2 without t1 case
-      EQ -> case op t1 of -- PostUpdate _ > PreUpdate _ 
-              Maximize -> compare b1 b2 `mappend` choose rest1 rest2
-              Minimize -> (flip compare) b1 b2 `mappend` choose rest1 rest2
-              Orbit | b1 == b2 -> choose rest1 rest2
-                    | otherwise -> errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Unequal Orbit values" ++ show ((t1,b1),(t2,b2))
-      GT -> case op t2 of
-              Maximize -> if ignoreCommand b2
-                            then choose all1 rest2 -- sym.
-                            else LT
-              Minimize -> if ignoreCommand b2
-                            then errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 > 2 unclassified : "++ show (all1,all2)
-                            else GT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 > 2 : " ++ show (t1,t2) -- GT 
-              Orbit -> GT -- consistent with t2 without t1 case
-  choose ((t1,b1):rest1) [] = case op t1 of
-                           Maximize -> if ignoreCommand b1
-                                         then choose rest1 [] -- sym.
-                                         else GT
-                           Minimize -> if ignoreCommand b1
-                                         then choose rest1 [] -- sym.
-                                         else LT
-                           -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 w/o 2 : " ++ show t1 -- LT ?
-                           Orbit -> LT -- symmetric to t2 without t1 case
-  choose [] ((t2,b2):rest2) = case op t2 of
-                           Maximize -> if ignoreCommand b2
-                                         then choose [] rest2 -- setup to try and fix "(a*)+" DFA
-                                         else LT
-                           Minimize -> if ignoreCommand b2
-                                         then choose [] rest2
-                                         else GT
-                           -- errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 2 w/o 1 : " ++ show t2 -- GT ?
-                                        -- Policy source: set lastStarGreedy to True and run "xx" =~ "((x*)*x)"
-                           Orbit -> GT  -- Policy source: Case of "(x?)*x" being nullview or not, triggered by "xx" =~ "((x*)*x)"
-  choose [] [] = EQ
-
-
 noWin :: TagList -> Bool
 noWin = null
-
-{- XXX
-andTag :: Maybe Tag -> Maybe Tag -> TagList
-andTag (Just a) (Just b) = [(b,PreTag),(a,PreTag)]
-andTag (Just a) Nothing  = [(a,PreTag)]
-andTag Nothing  (Just b) = [(b,PreTag)]
-andTag Nothing  Nothing  = []
--}
-{-
-prependTags :: [Tag] -> QT -> QT
-prependTags tags qt | null tags = qt
-                    | nullQT qt = qt
-                    | otherwise = prependTags' [(tag,PreTag)|tag<-tags] qt
--}
-
-{- XXX 
--- Modify and query the continuation
-addTag :: Maybe Tag -> E -> E
-addTag (Just tag) (tags,cont) = ((tag,PreTag):tags,cont)
-addTag Nothing x = x
-
-addTags :: TagList -> E -> E
---addTags tags (tags',cont) = ([(tag,PreTag)|tag<-tags] `mappend` tags',cont)
-addTags tags (tags',cont) = (tags `mappend` tags',cont)
-
-insertTag :: Maybe Tag -> [Tag] -> [Tag]
-insertTag (Just tag) tags = (tag:tags)
-insertTag Nothing tags = tags
--}
 
 -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
 
@@ -454,6 +315,11 @@ addWinTags wtags (tags,cont) = (demoteTags wtags `mappend` tags,cont)
 addTag' :: Tag -> (TagTasks,a) -> (TagTasks,a)
 addTag' tag (tags,cont) = ((tag,TagTask):tags,cont)
 
+{-# INLINE addGroupResets #-}
+addGroupResets :: (Show a) => [Tag] -> (TagTasks,a) -> (TagTasks,a)
+addGroupResets [] x = x
+addGroupResets tags (tags',cont) = (foldr (:) tags' . map (\tag -> (tag,ResetGroupStopTask)) $ tags,cont)
+
 addTag :: Maybe Tag -> E -> E
 addTag Nothing e = e
 addTag (Just tag) e = addTag' tag e
@@ -462,7 +328,6 @@ addTag (Just tag) e = addTag' tag e
 enterOrbit :: Maybe Tag -> E -> E
 enterOrbit Nothing e = e
 enterOrbit (Just tag) (tags,cont) = ((tag,EnterOrbitTask):tags,cont)
-
 -}
 
 addTestAC :: TestInfo -> ActCont -> ActCont
@@ -475,6 +340,12 @@ addTagAC Nothing ac = ac
 addTagAC (Just tag) (e,mE,mQNFA) = (addTag' tag e
                                    ,fmap (addTag' tag) mE
                                    ,fmap (addTag' tag) mQNFA)
+
+addGroupResetsAC :: [Tag] -> ActCont -> ActCont
+addGroupResetsAC [] ac = ac
+addGroupResetsAC tags (e,mE,mQNFA) = (addGroupResets tags e
+                                     ,fmap (addGroupResets tags) mE
+                                     ,fmap (addGroupResets tags) mQNFA)
 
 addWinTagsAC :: WinTags -> ActCont -> ActCont
 addWinTagsAC wtags (e,mE,mQNFA) = (addWinTags wtags e
@@ -489,13 +360,13 @@ getE (eLoop,Nothing,_) = eLoop
 mergeE :: E -> E -> E
 mergeE e1 e2 = fromQT (mergeQT (getQT e1) (getQT e2))
 
--- This is applied directly to any qt right before passing to mergeQT
-addResets :: [Tag] -> QT -> QT
-addResets tags qt = prependTags' [(tag,PreUpdate ResetTask)|tag<-tags] qt
-
 prependTag :: Maybe Tag -> QT -> QT
-prependTag (Just tag) qt = prependTags' [(tag,PreUpdate TagTask)] qt
 prependTag Nothing qt = qt
+prependTag (Just tag) qt = prependTags' [(tag,PreUpdate TagTask)] qt
+
+prependGroupResets :: [Tag] -> QT -> QT
+prependGroupResets [] qt = qt
+prependGroupResets tags qt = prependTags' [(tag,PreUpdate ResetGroupStopTask)|tag<-tags] qt
 
 prependTags' :: TagList -> QT -> QT
 prependTags' tcs' qt@(Testing {}) = qt { qt_a = prependTags' tcs' (qt_a qt)
@@ -504,7 +375,7 @@ prependTags' tcs' (Simple {qt_win=w,qt_trans=t,qt_other=o}) =
   Simple { qt_win = if noWin w then w else tcs' `mappend` w
          , qt_trans = Map.map prependQTrans t
          , qt_other = prependQTrans o }
-  where prependQTrans = IMap.map (Set.map (\(d,tcs) -> (d,tcs' `mappend` tcs)))
+  where prependQTrans = IMap.map (map (\(d,tcs) -> (d,tcs' `mappend` tcs)))
 
 -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
 
@@ -518,27 +389,23 @@ qToNFA compOpt qTop = (q_id startingQNFA
   startState = (0,id)
 
   -- This is the only place where PostUpdate is used
-  newTrans :: String -> Maybe Tag -> Pattern -> E -> S E
-  newTrans s mPre pat (tags,cont) = do
+  newTrans :: String -> [Tag] -> Maybe Tag -> Pattern -> E -> S E
+  newTrans s resets mPre pat (tags,cont) = do
     i <- case cont of
            Left qnfa -> return (q_id qnfa)
            Right qt -> do qnfa <- newQNFA s qt
                           return (q_id qnfa)
     let post = promoteTasks PostUpdate tags
-    return . fromQT $ acceptTrans mPre pat post i
+        pre = promoteTasks PreUpdate ([(tag,ResetGroupStopTask) | tag<-resets] ++ maybe [] (\tag -> [(tag,TagTask)]) mPre)
+    return . fromQT $ acceptTrans pre pat post i
 
-  -- Alternative: Either (SetTag,QNFA) QT to send Tags that apply
-  --  before going to the QNFA leftward, where they may someday reach
-  --  a OneChar.  Essentially it accumulates postTags and preTags into
-  --  effective postTags. The (getQT) abstraction will handle this
-  --  well.  
   getTrans,getTransTagless :: Q -> E -> S E
-  getTrans qIn@(Q {preTag=pre,postTag=post,unQ=pIn}) e = debug (">< getTrans "++show qIn++" <>") $
+  getTrans qIn@(Q {preReset=resets,preTag=pre,postTag=post,unQ=pIn}) e = debug (">< getTrans "++show qIn++" <>") $
     case pIn of
-      OneChar pat -> newTrans "getTrans/OneChar" pre pat . addTag post $ e
-      Empty -> return . addTag pre . addTag post $ e
-      Test ti -> return . addTag pre . addTest ti . addTag post $ e
-      _ -> return . addTag pre =<< getTransTagless qIn (addTag post $ e)
+      OneChar pat -> newTrans "getTrans/OneChar" resets pre pat . addTag post $ e
+      Empty -> return . addGroupResets resets . addTag pre . addTag post $ e
+      Test ti -> return . addGroupResets resets . addTag pre . addTest ti . addTag post $ e
+      _ -> return . addGroupResets resets . addTag pre =<< getTransTagless qIn (addTag post $ e)
 
   getTransTagless qIn e = debug (">< getTransTagless "++show qIn++" <>") $
     case unQ qIn of
@@ -552,7 +419,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                   else sequence [ getTrans q e | q <- qs ]
         let qts = map getQT eqts
         return (fromQT (foldr1 mergeAltQT qts))
-      Star mOrbit tags mayFirstBeNull q ->
+      Star mOrbit resets mayFirstBeNull q ->
         let (e',clear) = -- trace ("\n>"++show e++"\n"++show q++"\n<") $
               if notNullable q then (e,True)
                 else case maybeOnlyEmpty q of
@@ -562,10 +429,10 @@ qToNFA compOpt qTop = (q_id startingQNFA
         in if cannotAccept q then return e' else mdo
         mqt <- inStar q this
         (this,ans) <- case mqt of
-                        Nothing -> error ("Weird pattern in getTransTagless/Star: " ++ show qIn)
+                        Nothing -> err ("Weird pattern in getTransTagless/Star: " ++ show qIn)
                         Just qt -> do
-                          let qt' = addResets tags . enterOrbitQT mOrbit $ qt
-                              thisQT = mergeQT qt' . getQT . leaveOrbitQT mOrbit $ e -- tell child to leave via leaveOrbit/e
+                          let qt' = resetOrbitsQT resets . enterOrbitQT mOrbit $ qt
+                              thisQT = mergeQT qt' . getQT . leaveOrbit mOrbit $ e -- tell child to leave via leaveOrbit/e
                               ansE = fromQT . mergeQT qt' . getQT $ e' -- tell world to skip via e'
                           thisE <- if usesQNFA q
                                   then return . fromQNFA =<< newQNFA "getTransTagless/Star" thisQT
@@ -573,15 +440,15 @@ qToNFA compOpt qTop = (q_id startingQNFA
                           return (thisE,ansE)
         return (if mayFirstBeNull then (if clear then this else ans)
                   else this)
-      _ -> error ("This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen" ++ show qIn)
+      _ -> err ("This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen" ++ show qIn)
 
   inStar,inStarTagless :: Q -> E -> S (Maybe QT)
-  inStar qIn@(Q {preTag=pre,postTag=post}) eLoop | notNullable qIn =
+  inStar qIn@(Q {preReset=resets,preTag=pre,postTag=post}) eLoop | notNullable qIn =
     debug (">< inStar/1 "++show qIn++" <>") $
     return . Just . getQT =<< getTrans qIn eLoop
                                                  | otherwise =
     debug (">< inStar/2 "++show qIn++" <>") $
-    return . fmap (prependTag pre) =<< inStarTagless qIn (addTag post $ eLoop)
+    return . fmap (prependGroupResets resets . prependTag pre) =<< inStarTagless qIn (addTag post $ eLoop)
     
   inStarTagless qIn eLoop = debug (">< inStarTagless "++show qIn++" <>") $ do
     case unQ qIn of
@@ -601,7 +468,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
       Star {} -> do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
                     return (fmap getQT meAcceptingOut)
       Test {} -> return Nothing -- with Or this discards ^ branch in "(^|foo|())*"
-      OneChar {} -> error ("OneChar cannot have nullable True")
+      OneChar {} -> err ("OneChar cannot have nullable True")
 
   {- act* functions
 
@@ -648,15 +515,15 @@ qToNFA compOpt qTop = (q_id startingQNFA
   act qIn c | nullable qIn = actNullable qIn c
             | otherwise = debug (">< act "++show qIn++" <>") $ do
     mqt <- return . Just =<< getTrans qIn ( getE $ c )
-    return (error "qToNFA / act / no clear view",mqt,Nothing)  -- or "return (fromQT qtlose,mqt,Nothing)"
+    return (err "qToNFA / act / no clear view",mqt,Nothing)  -- or "return (fromQT qtlose,mqt,Nothing)"
 
-  actNullable qIn@(Q {preTag=pre,postTag=post,unQ=pIn}) ac =
+  actNullable qIn@(Q {preReset=resets,preTag=pre,postTag=post,unQ=pIn}) ac =
     debug (">< actNullable "++show qIn++" <>") $ do
     case pIn of
-      Empty -> return . addTagAC pre . addTagAC post $ ac
-      Test ti -> return . addTagAC pre . addTestAC ti . addTagAC post $ ac
-      OneChar {} -> error ("OneChar cannot have nullable True ")
-      _ -> return . addTagAC pre =<< actNullableTagless qIn ( addTagAC post $ ac )
+      Empty -> return . addGroupResetsAC resets . addTagAC pre . addTagAC post $ ac
+      Test ti -> return . addGroupResetsAC resets . addTagAC pre . addTestAC ti . addTagAC post $ ac
+      OneChar {} -> err ("OneChar cannot have nullable True ")
+      _ -> return . addGroupResetsAC resets . addTagAC pre =<< actNullableTagless qIn ( addTagAC post $ ac )
 
   actNullableTagless qIn ac@(eLoop,mAccepting,mQNFA) = debug (">< actNullableTagless "++show (qIn)++" <>") $ do
     case unQ qIn of
@@ -667,14 +534,13 @@ qToNFA compOpt qTop = (q_id startingQNFA
       Or qs -> do
         cqts <- do
           if all nullable qs
-            then sequence [act q ac | q <- qs]
+            then sequence [fmap snd3 $ actNullable q ac | q <- qs]
             else do
               e' <- asQNFA "qToNFA/actNullableTagless/Or" . getE $ ac
-              let act' :: Q -> S ActCont
-                  act' q = do mqt <- return . Just =<< getTrans q e'
-                              return (error "qToNFA/actNullableTagless/Or: no clear view", mqt,Nothing)
-              sequence [ if nullable q then act q ac else act' q | q <- qs ]
-        let qts = map getQT (catMaybes (map (\(_,mA,_) -> mA) cqts))
+              let act' :: Q -> S (Maybe E)
+                  act' q = return . Just =<< getTrans q e'
+              sequence [ if nullable q then fmap snd3 $ actNullable q ac else act' q | q <- qs ]
+        let qts = map getQT (catMaybes cqts)
             eLoop' = case maybeOnlyEmpty qIn of
                        Just wtags -> addWinTags wtags eLoop -- nullable without tests; avoid getQT
                        Nothing -> fromQT $ applyNullViews (nullQ qIn) (getQT eLoop)
@@ -688,7 +554,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                        else Nothing
         return (eLoop',mAccepting',mQNFA')
 
-      Star mOrbit tags mayFirstBeNull q -> do
+      Star mOrbit resets mayFirstBeNull q -> do
         let (ac0@(_,mAccepting0,_),clear) =
               if notNullable q
                 then (ac,True)
@@ -698,14 +564,18 @@ qToNFA compOpt qTop = (q_id startingQNFA
                        _ -> let nQ = fromQT . preferNullViews (nullQ q) . getQT
                             in ((nQ eLoop,fmap nQ mAccepting,Nothing),False)
         if cannotAccept q then return ac0 else mdo
-          (_,mChildAccepting,mChildQNFA) <- act q (this,Nothing,Nothing)
+-- XXX
+-- mChildAccepting <- if nullable q then fmap snd3 $ actNullable q (this,Nothing,Nothing)
+--                      else return . Just =<< getTrans q this
+-- XXX  and then delete act
+          (_,mChildAccepting, _ {-mChildQNFA-}) <- act q (this,Nothing,Nothing)
   -- XXX  if clear && isJust mChildQNFA then (childQNFA,Just (getQT childQNFA),(mempty,childQNFA))
           (thisAC@(this,_,_),ansAC) <- 
             case mChildAccepting of
-              Nothing -> error ("Weird pattern in getTransTagless/Star: " ++ show qIn)
+              Nothing -> err ("Weird pattern in getTransTagless/Star: " ++ show qIn)
               Just childAccepting -> do
-                let childQT = addResets tags . enterOrbitQT mOrbit . getQT $ childAccepting
-                    thisQT = mergeQT childQT . getQT . leaveOrbitQT mOrbit . getE $ ac
+                let childQT = resetOrbitsQT resets . enterOrbitQT mOrbit . getQT $ childAccepting
+                    thisQT = mergeQT childQT . getQT . leaveOrbit mOrbit . getE $ ac
                     thisAccepting =
                       case mAccepting of
                         Just futureAccepting -> Just . fromQT . mergeQT childQT . getQT $ futureAccepting
@@ -723,23 +593,20 @@ qToNFA compOpt qTop = (q_id startingQNFA
                 return (thisAll,ansAll)
           return (if mayFirstBeNull then (if clear then thisAC else ansAC)
                     else thisAC)
-      _ -> error ("This case in Text.Regex.TNFA.TNFA.actNullableTagless cannot happen: "++show qIn)
+      _ -> err ("This case in Text.Regex.TNFA.TNFA.actNullableTagless cannot happen: "++show qIn)
 
+  -- This is applied directly to any qt right before passing to mergeQT
+  resetOrbitsQT :: [Tag] -> QT -> QT
+  resetOrbitsQT | lastStarGreedy compOpt = const id
+                | otherwise = (\ tags -> prependTags' [(tag,PreUpdate ResetOrbitTask)|tag<-tags])
 
   enterOrbitQT :: Maybe Tag -> QT -> QT
-  enterOrbitQT | lastStarGreedy compOpt = (\_ qt -> qt)
+  enterOrbitQT | lastStarGreedy compOpt = const id
                | otherwise = maybe id (\tag->prependTags' [(tag,PreUpdate EnterOrbitTask)])
 
-  leaveOrbitQT :: Maybe Tag -> E -> E
-  leaveOrbitQT | lastStarGreedy compOpt = (\_ qt -> qt)
-               | otherwise = maybe id (\tag->(\(tags,cont)->((tag,LeaveOrbitTask):tags,cont)))
-{-
-leaveOrbitQT mt qt = 
-leaveOrbit mt $ qt
-    where leaveOrbit :: Maybe Tag -> E -> E
-          leaveOrbit Nothing e = e
-          leaveOrbit (Just tag) (tags,cont) = 
--}
+  leaveOrbit :: Maybe Tag -> E -> E
+  leaveOrbit | lastStarGreedy compOpt = const id
+             | otherwise = maybe id (\tag->(\(tags,cont)->((tag,LeaveOrbitTask):tags,cont)))
 
   dotTrans | multiline compOpt = Map.singleton '\n' mempty
            | otherwise = mempty
@@ -753,10 +620,9 @@ leaveOrbit mt $ qt
                                                  then (dl.(toUpper c:).(toLower c:))
                                                  else (dl.(c:))) id 
 
-  acceptTrans :: Maybe Tag -> Pattern -> TagList -> Index -> QT
+  acceptTrans :: TagList -> Pattern -> TagList -> Index -> QT
   acceptTrans pre pIn post i =
-    let target = IMap.singleton i $ Set.singleton (getDoPa pIn
-                                                  ,maybe post (\tag->(tag,PreUpdate TagTask):post) pre)
+    let target = IMap.singleton i [(getDoPa pIn,pre++post)]
     in case pIn of
          PChar _ char ->
            let trans = toMap target [char]
@@ -771,7 +637,7 @@ leaveOrbit mt $ qt
          PAnyNot _ ps ->
            let trans = toMap mempty . Set.toAscList . addNewline . decodePatternSet $ ps
            in Simple { qt_win = mempty, qt_trans = trans, qt_other = target }
-         _ -> error ("Cannot acceptTrans pattern "++show pIn)
+         _ -> err ("Cannot acceptTrans pattern "++show pIn)
 
 {-
 showQT' :: (Tag -> OP) -> QT -> String
@@ -810,3 +676,200 @@ asQT :: E -> E
 asQT (tags,cont) = (tags,Right (either q_qt id cont))
 
 -}
+{-
+
+("","(((())+)?)+.+",("","","",[]),"same")
+*** Exception: Weird pattern in getTransTagless/Star: Q { nullQ = [(SetTestInfo [],[(3,PreUpdate TagTask)])]
+  , takes = (0,Nothing)
+  , preTag = Nothing
+  , postTag = Just 3
+  , tagged = True
+  , wants = WantsQT
+  , unQ = Star {getOrbit = Just 10, reset = [4,5,6,9,12,13,14,15,17], firstNull = False, unStar = Q { nullQ = [(SetTestInfo [],[(12,PreUpdate TagTask),(11,PreUpdate TagTask),(14,PreUpdate TagTask),(13,PreUpdate TagTask)])]
+            , takes = (0,Nothing)
+            , preTag = Just 11
+            , postTag = Just 12
+            , tagged = True
+            , wants = WantsQT
+            , unQ = Or [Q { nullQ = [(SetTestInfo [],[(14,PreUpdate TagTask),(13,PreUpdate TagTask)])]
+                      , takes = (0,Nothing)
+                      , preTag = Nothing
+                      , postTag = Nothing
+                      , tagged = True
+                      , wants = WantsQT
+                      , unQ = Seq Q { nullQ = [(SetTestInfo [],[(14,PreUpdate TagTask)])]
+                                , takes = (0,Just 0)
+                                , preTag = Nothing
+                                , postTag = Just 14
+                                , tagged = True
+                                , wants = WantsEither
+                                , unQ = Empty
+                               } Q { nullQ = [(SetTestInfo [],[(13,PreUpdate TagTask)])]
+                                , takes = (0,Nothing)
+                                , preTag = Nothing
+                                , postTag = Just 13
+                                , tagged = True
+                                , wants = WantsQT
+                                , unQ = Star {getOrbit = Just 15, reset = [6,9,14,17], firstNull = False, unStar = Q { nullQ = [(SetTestInfo [],[(17,PreUpdate TagTask),(16,PreUpdate TagTask)])]
+                                          , takes = (0,Just 0)
+                                          , preTag = Just 16
+                                          , postTag = Just 17
+                                          , tagged = True
+                                          , wants = WantsEither
+                                          , unQ = Empty
+                                         }}
+                               }
+                     },Q { nullQ = [(SetTestInfo [],[])]
+                      , takes = (0,Just 0)
+                      , preTag = Nothing
+                      , postTag = Nothing
+                      , tagged = False
+                      , wants = WantsEither
+                      , unQ = Empty
+                     }]
+           }}
+ }
+*Main> 
+-}
+
+{-
+bestTrans :: (Tag -> OP) -> Set TagCommand -> TagCommand
+bestTrans op s | len == 0 = err "There were no transitions in bestTrans"
+               | len == 1 = canonical $ head l
+               | otherwise = foldl' pick (canonical $ head l) (tail l) where
+  len = Set.size s
+  l = Set.toList s
+  pick :: TagCommand -> TagCommand -> TagCommand
+  pick t1_can@(_,tcs1_can) t2@(_,_) =
+    let t2_can@(_,tcs2_can) = canonical t2
+    in case choose tcs1_can tcs2_can of
+         GT -> t1_can
+         EQ -> t1_can
+         LT -> t2_can
+  canonical :: TagCommand -> TagCommand
+  canonical (dopa,tcs) = (dopa,sort clean) -- keep only last setting or resetting
+    where clean = nubBy ((==) `on` fst) . reverse $ tcs  -- ick, nub XXX
+  -- choose trests Orbit and Minimize as the same
+  errMsg msg = err (msg ++ " : " ++ show s)
+  choose :: TagList -> TagList -> Ordering
+  choose all1@((t1,b1):rest1) all2@((t2,b2):rest2) =
+    case compare t1 t2 of -- find and examine the smaller of t1 and t2
+      LT -> case op t1 of
+              Maximize -> if ignoreCommand b1
+                            then choose rest1 all2  -- sym
+                            else GT
+              Minimize -> if ignoreCommand b1 -- cosistent with Maximize case
+                            then errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 < 2 unclassified : "++ show (all1,all2)
+                            else LT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 < 2 : " ++ show (t1,t2) -- LT ?
+              Orbit -> LT -- consistent with t2 without t1 case
+      EQ -> if ignoreCommand b1 /= ignoreCommand b2
+              then errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose the EQ case has different ignore b1 and b2: " ++ show (all1,all2)
+              else if ignoreCommand b1 || ignoreCommand b2 then choose rest1 rest2
+                     else case op t1 of -- PostUpdate _ > PreUpdate _ 
+                            Maximize -> compare b1 b2 `mappend` choose rest1 rest2
+                            Minimize -> (flip compare) b1 b2 `mappend` choose rest1 rest2
+                            Orbit | b1 == b2 -> choose rest1 rest2
+                                  | otherwise -> errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Unequal Orbit values" ++ show ((t1,b1),(t2,b2))
+      GT -> case op t2 of
+              Maximize -> if ignoreCommand b2
+                            then choose all1 rest2 -- sym.
+                            else LT
+              Minimize -> if ignoreCommand b2
+                            then errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 > 2 unclassified : "++ show (all1,all2)
+                            else GT -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 > 2 : " ++ show (t1,t2) -- GT 
+              Orbit -> GT -- consistent with t2 without t1 case
+  choose ((t1,b1):rest1) [] = case op t1 of
+                           Maximize -> if ignoreCommand b1
+                                         then choose rest1 [] -- sym.
+                                         else GT
+                           Minimize -> if ignoreCommand b1
+                                         then choose rest1 [] -- sym.
+                                         else LT
+                           -- sym. errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 1 w/o 2 : " ++ show t1 -- LT ?
+                           Orbit -> LT -- symmetric to t2 without t1 case
+  choose [] ((t2,b2):rest2) = case op t2 of
+                           Maximize -> if ignoreCommand b2
+                                         then choose [] rest2 -- setup to try and fix "(a*)+" DFA
+                                         else LT
+                           Minimize -> if ignoreCommand b2
+                                         then choose [] rest2
+                                         else GT
+                           -- errMsg $ "Text.Regex.TDFA.TNFA.bestTrans.choose Minimize 2 w/o 1 : " ++ show t2 -- GT ?
+                                        -- Policy source: set lastStarGreedy to True and run "xx" =~ "((x*)*x)"
+                           Orbit -> GT  -- Policy source: Case of "(x?)*x" being nullview or not, triggered by "xx" =~ "((x*)*x)"
+  choose [] [] = EQ
+  -- This ignoreCommand exists to try and fix the DFA generated for
+  -- "(a*)+" The DFA "(a*)(a*)*" has the desired shape.  I feel like I
+  -- am on thin ice fixing this.
+  ignoreCommand :: TagUpdate -> Bool
+  ignoreCommand tc = 
+    case tc of
+      PostUpdate task -> case task of
+                           TagTask -> False
+                           _ -> errMsg $ "Unclassified PostUpdate task:  Text.Regex.TNFA.ignoreCommand " ++ show tc
+      PreUpdate task -> case task of
+                          TagTask -> False
+                          ResetTask -> True
+                          EnterOrbitTask -> True -- errMsg $ "Should not get here: Text.Regex.TNFA.ignoreCommand " ++ show tc
+                          LeaveOrbitTask -> True -- errMsg $ "Should not get here: Text.Regex.TNFA.ignoreCommand " ++ show tc
+-}
+
+
+{- XXX
+andTag :: Maybe Tag -> Maybe Tag -> TagList
+andTag (Just a) (Just b) = [(b,PreTag),(a,PreTag)]
+andTag (Just a) Nothing  = [(a,PreTag)]
+andTag Nothing  (Just b) = [(b,PreTag)]
+andTag Nothing  Nothing  = []
+-}
+{-
+prependTags :: [Tag] -> QT -> QT
+prependTags tags qt | null tags = qt
+                    | nullQT qt = qt
+                    | otherwise = prependTags' [(tag,PreTag)|tag<-tags] qt
+-}
+
+{- XXX 
+-- Modify and query the continuation
+addTag :: Maybe Tag -> E -> E
+addTag (Just tag) (tags,cont) = ((tag,PreTag):tags,cont)
+addTag Nothing x = x
+
+addTags :: TagList -> E -> E
+--addTags tags (tags',cont) = ([(tag,PreTag)|tag<-tags] `mappend` tags',cont)
+addTags tags (tags',cont) = (tags `mappend` tags',cont)
+
+insertTag :: Maybe Tag -> [Tag] -> [Tag]
+insertTag (Just tag) tags = (tag:tags)
+insertTag Nothing tags = tags
+-}
+{-
+applyNullViews :: NullView -> QT -> QT
+applyNullViews [] win = win
+applyNullViews nvs win = foldl' dominate qtlose (reverse $ cleanNullView nvs) where
+  winTests = listTestInfo win $ mempty
+  dominate :: QT -> (SetTestInfo,WinTags) -> QT
+  dominate lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x) $
+    let -- The winning states are reached through the SetTag
+        win' = prependTags' tags win
+        -- get the SetTestInfo 
+        allTests = (listTestInfo lose $ Map.keysSet sti) `mappend` winTests
+        useTest _ [] w _ = w -- no more dominating tests to fail to choose lose, so just choose win
+        useTest (aTest:tests) allD@((dTest,dopas):ds) w l =
+          let (wA,wB,wD) = branches w
+              (lA,lB,lD) = branches l
+              branches qt@(Testing {}) | aTest==qt_test qt = (qt_a qt,qt_b qt,qt_dopas qt)
+              branches qt = (qt,qt,mempty)
+          in if aTest == dTest
+               then Testing {qt_test = aTest
+                            ,qt_dopas = (dopas `mappend` wD) `mappend` lD
+                            ,qt_a = useTest tests ds wA lA
+                            ,qt_b = lB}
+               else Testing {qt_test = aTest
+                            ,qt_dopas = wD `mappend` lD
+                            ,qt_a = useTest tests allD wA lA
+                            ,qt_b = useTest tests allD wB lB}
+        useTest [] _ _  _ = error "This case in Text.Regex.TNFA.TNFA.applyNullViews.useText cannot happen"
+    in useTest (Set.toList allTests) (Map.assocs sti) win' lose
+-}
+

@@ -22,9 +22,59 @@ import Text.Regex.TDFA.Wrap
 
 -- import Debug.Trace
 
+err = common_error "Text.Regex.TDFA.Run"
+
 type TagValues = IntMap {- Tag -} Position
 type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the preferred one
 
+compareWith :: (Ord x,Monoid a) => (Maybe (x,b) -> Maybe (x,c) -> a) -> [(x,b)] -> [(x,c)] -> a
+compareWith comp = cw where
+  cw [] [] = comp Nothing Nothing
+  cw xx@(x:xs) yy@(y:ys) =
+    case compare (fst x) (fst y) of
+      GT -> comp Nothing  (Just y) `mappend` cw xx ys
+      EQ -> comp (Just x) (Just y) `mappend` cw xs ys
+      LT -> comp (Just x) Nothing  `mappend` cw xs yy
+  cw xx [] = foldr (\x rest -> comp (Just x) Nothing  `mappend` rest) mempty xx
+  cw [] yy = foldr (\y rest -> comp Nothing  (Just y) `mappend` rest) mempty yy
+
+makeTagComparer :: Array Tag OP -> TagComparer
+makeTagComparer aTags = (\ tv1 tv2 ->
+  let tv1' = IMap.toAscList . fst $ tv1
+      tv2' = IMap.toAscList . fst $ tv2
+
+      errMsg s = err $ "makeTagComparer : " ++ s ++ " : " ++ unlines [show aTags,show tv1,show tv2]
+
+      tagComparer :: Maybe (Tag,(Position,Bool)) -> Maybe (Tag,(Position,Bool)) -> Ordering
+      tagComparer = check where
+        check (Just (tag,(pos1,_))) (Just (_,(pos2,_))) =
+          case aTags!tag of
+            Maximize -> compare pos1 pos2
+            Minimize -> (flip compare) pos1 pos2
+            Orbit -> compareOrbits (IMap.lookup tag (snd tv1)) (IMap.lookup tag (snd tv2))
+        check all@(Just (tag,(pos1,_))) Nothing =
+          case aTags!tag of
+            Maximize -> GT
+            Minimize -> errMsg $ "tagComparer TODO: Minimize tag in 1st without one in 2nd "++show all
+            Orbit -> errMsg $ "tagComparer TODO: Orbit tag in 1st without one in 2nd " ++ show all
+        check Nothing all@(Just (tag,(pos2,_))) =
+          case aTags!tag of
+            Maximize -> LT
+            Minimize -> errMsg $ "tagComparer TODO: Minimize tag in 2nd without one in 1st "++show all
+            Orbit -> errMsg $ "tagComparer TODO: Orbit tag in 2nd without one in 1st " ++ show all
+        check Nothing Nothing = EQ
+      compareOrbits (Just pos1) (Just pos2) = comparePos (viewl pos1) (viewl pos2)
+        where comparePos EmptyL EmptyL = EQ
+              comparePos EmptyL _ = GT
+              comparePos _ EmptyL = LT
+              comparePos (p1:<ps1) (p2:<ps2) = compare p1 p2 `mappend`
+                                               comparePos (viewl ps1) (viewl ps2)
+      compareOrbits e1 e2 = errMsg $ ("compareOrbits Nothing found in Scratch"++show (e1,e2))
+    
+  in compareWith tagComparer tv1' tv2')
+
+
+{-
 -- Returns GT if the first item is preferred. I could generate test
 -- cases to be sure about all the Maximize cases.  The minimize cases
 -- look stranger to trigger, so I am leaving them as errors until I am
@@ -58,6 +108,7 @@ makeTagComparer tags = (\ tv1 tv2 ->
                        Maximize -> LT
                        Minimize -> errMsg "makeTagComparer.comp: tv2 Minimize without tv1, bestCase GT"
                        Orbit -> errMsg "makeTagComparer.comp: tv2 Orbit without tv1, bestCase GT"
+-- "AAAc" =~ "(A|A)((.*)*)+(A)?|."  gets ("","AAAc","",["A","AAc","",""]),("","AAAc","",["A","","",""]))
         where                         
           compareOrbits (Just pos1) (Just pos2) = comparePos (viewl pos1) (viewl pos2)
             where comparePos EmptyL EmptyL = EQ
@@ -77,26 +128,27 @@ makeTagComparer tags = (\ tv1 tv2 ->
         
   in comp tv1' tv2'
  )
-
+-}
 {-# INLINE look #-}
 look :: Int -> IntMap a -> a
 look key imap = IMap.findWithDefault (error ("key "++show key++" not found in Text.Regex.TDFA.Run.look")) key imap
 
 
 {-# INLINE tagsToGroups #-}
-tagsToGroups :: Array PatternIndex [GroupInfo] -> Scratch -> MatchArray
+tagsToGroups :: Array GroupIndex [GroupInfo] -> Scratch -> MatchArray
 tagsToGroups aGroups (tags,orbits) | False && not (IMap.null orbits) = -- XXX disable this check
   error ("tagsToGroups non null orbits :"++show (aGroups,tags,orbits))
                                    | otherwise = groups -- trace (">><<< "++show (tags,filler)) groups
   where groups = array (0,snd (bounds aGroups)) filler
         filler = wholeMatch : map checkAll (assocs aGroups)
         wholeMatch = (0,(startPos,stopPos-startPos)) -- will not fail to return good positions
-          where startPos = look 0 tags
-                stopPos = look 1 tags
+          where startPos = fst $ look 0 tags
+                stopPos = fst $ look 1 tags
         checkAll (this_index,these_groups) = (this_index,if null good then (-1,0) else head good)
-          where good = do (GroupInfo _ parent start stop) <- these_groups -- Monad []
-                          startPos <- IMap.lookup start tags
-                          stopPos <- IMap.lookup stop tags
+          where good = do (GroupInfo _ parent start stop _) <- these_groups -- Monad []
+                          (startPos,_) <- IMap.lookup start tags
+                          (stopPos,validStop) <- IMap.lookup stop tags
+                          guard validStop
                           let (startParent,lengthParent) = groups!parent
                           guard (0 <= startParent &&
                                  0 <= lengthParent &&
@@ -175,7 +227,7 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
                     Nothing -> Nothing
                     Just offsetEnd -> Just (array (0,0) [(0,(offsetIn,offsetEnd-offsetIn))])
 
-  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 offsetIn,mempty)
+  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 (offsetIn,True),mempty)
   comp = makeTagComparer (regex_tags regexIn)
 
   test_multiline wt _ prev input =

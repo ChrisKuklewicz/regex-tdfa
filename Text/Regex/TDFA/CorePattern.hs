@@ -3,7 +3,7 @@ module Text.Regex.TDFA.CorePattern(Q(..),P(..),WhichTest(..),Wanted(..),TestInfo
 
 import Control.Monad.Fix()
 import Control.Monad.RWS
-import Text.Regex.TDFA.Common -- (Tag,GroupInfo(..),PatternIndex,Position,WinTags,DoPa,CompOption(..),mapSnd)
+import Text.Regex.TDFA.Common -- (Tag,GroupInfo(..),GroupIndex,Position,WinTags,DoPa,CompOption(..),mapSnd)
 import Text.Regex.TDFA.Pattern(Pattern(..),starTrans)
 
 import Data.Maybe
@@ -28,7 +28,7 @@ data P = Empty
        | Or [Q]
        | Seq Q Q
        | Star { getOrbit :: Maybe Tag  -- tag to prioritize the need to keep track of length of each pass though q
-              , reset :: [Tag]         -- need to reset the contained groups by resetting these closing tags
+              , resetOrbits :: [Tag]   -- child star's orbits to reset
               , firstNull :: Bool      -- Usually True meaning the first pass may match 0 characters
               , unStar :: Q}
        | Test TestInfo
@@ -38,6 +38,7 @@ data P = Empty
 -- The diagnostics about the pattern
 data Q = Q {nullQ :: NullView         -- Ordered list of nullable views
            ,takes :: (Position,Maybe Position)  -- Range of number of accepted characters
+           ,preReset :: [Tag]         -- Tags to "reset" (XXX only used by Star and PStar/PGroup)
            ,preTag,postTag :: Maybe Tag -- Tags assigned around this pattern
            ,tagged :: Bool            -- Whether this node should be tagged (XXX only used in patternToQ/PStar)
            ,childGroups :: Bool       -- Whether unQ has any PGroups (XXX only used in patternToQ/POr)
@@ -49,7 +50,6 @@ type TestInfo = (WhichTest,DoPa)
 -- This is newtype'd to allow for a custom Ord instance
 -- This is a set of WhichTest where each test has associated pattern location information
 newtype SetTestInfo = SetTestInfo {getTests :: Map WhichTest (Set DoPa)} deriving (Eq,Monoid)
-
 
 -- During the depth first traversal, children are told about bounds by the parent
 data HandleTag = NoTag | Advice Tag | Apply Tag deriving (Show)
@@ -119,7 +119,7 @@ fromHandleTag (Advice tag) = tag
 fromHandleTag _ = error "fromHandleTag"
 
 winTags :: Maybe Tag -> Maybe Tag -> WinTags
-winTags (Just a) (Just b) = [(b,PreUpdate TagTask),(a,PreUpdate TagTask)]
+winTags (Just a) (Just b) = [(a,PreUpdate TagTask),(b,PreUpdate TagTask)]
 winTags (Just a) Nothing  = [(a,PreUpdate TagTask)]
 winTags Nothing  (Just b) = [(b,PreUpdate TagTask)]
 winTags Nothing  Nothing  = mempty
@@ -127,6 +127,7 @@ winTags Nothing  Nothing  = mempty
 showQ :: Q -> String
 showQ q = "Q { nullQ = "++show (nullQ q)++
         "\n  , takes = "++show (takes q)++
+        "\n  , preReset = "++show (preReset q)++
         "\n  , preTag = "++show (preTag q)++
         "\n  , postTag = "++show (postTag q)++
         "\n  , tagged = "++show (tagged q)++
@@ -173,13 +174,13 @@ getChildTags :: Q -> [Tag]
 getChildTags q = maybe id (:) (preTag q) $ maybe (childTags q) (:childTags q) (postTag q)
 -}
 
-type PM = RWS PatternIndex [Either Tag GroupInfo] ([OP]->[OP],Tag) 
+type PM = RWS GroupIndex [Either Tag GroupInfo] ([OP]->[OP],Tag) 
 type HHQ = HandleTag  -- m1 : info about left or pre-tag, currently NoTag or Advice and never Apply
         -> HandleTag  -- m2 : info about right or post-tag, currently NoTag or Apply, and top-level Advice
         -> PM Q
 
-makeGroupArray :: PatternIndex -> [GroupInfo] -> Array PatternIndex [GroupInfo]
-makeGroupArray maxPatternIndex groups = accumArray (\earlier later -> later:earlier) [] (1,maxPatternIndex) filler
+makeGroupArray :: GroupIndex -> [GroupInfo] -> Array GroupIndex [GroupInfo]
+makeGroupArray maxGroupIndex groups = accumArray (\earlier later -> later:earlier) [] (1,maxGroupIndex) filler
     where filler = map (\gi -> (thisIndex gi,gi)) groups
 
 fromRight :: [Either Tag GroupInfo] -> [GroupInfo]
@@ -194,27 +195,42 @@ partEither = helper id id where
   helper ls rs ((Right x):xs) = helper  ls      (rs.(x:)) xs
   helper ls rs ((Left  x):xs) = helper (ls.(x:)) rs       xs
 
-patternToQ :: CompOption -> (Pattern,(PatternIndex,Int)) -> (Q,Array Tag OP,Array PatternIndex [GroupInfo])
-patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
+---
+
+---
+
+patternToQ :: CompOption -> (Pattern,(GroupIndex,Int)) -> (Q,Array Tag OP,Array GroupIndex [GroupInfo])
+patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
   (tnfa,(tag_dlist,nextTag),groups) = runRWS monad startReader startState
   aTags = listArray (0,pred nextTag) (tag_dlist [])
-  aGroups = makeGroupArray maxPatternIndex (fromRight groups)
+  aGroups = makeGroupArray maxGroupIndex (fromRight groups)
+
   -- implicitly inside a PGroup 0 converted into a GroupInfo 0 undefined 0 1
   monad = go (starTrans pOrig) (Advice 0) (Apply 1)
-  startReader :: PatternIndex
+  startReader :: GroupIndex
   startReader = 0             -- start inside group 0
   startState :: ([OP]->[OP],Tag)
   startState = ( (Minimize:) . (Maximize:) , 2)  -- Tag 0 is Minimized and Tag 1 is maximized.
-  -- Give the operations more meaningful names
+
+  -- Give the monad operations more meaningful names
   getParentIndex = ask
-  withParent i = local (const i)
+
+  makeGroup :: GroupInfo -> PM ()
   makeGroup = tell . (:[]) . Right
+
   makeOrbit = do Apply x <- uniq Orbit
                  tell [Left x]
                  return (Just x)
-  hearResets x = let (ts,gs) = partEither x
-                     gs' = norep . sort .  map thisIndex $ gs
-                 in ts ++ concatMap (map stopTag . (aGroups!)) gs'
+
+  withParent :: GroupIndex -> PM a -> PM (a,([GroupIndex],[Tag]))
+  withParent this = local (const this) . listens childGroups
+    where childGroups x = let (_,gs) = partEither x
+                              children :: [GroupIndex]
+                              children = norep . sort . map thisIndex . filter ((this==).parentIndex) $ gs
+                          in (children, concatMap (map stopTag . (aGroups!)) (this:children))
+
+  withOrbit = listens childStars
+    where childStars x = let (ts,_) = partEither x in ts
 
   uniq newOp = do (op,s) <- get                -- generate the next tag with bias newOp
                   let op' = op . (newOp:)
@@ -222,52 +238,32 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
                   put $! debug ("\n"++show (s,newOp)++"\n") (op',s')
                   return (Apply s) -- someone will need to apply it
 
-  combineConcat ps m1 m2 =
-    if rightAssoc compOpt
-      then foldr combineRight (go (last ps)) (init ps) m1 m2
-    else foldl combineLeft  (go (head ps)) (tail ps) m1 m2    -- libtre default
-
-  combineRight :: Pattern -> HHQ -> HHQ
-  combineRight cFront pEnd m1 m2 = mdo
-    let bothVary = varies qFront && varies qEnd
-    a <- if noTag m1 && bothVary then uniq Minimize else return m1 -- Why was this Maximize?
-    b <- if noTag m2 && bothVary then uniq Maximize else return m2
-    mid <- case (noTag a,canAccept qFront,noTag b,canAccept qEnd) of
-             (False,False,_,_) -> return (toAdvice a)
-             (_,_,False,False) -> return (toAdvice b)
-             _ -> if tagged qFront || tagged qEnd then uniq Maximize else return NoTag
-    qFront <- go cFront a mid
-    qEnd <- pEnd (toAdvice mid) b
-    let wanted = if WantsEither == wants qEnd then wants qFront else wants qEnd
-    return $ Q (mergeNullViews (nullQ qFront) (nullQ qEnd))
-               (seqTake (takes qFront) (takes qEnd))
-               Nothing Nothing
-               bothVary (childGroups qFront || childGroups qEnd) wanted
-               (Seq qFront qEnd)
-
-  combineLeft :: HHQ -> Pattern -> HHQ
-  combineLeft cFront pEnd m1 m2 = mdo
-    let bothVary = varies qFront && varies qEnd
-    a <- if noTag m1 && bothVary then uniq Minimize else return m1 -- Why was this Maximize?
-    b <- if noTag m2 && bothVary then uniq Maximize else return m2
-    mid <- case (noTag a, canAccept qFront, noTag b, canAccept qEnd) of
-             (False,False,_    ,_    ) -> return (toAdvice a)
-             (_    ,_    ,False,False) -> return (toAdvice b)
-             _ -> if tagged qFront || tagged qEnd then uniq Maximize else return NoTag
-    qFront <- cFront a mid
-    qEnd <- go pEnd (toAdvice mid) b
-    let wanted = if WantsEither == wants qEnd then wants qFront else wants qEnd
-    return $ Q (mergeNullViews (nullQ qFront) (nullQ qEnd))
-               (seqTake (takes qFront) (takes qEnd))
-               Nothing Nothing
-               bothVary (childGroups qFront || childGroups qEnd) wanted
-               (Seq qFront qEnd)
-
+  combineConcat | rightAssoc compOpt = (\ps -> foldr combineSeq (go (last ps)) (map go $ init ps))
+                | otherwise          = (\ps -> foldl combineSeq (go (head ps)) (map go $ tail ps)) -- libtre default
+    where combineSeq :: HHQ -> HHQ -> HHQ
+          combineSeq pFront pEnd = (\ m1 m2 -> mdo
+            let bothVary = varies qFront && varies qEnd
+            a <- if noTag m1 && bothVary then uniq Minimize else return m1 -- Why was this Maximize?
+            b <- if noTag m2 && bothVary then uniq Maximize else return m2
+            mid <- case (noTag a,canAccept qFront,noTag b,canAccept qEnd) of
+                     (False,False,_,_) -> return (toAdvice a)
+                     (_,_,False,False) -> return (toAdvice b)
+                     _ -> if tagged qFront || tagged qEnd then uniq Maximize else return NoTag
+            qFront <- pFront a mid
+            qEnd <- pEnd (toAdvice mid) b
+            let wanted = if WantsEither == wants qEnd then wants qFront else wants qEnd
+            return $ Q (mergeNullViews (nullQ qFront) (nullQ qEnd))
+                       (seqTake (takes qFront) (takes qEnd))
+                       [] Nothing Nothing
+                       bothVary (childGroups qFront || childGroups qEnd) wanted
+                       (Seq qFront qEnd)
+                                   )
   go :: Pattern -> HHQ
   go pIn m1 m2 =
     let die = error $ "patternToQ cannot handle "++show pIn -- assume (starTrans) has been run already
         nil = return $ Q {nullQ=emptyNull (apply m1 `winTags` apply m2) -- No tests, just empty
                          ,takes=(0,Just 0)
+                         ,preReset=[]
                          ,preTag=apply m1
                          ,postTag=apply m2
                          ,tagged=False
@@ -276,6 +272,7 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
                          ,unQ=Empty}
         one = return $ Q {nullQ=notNull              -- one character accepted (just store P type)
                          ,takes=(1,Just 1)
+                         ,preReset=[]
                          ,preTag=apply m1
                          ,postTag=apply m2
                          ,tagged=False
@@ -285,12 +282,12 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
         test myTest = return $ Q {nullQ=testNull myTest (apply m1 `winTags` apply m2) -- anchor of some sort
                                  ,takes=(0,Just 0)
                                  ,preTag=apply m1
+                                 ,preReset=[]
                                  ,postTag=apply m2
                                  ,tagged=False
                                  ,childGroups=False
                                  ,wants=WantsQT
                                  ,unQ=Test myTest }
-
     in case pIn of
          PEmpty -> nil
          POr [] -> nil
@@ -315,36 +312,26 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
                nullView = addTagsToNullView (winTags (apply a) (apply b)) . cleanNullView . concatMap nullQ $ qs
            let ans = Q nullView
                        (orTakes . map takes $ qs)
-                       (apply a) (apply b)
+                       [](apply a) (apply b)
                        canVary (any childGroups qs) wanted
                        (Or qs)
            return ans
-         PConcat [] -> nil
-         PConcat ps -> combineConcat ps m1 m2 -- unsafe to pass [] to combineConcat
-         PStar mayFirstBeNull p -> do
-           q1 <- mdo
-             let accepts = canAccept q
-             a <- if noTag m1 && accepts then uniq Minimize else return m1
-             b <- if noTag m2 && accepts then uniq Maximize else return m2
-             c <- if varies q || childGroups q then makeOrbit else return Nothing
-             -- end of each iteration is Maximize and is the beginning
-             -- of the next so the start of each iteration should be a
-             -- Maximize (except the first iteration, but this is taken
-             -- care of by 'a' above').  To keep the interior pattern
-             -- from making a Minimize tag and breaking the logic, a
-             -- Maximize tag is always passed as the first tag
-             (q,resetTags) <- listens hearResets $ go p NoTag NoTag
-             let nullView = emptyNull (winTags (apply a) (apply b)
---                                       ++ map (\tag -> (tag,PreUpdate ResetTask)) resetGroups
---                                       ++ maybe [] (\tag -> [(tag,PreUpdate LeaveOrbitTask)]) (apply c)
-                                      )
-             let ans = Q nullView
-                         (0,if accepts then Nothing else (Just 0))
-                         (apply a) (apply b)
-                         accepts (childGroups q) WantsQT
-                         (Star c (norep . sort $ resetTags) mayFirstBeNull q)
-             return ans
-           return q1
+         PConcat [] -> nil -- fatal to pass [] to combineConcat
+         PConcat ps -> combineConcat ps m1 m2
+         PStar mayFirstBeNull p -> mdo
+           let accepts    = canAccept q
+               needsOrbit = varies q || childGroups q  -- otherwise it cannot matter
+               needsTags  = needsOrbit || accepts        -- orbits implies accepts
+           a <- if noTag m1 && needsTags then uniq Minimize else return m1
+           b <- if noTag m2 && needsTags then uniq Maximize else return m2
+           c <- if needsOrbit then makeOrbit else return Nothing
+           (q,resetTags) <- withOrbit $ go p NoTag NoTag
+           let nullView = emptyNull (winTags (apply a) (apply b))
+           return $ Q nullView
+                      (0,if accepts then Nothing else (Just 0))
+                      [] (apply a) (apply b)
+                      accepts (childGroups q) WantsQT
+                      (Star c resetTags mayFirstBeNull q)
          PCarat dopa -> test (Test_BOL,dopa)
          PDollar dopa -> test (Test_EOL,dopa)
          PChar {} -> one
@@ -354,16 +341,61 @@ patternToQ compOpt (pOrig,(maxPatternIndex,_)) = (tnfa,aTags,aGroups) where
          PEscape {} -> one
 
          -- a PGroup can share a preTag (with Advice) with other branches but must have a postTag of Apply
-         PGroup this p -> do
+         PGroup Nothing p -> go p m1 m2
+         PGroup (Just this) p -> do
            a <- if noTag m1 then uniq Minimize else return m1
            b <- if isNothing (apply m2) then uniq Maximize else return m2
            parent <- getParentIndex
-           makeGroup (GroupInfo this parent (fromHandleTag a) (fromHandleTag b))
-           q <- withParent this $ go p a b
-           let ans = q {tagged = True,childGroups = True}
-           return ans
+           (q,(children,resetTags)) <- withParent this $ go p a b
+           makeGroup (GroupInfo this parent (fromHandleTag a) (fromHandleTag b) children)
+           return $ q { tagged = True
+                      , childGroups = True
+                      , preReset = resetTags ++ (preReset q) }
 
          -- these are here for completeness of the case branches, currently starTrans replaces them all
          PPlus {} -> die
          PQuest {} -> die
          PBound {} -> die
+
+
+
+
+
+
+{-
+      combineRight :: Pattern -> HHQ -> HHQ
+      combineRight cFront pEnd m1 m2 = mdo
+        let bothVary = varies qFront && varies qEnd
+        a <- if noTag m1 && bothVary then uniq Minimize else return m1 -- Why was this Maximize?
+        b <- if noTag m2 && bothVary then uniq Maximize else return m2
+        mid <- case (noTag a,canAccept qFront,noTag b,canAccept qEnd) of
+                 (False,False,_,_) -> return (toAdvice a)
+                 (_,_,False,False) -> return (toAdvice b)
+                 _ -> if tagged qFront || tagged qEnd then uniq Maximize else return NoTag
+        qFront <- go cFront a mid
+        qEnd <- pEnd (toAdvice mid) b
+        let wanted = if WantsEither == wants qEnd then wants qFront else wants qEnd
+        return $ Q (mergeNullViews (nullQ qFront) (nullQ qEnd))
+                   (seqTake (takes qFront) (takes qEnd))
+                   Nothing Nothing []
+                   bothVary (childGroups qFront || childGroups qEnd) wanted
+                   (Seq qFront qEnd)
+
+      combineLeft :: HHQ -> Pattern -> HHQ
+      combineLeft cFront pEnd m1 m2 = mdo
+        let bothVary = varies qFront && varies qEnd
+        a <- if noTag m1 && bothVary then uniq Minimize else return m1 -- Why was this Maximize?
+        b <- if noTag m2 && bothVary then uniq Maximize else return m2
+        mid <- case (noTag a, canAccept qFront, noTag b, canAccept qEnd) of
+                 (False,False,_    ,_    ) -> return (toAdvice a)
+                 (_    ,_    ,False,False) -> return (toAdvice b)
+                 _ -> if tagged qFront || tagged qEnd then uniq Maximize else return NoTag
+        qFront <- cFront a mid
+        qEnd <- go pEnd (toAdvice mid) b
+        let wanted = if WantsEither == wants qEnd then wants qFront else wants qEnd
+        return $ Q (mergeNullViews (nullQ qFront) (nullQ qEnd))
+                   (seqTake (takes qFront) (takes qEnd))
+                   Nothing Nothing []
+                   bothVary (childGroups qFront || childGroups qEnd) wanted
+                   (Seq qFront qEnd)
+-}

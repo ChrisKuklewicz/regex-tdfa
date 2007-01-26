@@ -2,7 +2,7 @@
 -- | This is a version of ReadRegex that allows NUL characters.
 -- Lazy/Possessive/Backrefs are not recognized.  Anchors ^ and $ are
 -- now recognized (they used to be errors).
-module Text.Regex.TDFA.ReadRegex (PatternIndex,parseRegex,decodePatternSet,legalCharacterClasses) where
+module Text.Regex.TDFA.ReadRegex (GroupIndex,parseRegex,decodePatternSet,legalCharacterClasses) where
 
 {- By Chris Kuklewicz, 2006. BSD License, see the LICENSE file. -}
 
@@ -17,13 +17,13 @@ import qualified Data.Set as Set(fromList, toList, insert,empty)
 -- | BracketElement is internal only
 data BracketElement = BEChar Char | BEChars String | BEColl String | BEEquiv String | BEClass String
 
-parseRegex :: String -> Either ParseError (Pattern,(PatternIndex,Int))
+parseRegex :: String -> Either ParseError (Pattern,(GroupIndex,Int))
 parseRegex x = runParser (do pat <- p_regex
                              eof
                              subs <- getState
                              return (pat,subs)) (0,0) x x
 
-p_regex :: GenParser Char (PatternIndex,Int) Pattern
+p_regex :: GenParser Char (GroupIndex,Int) Pattern
 p_regex = liftM POr $ sepBy1 p_branch (char '|')
 
 -- man re_format helps alot, it says one-or-more pieces so this is
@@ -38,7 +38,7 @@ group_index = do
   (gi,ci) <- getState
   let index = succ gi
   setState (index,ci)
-  return index
+  return (Just index)
 
 p_group = lookAhead (char '(') >> do
   index <- group_index
@@ -75,7 +75,7 @@ p_anchor = (char '^' >> liftM PCarat char_index)
 char_index = do (gi,ci) <- getState
                 let ci' = succ ci
                 setState (gi,ci')
-                return (newDoPa ci')
+                return (DoPa ci')
 
 p_char = p_dot <|> p_left_brace <|> p_escaped <|> p_other_char where
   p_dot = char '.' >> char_index >>= return . PDot

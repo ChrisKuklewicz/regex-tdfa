@@ -5,6 +5,7 @@ module Text.Regex.TDFA.Common {- export everything -} where
 
 import Control.Monad.RWS(RWS)
 import Data.Array.IArray
+--import Data.Monoid
 import Data.Map(Map)
 import Data.Set(Set)
 import Data.IntMap(IntMap)
@@ -12,6 +13,8 @@ import Data.IntSet(IntSet)
 import Data.Sequence(Seq)
 
 --import Debug.Trace
+
+common_error s t = error ("Explict error in module "++s++" : "++t)
 
 on :: (t1 -> t1 -> t2) -> (t -> t1) -> t -> t -> t2
 f `on` g = (\x y -> (g x) `f` (g y))
@@ -43,12 +46,6 @@ newtype DoPa = DoPa {dopaIndex :: Int} deriving (Eq,Ord)
 instance Show DoPa where
   showsPrec p (DoPa {dopaIndex=i}) = ('#':) . showsPrec p i
 
-newDoPa :: Int -> DoPa
-newDoPa i = DoPa i
-
--- | PatternIndex is for indexing submatches from  parenthesized groups (PGroup)
-type PatternIndex = Int
-
 -- | 'RegexOption' control whether the pattern is multiline or
 -- case-sensitive like Text.Regex and whether to capture the subgroups
 -- (\1, \2, etc).
@@ -61,7 +58,7 @@ data ExecOption = ExecOption { captureGroups :: Bool
                              , testMatch :: Bool
                              }
 
--- | 'MatchedStrings' is an IntMap where the keys are PatternIndex
+-- | 'MatchedStrings' is an IntMap where the keys are GroupIndex
 -- numbers and the values are completed substring captures.
 --
 -- This has now been augmented to also remember the offset and length
@@ -86,14 +83,18 @@ type SetIndex = IntSet {- Index -}
 type Position = Int      -- index into the text being searched
 -- type Delta = Position -> [(Tag,Position)]
 
-data GroupInfo = GroupInfo {thisIndex,parentIndex::PatternIndex,startTag,stopTag::Tag} deriving Show
+-- | GroupIndex is for indexing submatches from  parenthesized groups (PGroup)
+type GroupIndex = Int
+data GroupInfo = GroupInfo {thisIndex,parentIndex::GroupIndex
+                           ,startTag,stopTag::Tag
+                           ,myChildren::[GroupIndex]} deriving Show
 
 -- | The DFA backend specific 'Regex' type, used by this module's '=~'
 -- and '=~~' operators.
 data Regex = Regex {regex_dfa::DFA
                    ,regex_init::Index
                    ,regex_tags::Array Tag OP
-                   ,regex_groups::Array PatternIndex [GroupInfo]
+                   ,regex_groups::Array GroupIndex [GroupInfo]
                    ,regex_compOptions::CompOption
                    ,regex_execOptions::ExecOption}
 
@@ -102,7 +103,7 @@ data OP = Maximize | Minimize | Orbit deriving (Eq,Show)  -- whether to prefer l
 data QNFA = QNFA {q_id :: Index
                  ,q_qt :: QT}
 
-type QTrans = IntMap {- Destination Index -} (Set TagCommand)
+type QTrans = IntMap {- Destination Index -} [TagCommand]
 
 data QT = Simple {qt_win :: WinTags
                  ,qt_trans :: Map Char QTrans
@@ -112,17 +113,18 @@ data QT = Simple {qt_win :: WinTags
                   ,qt_a,qt_b :: QT}
 
 -- during contruction
-data TagTask = ResetTask | TagTask | EnterOrbitTask | LeaveOrbitTask deriving (Show,Eq) -- Ord details are unimportant
+data TagTask = TagTask | ResetGroupStopTask
+             | ResetOrbitTask | EnterOrbitTask | LeaveOrbitTask deriving (Show,Eq)
 type TagTasks = [(Tag,TagTask)]
-
+{-
 instance Ord TagTask where
     compare a b | a==b = EQ
     compare TagTask ResetTask = GT  -- "x" =~ "((x?)?x)*" :: MatchArray should prefer inner ?'s Empty to outer ?'s Empty
     compare ResetTask TagTask = LT 
     compare a b = error ("Ord instance for TagTask (called from TNFA.bestTrans.choose EQ branch) found " ++ show (a,b))
-
+-}
 -- for QTrans
-data TagUpdate = PreUpdate TagTask | PostUpdate TagTask deriving (Show,Eq,Ord) -- PostUpdate is better than PreUpdate
+data TagUpdate = PreUpdate TagTask | PostUpdate TagTask deriving (Show,Eq)
 type TagList = [(Tag,TagUpdate)]
 type TagCommand = (DoPa,TagList)
 
@@ -148,7 +150,7 @@ data DT = Simple' { dt_win :: IntMap {- Index -} (RunState ())
                    , dt_a,dt_b :: DT}
 
 type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,RunState ()))
-type DTrans' = [(Index, [(Index, (DoPa, ([(Tag, Position)],[String])))])]
+type DTrans' = [(Index, [(Index, (DoPa, ([(Tag, (Position,Bool))],[String])))])]
 
 data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord)  -- known predicates, todo: allow for inversion
 
@@ -156,5 +158,7 @@ data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord)  -- known predicates
 
 type RunState = RWS (Position,Position) [String] Scratch
 
+type Scratch = (IntMap (Position,Bool)     -- Bool is False iff it was Reset
+               ,IntMap {- Tag -} Orbits)
+
 type Orbits = Seq Position
-type Scratch = (IntMap Position,IntMap {- Tag -} Orbits)

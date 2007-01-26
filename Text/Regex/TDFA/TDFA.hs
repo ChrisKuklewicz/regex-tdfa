@@ -35,6 +35,8 @@ import qualified Text.Regex.TDFA.IntArrTrieSet as Trie
 
 -- import Debug.Trace
 
+err s = common_error "Text.Regex.TDFA.TDFA"  s
+
 debug :: (Show a) => a -> s -> s
 debug _ s = s
 
@@ -47,7 +49,7 @@ dlose = DFA { d_id = ISet.empty
 -- Specilized utility
 ungroupBy :: (a->x) -> ([a]->y) -> [[a]] -> [(x,y)]
 ungroupBy f g = map helper where
-  helper [] = (error "empty group passed to ungroupBy",g [])
+  helper [] = (err "empty group passed to ungroupBy",g [])
   helper x@(x1:_) = (f x1,g x)
 
 -- Used to create actions for Run
@@ -56,9 +58,9 @@ askPre :: RunState Position
 askPre = asks fst
 
 askPost :: RunState Position
-askPost = asks fst
+askPost = asks snd
 
-modifyMap :: (IntMap Position -> IntMap Position) -> RunState ()
+modifyMap :: (IntMap (Position,Bool) -> IntMap (Position,Bool)) -> RunState ()
 modifyMap f = do
   (m,s) <- get
   let m' = f m in seq m' $ do
@@ -66,64 +68,66 @@ modifyMap f = do
 
 ----
 
+resetFlag :: Tag -> IntMap {- Tag -} (Position,Bool) -> IntMap (Position,Bool)
+resetFlag = IMap.adjust (\(pos,_) -> (pos,False))
+
 resetTag :: Tag -> RunState ()
-resetTag tag = modifyMap (IMap.delete tag)
+resetTag tag = do
+  pos <- askPre
+  tell ["Reset Tag "++show (tag,pos)]
+  modifyMap (resetFlag tag)
+
+setPreTag :: Tag -> RunState ()
+setPreTag tag = do
+  pos <- askPre
+  modifyMap (IMap.insert tag (pos,True))
+
+setPostTag :: Tag -> RunState ()
+setPostTag tag = do
+  pos <- askPost
+  modifyMap (IMap.insert tag (pos,True))
+
+----
 
 resetOrbit :: Tag -> RunState ()
 resetOrbit tag = do
   (m,s) <- get
   let m' = IMap.delete tag m
       s' = IMap.delete tag s
-  seq m' $ seq s' $ put (m',s')
-
-setPreTag :: Tag -> RunState ()
-setPreTag tag = do
   pos <- askPre
-  modifyMap (IMap.insert tag pos)
-
-setPostTag :: Tag -> RunState ()
-setPostTag tag = do
-  pos <- askPost
-  let pos' = succ pos in seq pos' $ modifyMap (IMap.insert tag pos')
-
-----
+  tell ["Reset Orbit "++show (tag,pos)]
+  seq m' $ seq s' $ put (m',s')
 
 enterOrbit :: Tag -> RunState ()
 enterOrbit tag = do
   pos <- askPre
-  (m,s) <- get :: RunState Scratch
-  let (m',s') = case IMap.lookup tag m of
-                  Nothing -> (IMap.insert tag pos m
-                             ,IMap.insert tag (S.singleton pos) s
-                             ) -- start new stack
-                  Just _ -> (m
-                            ,case IMap.lookup tag s of
-                               Nothing -> IMap.insert tag (S.singleton pos) s
-                               -- error $ "enterOrbit could not find old Seq"++show (tag,off,pos,m,s)
-                               Just old -> let new = (S.|>) old pos
-                                           in seq new $ IMap.insert tag new s
-                            )
-  let msg = ["Entering Orbit "++show (tag,pos)] -- ,(m,s),(m',s'))]
+  (m,s) <- get
+  let new =  (IMap.insert tag (pos,True) m, IMap.insert tag (S.singleton pos) s)
+      (m',s') = case IMap.lookup tag m of
+                  Nothing -> new
+                  Just (_,False) -> new
+                  Just (off,True) -> (m
+                                     ,case IMap.lookup tag s of
+                                        Nothing -> snd new
+                                        Just s_old -> let s_new = (S.|>) s_old pos
+                                                      in seq s_new $ IMap.insert tag s_new s)
+  let msg = ["Entering Orbit "++show (tag,pos)]
   tell msg
   seq m' $ seq s' $ put (m',s')
 
 leaveOrbit :: Tag -> RunState ()
--- leaveOrbit _ = return ()
-
 leaveOrbit tag = do
-  pos <- askPre
-  let msg = ["Leaving Orbit "++show (tag,pos)]
+  modifyMap (resetFlag tag)
+  let msg = ["Leaving Orbit "++show tag]
   tell msg
-  -- seq m' $ seq s' $ put (m',s')
-
 
 -- dumb smart constructor for tracing construction (I wanted to monitor laziness)
 makeDFA :: SetIndex -> DT -> DFA
 makeDFA i dt = debug ("\n>Making DFA "++show i++"<") $ DFA i dt
 
 -- Note that no CompOption parameter is needed.
-nfaToDFA :: ((Index,Array Index QNFA),Array Tag OP,Array PatternIndex [GroupInfo])
-         -> (DFA,Index,Array Tag OP,Array PatternIndex [GroupInfo])
+nfaToDFA :: ((Index,Array Index QNFA),Array Tag OP,Array GroupIndex [GroupInfo])
+         -> (DFA,Index,Array Tag OP,Array GroupIndex [GroupInfo])
 nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupInfo) where
   dfa = indexesToDFA [startIndex]
 
@@ -155,13 +159,13 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
             where specRunState = sequence_ . map helper $ spec
                   helper (tag,update) = case update of
                                            PreUpdate TagTask -> setPreTag tag
-                                           PreUpdate ResetTask -> case aTagOp!tag of
-                                                                    Orbit -> resetOrbit tag
-                                                                    _ -> resetTag tag
+                                           PreUpdate ResetGroupStopTask -> resetTag tag
+                                           PreUpdate ResetOrbitTask -> resetOrbit tag
                                            PreUpdate EnterOrbitTask -> enterOrbit tag
                                            PreUpdate LeaveOrbitTask -> leaveOrbit tag
                                            PostUpdate TagTask -> setPostTag tag
-                                           _ -> error ("Weird command in makeUpdater: "++show (tag,update,spec))
+                                           PostUpdate ResetGroupStopTask -> resetTag tag
+                                           _ -> err ("Weird command in makeUpdater: "++show (tag,update,spec))
 
           qtransToDFA :: QTrans -> (DFA,DTrans)
           qtransToDFA qtrans = (indexesToDFA (IMap.keys dtrans),dtrans)
@@ -219,9 +223,9 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
       mergeDT dt1@(Testing' {}) dt2 = nestDT dt1 dt2
       mergeDT dt1 dt2@(Testing' {}) = nestDT dt2 dt1
       nestDT dt1@(Testing' {dt_a=a,dt_b=b}) dt2 = dt1 { dt_a = mergeDT a dt2, dt_b = mergeDT b dt2 }
-      nestDT _ _ = error "nestDT called on Simple -- cannot happen"
+      nestDT _ _ = err "nestDT called on Simple -- cannot happen"
 
-patternToDFA :: CompOption -> (Pattern,(PatternIndex, Int)) -> (DFA,Index,Array Tag OP,Array PatternIndex [GroupInfo])
+patternToDFA :: CompOption -> (Pattern,(GroupIndex, Int)) -> (DFA,Index,Array Tag OP,Array GroupIndex [GroupInfo])
 patternToDFA compOpt pattern = nfaToDFA (patternToNFA compOpt pattern)
 
 dfaMap :: DFA -> Map SetIndex DFA
@@ -236,13 +240,13 @@ flattenDT :: DT -> [DFA]
 flattenDT (Simple' {dt_trans=mt,dt_other=mo}) = map fst . maybe id (:) mo . Map.elems $ mt
 flattenDT (Testing' {dt_a=a,dt_b=b}) = flattenDT a ++ flattenDT b
 
-fillMap :: Tag -> IntMap Position
-fillMap tag = IMap.fromDistinctAscList [(t,-1) | t <- [0..tag] ]
+fillMap :: Tag -> IntMap (Position,Bool)
+fillMap tag = IMap.fromDistinctAscList [(t,(-1,True)) | t <- [0..tag] ]
 
-diffMap :: IntMap Position -> IntMap Position -> [(Index,Position)]
+diffMap :: IntMap (Position,Bool) -> IntMap (Position,Bool) -> [(Index,(Position,Bool))]
 diffMap old new = IMap.toList (IMap.differenceWith (\a b -> if a==b then Nothing else Just b) old new)
 
-examineDFA :: (DFA,Index,Array Tag OP,Array PatternIndex [GroupInfo]) -> String
+examineDFA :: (DFA,Index,Array Tag OP,Array GroupIndex [GroupInfo]) -> String
 examineDFA (dfa,_,aTags,_) = unlines $ map (examineDFA' (snd . bounds $ aTags)) (Map.elems $ dfaMap dfa)
 
 examineDFA' :: Tag -> DFA -> String
@@ -256,12 +260,12 @@ instance Show DFA where
 -}
 -- instance Show DT where show = showDT
 
-showDFA :: IntMap Position -> DFA -> String
+showDFA :: IntMap (Position,Bool) -> DFA -> String
 showDFA m (DFA {d_id=i,d_dt=dt}) = "DFA {d_id = "++show (ISet.toList i)
                                ++"\n    ,d_dt = "++ showDT m dt
                                ++"\n}"
 
-showDT :: IntMap Position -> DT -> String
+showDT :: IntMap (Position,Bool) -> DT -> String
 showDT m (Simple' w t o) = "Simple' { dt_win = " ++ (show . map (\(i,rs) -> (i,seeRS rs)) . IMap.assocs $ w)
                       ++ "\n        , dt_trans = " ++ (unlines . map show . mapSnd (ISet.toList . d_id *** seeDTrans) . Map.assocs $ t)
                       ++ "\n        , dt_other = " ++ maybe "None" (\o' -> (\ (a,b) -> "("++a++" , "++b++")" )
@@ -274,11 +278,11 @@ showDT m (Simple' w t o) = "Simple' { dt_win = " ++ (show . map (\(i,rs) -> (i,s
         seeDTrans dtrans = 
           let x :: [(Index,IntMap (DoPa,RunState ()))]
               x = IMap.assocs dtrans
-              y :: IntMap (DoPa,RunState ()) -> [(Index,(DoPa,([(Tag,Position)],[String])))]
+              y :: IntMap (DoPa,RunState ()) -> [(Index,(DoPa,([(Tag,(Position,Bool))],[String])))]
               y z = mapSnd (\(dopa,rs) -> (dopa,seeRS rs))
                     . IMap.assocs $ z
           in mapSnd y x
-        seeRS :: RunState () -> ([(Tag,Position)],[String])
+        seeRS :: RunState () -> ([(Tag,(Position,Bool))],[String])
         seeRS rs = let ((s,_),written) = execRWS rs (0,0) (m,mempty)
                    in (diffMap m s,written)
 
@@ -289,3 +293,76 @@ showDT m (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
                           ++ "\n         }"
  where indent = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT m
        spaces = replicate 10 ' '
+
+pickQTrans :: (Tag -> OP) -> QTrans -> [({-Destination-}Index,TagCommand)]
+pickQTrans op tr = mapSnd (bestTrans op) . IMap.toList $ tr
+
+cleanWin :: WinTags -> WinTags
+cleanWin =  reverse . clean  . reverse
+  where isTagTask (_,PreUpdate TagTask) = True
+        isTagTask (_,PostUpdate TagTask) = True
+        isTagTask _ = False
+        clean [] = []
+        clean (x:rest) | isTagTask x =  x : clean (filter (check (fst x)) rest)
+                       | otherwise   =  x : clean rest
+          where check tag (tag',PreUpdate TagTask) = tag/=tag'
+                check tag (tag',PostUpdate TagTask) = tag/=tag'
+                -- check tag (tag',PreUpdate ResetGroupStopTask) = tag/=tag'
+                -- check tag (tag',PostUpdate ResetGroupStopTask) = tag/=tag'
+                -- XXX XXX disable optimization
+                check _ _ = True
+
+bestTrans :: (Tag -> OP) -> [TagCommand] -> TagCommand
+bestTrans op [] = err "bestTrans There were no transition in s"
+bestTrans op (f:fs) | null fs = canonical f
+                    | otherwise = canonical . snd $ foldl' pick (prep f,f) fs where
+  canonical :: TagCommand -> TagCommand
+  canonical (dopa,tcs) = (dopa,reverse . clean  . reverse $ tcs)
+  prep :: TagCommand -> TagList
+  prep (dopa,tcs) = sortBy (compare `on` fst) . clean . reverse . filter isTagTask $ tcs
+  isTagTask (_,PreUpdate TagTask) = True
+  isTagTask (_,PostUpdate TagTask) = True
+  isTagTask _ = False
+  clean [] = []
+  clean (x:rest) | isTagTask x =  x : clean (filter (check (fst x)) rest)
+                 | otherwise   =  x : clean rest
+    where check tag (tag',PreUpdate TagTask) = tag/=tag'
+          check tag (tag',PostUpdate TagTask) = tag/=tag'
+          -- check tag (tag',PreUpdate ResetGroupStopTask) = tag/=tag'
+          -- check tag (tag',PostUpdate ResetGroupStopTask) = tag/=tag'
+          check _ _ = True -- XXX XXX displable this optimization
+  pick :: (TagList,TagCommand) -> TagCommand -> (TagList,TagCommand)
+  pick win@(oldP,_) new =
+    let newP = prep new
+    in case compareWith choose oldP (prep new) of
+         GT -> win
+         EQ -> win
+         LT -> (newP,new)
+  choose :: Maybe (Tag,TagUpdate) -> Maybe (Tag,TagUpdate) -> Ordering
+  choose all1@(Just (tag,task1)) all2@(Just (_,task2)) =
+    case (task1,task2) of
+      (PostUpdate TagTask,PreUpdate TagTask)  -> if op tag == Maximize then GT else LT
+      (PreUpdate TagTask ,PostUpdate TagTask) -> if op tag == Maximize then LT else GT
+      (PreUpdate TagTask ,PreUpdate TagTask)  -> EQ
+      (PostUpdate TagTask,PostUpdate TagTask) -> EQ
+      _ -> err $ "bestTrans.choose : unknown tasks Just/Just :"++show (all1,all2)
+  choose (Just (tag,PreUpdate TagTask)) Nothing = if op tag == Maximize then GT else LT
+  choose (Just (tag,PostUpdate TagTask)) Nothing = if op tag == Maximize then GT else LT
+  choose Nothing (Just (tag,PreUpdate TagTask)) = if op tag == Maximize then LT else GT
+  choose Nothing (Just (tag,PostUpdate TagTask)) = if op tag == Maximize then LT else GT
+  choose Nothing Nothing = EQ
+  choose all1 all2 = err $ "bestTrans.choose : unknown tasks :"++show (all1,all2)
+
+
+{-# INLINE compareWith #-}
+compareWith :: (Ord x,Monoid a) => (Maybe (x,b) -> Maybe (x,c) -> a) -> [(x,b)] -> [(x,c)] -> a
+compareWith comp = cw where
+  cw [] [] = comp Nothing Nothing
+  cw xx@(x:xs) yy@(y:ys) =
+    case compare (fst x) (fst y) of
+      GT -> comp Nothing  (Just y) `mappend` cw xx ys
+      EQ -> comp (Just x) (Just y) `mappend` cw xs ys
+      LT -> comp (Just x) Nothing  `mappend` cw xs yy
+  cw xx [] = foldr (\x rest -> comp (Just x) Nothing  `mappend` rest) mempty xx
+  cw [] yy = foldr (\y rest -> comp Nothing  (Just y) `mappend` rest) mempty yy
+

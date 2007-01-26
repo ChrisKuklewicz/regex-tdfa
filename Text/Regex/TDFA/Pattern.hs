@@ -12,9 +12,8 @@ module Text.Regex.TDFA.Pattern
     ,PatternSetCharacterClass(..)
     ,PatternSetCollatingElement(..)
     ,PatternSetEquivalenceClass(..)
-    ,PatternIndex
-    ,DoPa
-    ,newDoPa
+    ,GroupIndex
+    ,DoPa(..)
     ,showPattern
     ,starTrans
     ,simplify'
@@ -27,13 +26,13 @@ module Text.Regex.TDFA.Pattern
 import Data.List(intersperse,partition)
 import qualified Data.Set as Set(toAscList,toList)
 import Data.Set(Set)
-import Text.Regex.TDFA.Common(DoPa,newDoPa,PatternIndex)
+import Text.Regex.TDFA.Common(DoPa(..),GroupIndex)
 
--- | PatternIndex is for indexing submatches from  parenthesized groups (PGroup)
--- type PatternIndex = Int
+-- | GroupIndex is for indexing submatches from  parenthesized groups (PGroup)
+-- type GroupIndex = Int
 
 data Pattern = PEmpty
-             | PGroup  PatternIndex Pattern -- (-1) pattern index to indicate non capturing?
+             | PGroup  (Maybe GroupIndex) Pattern -- Nothing to indicate non matching
              | POr     [Pattern]
              | PConcat [Pattern]
              | PQuest  Pattern
@@ -142,6 +141,10 @@ dfsPattern f = dfs
                        PBound i mi p -> unary (PBound i mi) p
                        _ -> f pattern
 
+unCapture = dfsPattern unCapture' where
+  unCapture' (PGroup (Just _) p) = PGroup Nothing p
+  unCapture' x = x
+
 starTrans' :: Pattern -> Pattern
 starTrans' pIn =
   case pIn of
@@ -152,12 +155,14 @@ starTrans' pIn =
     PBound i (Just j) _ | i>j -> PEmpty  -- malformed
     PBound _ (Just 0) _ -> PEmpty
     PBound 0 Nothing  p -> PStar True p
-    PBound i Nothing  p -> PConcat $ apply (p:) i [simplify' $ PStar False p]
+    PBound i Nothing  p -> PConcat $ apply (p':) (pred i) [p,simplify' $ PStar False p]
+      where p' = unCapture p
     PBound 0 (Just 1) p -> POr [p,PEmpty]
     PBound 0 (Just j) p -> apply (quest' . (concat' p)) (pred j) (quest' p)
-    PBound i (Just j) p | i == j    -> PConcat (replicate i p)
+    PBound i (Just j) p | i == j    -> PConcat $ apply (p':) (pred i) [p]
                         | otherwise -> PConcat $
-                                         apply (p:) i [simplify' . starTrans' $ PBound 0 (Just (j-i)) p]
+                                         apply (p:) (pred i) [p,simplify' . starTrans' $ PBound 0 (Just (j-i)) p]
+      where p' = unCapture p
     -- Left intact
     PEmpty -> pass
     PGroup {} -> pass
@@ -176,6 +181,7 @@ starTrans' pIn =
     concat' a b = simplify' $ PConcat [a,b]      -- require a and b to have been simplified
     apply f n x = foldr ($) x (replicate n f)
     pass = pIn
+
 
 -- | Function to transform a pattern into an equivalent, but less
 -- redundant form.  Nested 'POr' and 'PConcat' are flattened.
