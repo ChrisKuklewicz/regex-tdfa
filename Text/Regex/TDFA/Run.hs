@@ -55,12 +55,12 @@ makeTagComparer aTags = (\ tv1 tv2 ->
         check all@(Just (tag,(pos1,_))) Nothing =
           case aTags!tag of
             Maximize -> GT
-            Minimize -> errMsg $ "tagComparer TODO: Minimize tag in 1st without one in 2nd "++show all
+            Minimize -> LT -- errMsg $ "tagComparer TODO: Minimize tag in 1st without one in 2nd "++show all
             Orbit -> errMsg $ "tagComparer TODO: Orbit tag in 1st without one in 2nd " ++ show all
         check Nothing all@(Just (tag,(pos2,_))) =
           case aTags!tag of
             Maximize -> LT
-            Minimize -> errMsg $ "tagComparer TODO: Minimize tag in 2nd without one in 1st "++show all
+            Minimize -> GT -- errMsg $ "tagComparer TODO: Minimize tag in 2nd without one in 1st "++show all
             Orbit -> errMsg $ "tagComparer TODO: Orbit tag in 2nd without one in 1st " ++ show all
         check Nothing Nothing = EQ
       compareOrbits (Just pos1) (Just pos2) = comparePos (viewl pos1) (viewl pos2)

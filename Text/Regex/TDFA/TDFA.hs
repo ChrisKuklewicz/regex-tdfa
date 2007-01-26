@@ -283,7 +283,7 @@ showDT m (Simple' w t o) = "Simple' { dt_win = " ++ (show . map (\(i,rs) -> (i,s
                     . IMap.assocs $ z
           in mapSnd y x
         seeRS :: RunState () -> ([(Tag,(Position,Bool))],[String])
-        seeRS rs = let ((s,_),written) = execRWS rs (0,0) (m,mempty)
+        seeRS rs = let ((s,_),written) = execRWS rs (0,1) (m,mempty)
                    in (diffMap m s,written)
 
 showDT m (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt

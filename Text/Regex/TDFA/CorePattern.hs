@@ -320,8 +320,8 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
          PConcat ps -> combineConcat ps m1 m2
          PStar mayFirstBeNull p -> mdo
            let accepts    = canAccept q
-               needsOrbit = varies q || childGroups q  -- otherwise it cannot matter
-               needsTags  = needsOrbit || accepts        -- orbits implies accepts
+               needsOrbit = varies q || childGroups q  -- otherwise it cannot matter -- XXX change || to &&
+               needsTags  = needsOrbit || accepts      -- orbits implies accepts
            a <- if noTag m1 && needsTags then uniq Minimize else return m1
            b <- if noTag m2 && needsTags then uniq Maximize else return m2
            c <- if needsOrbit then makeOrbit else return Nothing
