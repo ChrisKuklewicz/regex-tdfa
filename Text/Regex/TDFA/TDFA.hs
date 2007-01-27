@@ -16,12 +16,12 @@ import Data.List(groupBy,sortBy,foldl')
 import Data.Map(Map)
 import qualified Data.Map as Map(elems,assocs,insert,member,empty,toAscList,fromDistinctAscList)
 import Data.Maybe(isJust)
-import qualified Data.Sequence as S(singleton,(|>))
 
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.IntArrTrieSet(TrieSet)
 import qualified Text.Regex.TDFA.IntArrTrieSet as Trie(lookupAsc,fromSinglesMerge)
 import Text.Regex.TDFA.Pattern(Pattern)
+import Text.Regex.TDFA.RunState(setPreTag,setPostTag,resetTag,enterOrbit,leaveOrbit,resetOrbit,compareWith)
 import Text.Regex.TDFA.TNFA(patternToNFA)
 -- import Debug.Trace
 
@@ -29,9 +29,6 @@ import Text.Regex.TDFA.TNFA(patternToNFA)
 
 err :: String -> a
 err s = common_error "Text.Regex.TDFA.TDFA"  s
-
-debug :: (Show a) => a -> s -> s
-debug _ s = s
 
 dlose :: DFA
 dlose = DFA { d_id = ISet.empty
@@ -45,78 +42,10 @@ ungroupBy f g = map helper where
   helper [] = (err "empty group passed to ungroupBy",g [])
   helper x@(x1:_) = (f x1,g x)
 
--- Used to create actions for Run
-
-askPre :: RunState Position
-askPre = asks fst
-
-askPost :: RunState Position
-askPost = asks snd
-
-modifyMap :: (IntMap (Position,Bool) -> IntMap (Position,Bool)) -> RunState ()
-modifyMap f = do
-  (m,s) <- get
-  let m' = f m in seq m' $ do
-  put (m',s)
-
-----
-
-resetFlag :: Tag -> IntMap {- Tag -} (Position,Bool) -> IntMap (Position,Bool)
-resetFlag = IMap.adjust (\(pos,_) -> (pos,False))
-
-resetTag :: Tag -> RunState ()
-resetTag tag = do
-  pos <- askPre
-  tell ["Reset Tag "++show (tag,pos)]
-  modifyMap (resetFlag tag)
-
-setPreTag :: Tag -> RunState ()
-setPreTag tag = do
-  pos <- askPre
-  modifyMap (IMap.insert tag (pos,True))
-
-setPostTag :: Tag -> RunState ()
-setPostTag tag = do
-  pos <- askPost
-  modifyMap (IMap.insert tag (pos,True))
-
-----
-
-resetOrbit :: Tag -> RunState ()
-resetOrbit tag = do
-  (m,s) <- get
-  let m' = IMap.delete tag m
-      s' = IMap.delete tag s
-  pos <- askPre
-  tell ["Reset Orbit "++show (tag,pos)]
-  seq m' $ seq s' $ put (m',s')
-
-enterOrbit :: Tag -> RunState ()
-enterOrbit tag = do
-  pos <- askPre
-  (m,s) <- get
-  let new =  (IMap.insert tag (pos,True) m, IMap.insert tag (S.singleton pos) s)
-      (m',s') = case IMap.lookup tag m of
-                  Nothing -> new
-                  Just (_,False) -> new
-                  Just (_,True) -> (m
-                                   ,case IMap.lookup tag s of
-                                      Nothing -> snd new
-                                      Just s_old -> let s_new = (S.|>) s_old pos
-                                                    in seq s_new $ IMap.insert tag s_new s)
-  let msg = ["Entering Orbit "++show (tag,pos)]
-  tell msg
-  seq m' $ seq s' $ put (m',s')
-
-leaveOrbit :: Tag -> RunState ()
-leaveOrbit tag = do
-  modifyMap (resetFlag tag)
-  let msg = ["Leaving Orbit "++show tag]
-  tell msg
-
 -- dumb smart constructor for tracing construction (I wanted to monitor laziness)
+{-# INLINE makeDFA #-}
 makeDFA :: SetIndex -> DT -> DFA
-makeDFA i dt = debug ("\n>Making DFA "++show i++"<") $ DFA i dt
+makeDFA i dt = DFA i dt
 
 -- Note that no CompOption parameter is needed.
 nfaToDFA :: ((Index,Array Index QNFA),Array Tag OP,Array GroupIndex [GroupInfo])
@@ -345,17 +274,4 @@ bestTrans op (f:fs) | null fs = canonical f
   choose Nothing (Just (tag,PostUpdate TagTask)) = if op tag == Maximize then LT else GT
   choose Nothing Nothing = EQ
   choose all1 all2 = err $ "bestTrans.choose : unknown tasks :"++show (all1,all2)
-
-
-{-# INLINE compareWith #-}
-compareWith :: (Ord x,Monoid a) => (Maybe (x,b) -> Maybe (x,c) -> a) -> [(x,b)] -> [(x,c)] -> a
-compareWith comp = cw where
-  cw [] [] = comp Nothing Nothing
-  cw xx@(x:xs) yy@(y:ys) =
-    case compare (fst x) (fst y) of
-      GT -> comp Nothing  (Just y) `mappend` cw xx ys
-      EQ -> comp (Just x) (Just y) `mappend` cw xs ys
-      LT -> comp (Just x) Nothing  `mappend` cw xs yy
-  cw xx [] = foldr (\x rest -> comp (Just x) Nothing  `mappend` rest) mempty xx
-  cw [] yy = foldr (\y rest -> comp Nothing  (Just y) `mappend` rest) mempty yy
 

@@ -1,104 +1,26 @@
 -- | "Text.Regex.TDFA.Run" is the main module for matching a DFA
 -- against a String.  Many of the associated functions are exported to
 -- other modules to help match against other types.
-module Text.Regex.TDFA.Run (findMatch,findMatchAll,countMatchAll
-                           ,makeTagComparer,tagsToGroups,update) where
+module Text.Regex.TDFA.Run (findMatch,findMatchAll,countMatchAll) where
 
-import Control.Monad(guard,mplus)
-import Control.Monad.RWS(execRWS)
-import Data.Monoid(Monoid(..))
-import Data.Array.IArray(Array,(!),array,bounds,assocs)
+import Control.Monad(MonadPlus(..))
+import Data.Array.IArray((!),array)
 import Data.List(maximumBy)
 import qualified Data.Map as Map(lookup,null)
 import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
 import Data.Maybe(isJust,isNothing)
-import Data.Sequence(viewl,ViewL(..))
 
 import Text.Regex.Base(MatchArray,RegexOptions(..))
 import Text.Regex.TDFA.Common
+import Text.Regex.TDFA.RunState(makeTagComparer,tagsToGroups,update,newScratchMap)
 import Text.Regex.TDFA.Wrap()
 -- import Debug.Trace
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
-err :: String -> a
-err = common_error "Text.Regex.TDFA.Run"
-
-type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the preferred one
-
-compareWith :: (Ord x,Monoid a) => (Maybe (x,b) -> Maybe (x,c) -> a) -> [(x,b)] -> [(x,c)] -> a
-compareWith comp = cw where
-  cw [] [] = comp Nothing Nothing
-  cw xx@(x:xs) yy@(y:ys) =
-    case compare (fst x) (fst y) of
-      GT -> comp Nothing  (Just y) `mappend` cw xx ys
-      EQ -> comp (Just x) (Just y) `mappend` cw xs ys
-      LT -> comp (Just x) Nothing  `mappend` cw xs yy
-  cw xx [] = foldr (\x rest -> comp (Just x) Nothing  `mappend` rest) mempty xx
-  cw [] yy = foldr (\y rest -> comp Nothing  (Just y) `mappend` rest) mempty yy
-
-makeTagComparer :: Array Tag OP -> TagComparer
-makeTagComparer aTags = (\ tv1 tv2 ->
-  let tv1' = IMap.toAscList . fst $ tv1
-      tv2' = IMap.toAscList . fst $ tv2
-
-      errMsg s = err $ "makeTagComparer : " ++ s ++ " : " ++ unlines [show aTags,show tv1,show tv2]
-
-      tagComparer :: Maybe (Tag,(Position,Bool)) -> Maybe (Tag,(Position,Bool)) -> Ordering
-      tagComparer = check where
-        check (Just (tag,(pos1,_))) (Just (_,(pos2,_))) =
-          case aTags!tag of
-            Maximize -> compare pos1 pos2
-            Minimize -> (flip compare) pos1 pos2
-            Orbit -> compareOrbits (IMap.lookup tag (snd tv1)) (IMap.lookup tag (snd tv2))
-        check all1@(Just (tag,(_,_))) Nothing =
-          case aTags!tag of
-            Maximize -> GT
-            Minimize -> LT -- errMsg $ "tagComparer TODO: Minimize tag in 1st without one in 2nd "++show all
-            Orbit -> errMsg $ "tagComparer TODO: Orbit tag in 1st without one in 2nd " ++ show all1
-        check Nothing all2@(Just (tag,(_,_))) =
-          case aTags!tag of
-            Maximize -> LT
-            Minimize -> GT -- errMsg $ "tagComparer TODO: Minimize tag in 2nd without one in 1st "++show all
-            Orbit -> errMsg $ "tagComparer TODO: Orbit tag in 2nd without one in 1st " ++ show all2
-        check Nothing Nothing = EQ
-      compareOrbits (Just pos1) (Just pos2) = comparePos (viewl pos1) (viewl pos2)
-        where comparePos EmptyL EmptyL = EQ
-              comparePos EmptyL _ = GT
-              comparePos _ EmptyL = LT
-              comparePos (p1:<ps1) (p2:<ps2) = compare p1 p2 `mappend`
-                                               comparePos (viewl ps1) (viewl ps2)
-      compareOrbits e1 e2 = errMsg $ ("compareOrbits Nothing found in Scratch"++show (e1,e2))
-    
-  in compareWith tagComparer tv1' tv2')
-
-{-# INLINE look #-}
-look :: Int -> IntMap a -> a
-look key imap = IMap.findWithDefault (error ("key "++show key++" not found in Text.Regex.TDFA.Run.look")) key imap
-
-
-{-# INLINE tagsToGroups #-}
-tagsToGroups :: Array GroupIndex [GroupInfo] -> Scratch -> MatchArray
-tagsToGroups aGroups (tags,orbits) | False && not (IMap.null orbits) = -- XXX disable this check
-  error ("tagsToGroups non null orbits :"++show (aGroups,tags,orbits))
-                                   | otherwise = groups -- trace (">><<< "++show (tags,filler)) groups
-  where groups = array (0,snd (bounds aGroups)) filler
-        filler = wholeMatch : map checkAll (assocs aGroups)
-        wholeMatch = (0,(startPos,stopPos-startPos)) -- will not fail to return good positions
-          where startPos = fst $ look 0 tags
-                stopPos = fst $ look 1 tags
-        checkAll (this_index,these_groups) = (this_index,if null good then (-1,0) else head good)
-          where good = do (GroupInfo _ parent start stop) <- these_groups -- Monad []
-                          (startPos,_) <- IMap.lookup start tags
-                          (stopPos,validStop) <- IMap.lookup stop tags
-                          guard validStop
-                          let (startParent,lengthParent) = groups!parent
-                          guard (0 <= startParent &&
-                                 0 <= lengthParent &&
-                                 startParent <= startPos &&
-                                 stopPos <= startPos + lengthParent)
-                          return (startPos,stopPos-startPos)
+-- err :: String -> a
+-- err = common_error "Text.Regex.TDFA.Run"
 
 {-# INLINE findMatch #-}
 findMatch :: Regex -> String -> Maybe MatchArray
@@ -152,10 +74,6 @@ countMatchAll regexIn stringIn = loop 0 '\n' stringIn $! 0 where
                            in seq offset' $
                               loop offset' prev' input' $! succ count
 
-{-# INLINE update #-}
-update :: RunState () -> Position -> Scratch -> (Scratch,[String])
-update rs p sIn = execRWS rs (p,succ p) sIn
-
 {-# INLINE matchHere #-}
 matchHere :: Regex -> Position -> Char -> String
           -> Maybe MatchArray
@@ -168,7 +86,7 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
                     Nothing -> Nothing
                     Just offsetEnd -> Just (array (0,0) [(0,(offsetIn,offsetEnd-offsetIn))])
 
-  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 (offsetIn,True),mempty)
+  initialScratchMap = newScratchMap regexIn offsetIn
   comp = makeTagComparer (regex_tags regexIn)
 
   test_multiline wt _ prev input =

@@ -10,19 +10,14 @@ import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
 import qualified Data.Map as Map
 import Data.Maybe(isJust)
-import Data.Monoid(Monoid(..))
 import Data.List(maximumBy)
 
 import Text.Regex.Base(MatchArray)
 import Text.Regex.TDFA.Common
-import Text.Regex.TDFA.Run(makeTagComparer,tagsToGroups,update)
+import Text.Regex.TDFA.RunState(makeTagComparer,tagsToGroups,update,newScratchMap)
 -- import Debug.Trace
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
-
-{-# INLINE look #-}
-look :: Int -> IntMap a -> a
-look key imap = IMap.findWithDefault (error ("key "++show key++" not found in Text.Regex.TDFA.Run.look")) key imap
 
 {-# INLINE findMatch #-}
 findMatch :: Regex -> B.ByteString -> Maybe MatchArray
@@ -74,7 +69,7 @@ matchHere regexIn offsetIn input = ans where
                     Nothing -> Nothing
                     Just offsetEnd -> Just (array (0,0) [(0,(fromEnum offsetIn,fromEnum $ offsetEnd-offsetIn))])
 
-  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 (fromEnum offsetIn,True),mempty)
+  initialScratchMap = newScratchMap regexIn (fromEnum offsetIn)
   comp = makeTagComparer (regex_tags regexIn)
 
   final :: Int64

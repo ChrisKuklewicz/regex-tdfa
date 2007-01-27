@@ -2,7 +2,6 @@
 module Text.Regex.TDFA.RunSeq (findMatch,findMatchAll,countMatchAll) where
 
 import Control.Monad(MonadPlus(..))
-import Data.Monoid(Monoid(..))
 import Data.Array.IArray((!),array)
 import Data.List(maximumBy)
 import qualified Data.Map as Map(lookup,null)
@@ -14,7 +13,7 @@ import qualified Data.Sequence as S(viewl,null,drop)
 
 import Text.Regex.Base(MatchArray,RegexOptions(..))
 import Text.Regex.TDFA.Common
-import Text.Regex.TDFA.Run(makeTagComparer,tagsToGroups,update)
+import Text.Regex.TDFA.RunState(makeTagComparer,tagsToGroups,update,newScratchMap)
 import Text.Regex.TDFA.Wrap()
 -- import Debug.Trace
 
@@ -22,12 +21,6 @@ import Text.Regex.TDFA.Wrap()
 
 -- err :: String -> a
 -- err = common_error "Text.Regex.TDFA.Run"
-
-{-# INLINE look #-}
-look :: Int -> IntMap a -> a
-look key imap = IMap.findWithDefault (error ("key "++show key++" not found in Text.Regex.TDFA.Run.look")) key imap
-
-
 
 {-# INLINE findMatch #-}
 findMatch :: Regex -> Seq Char -> Maybe MatchArray
@@ -94,7 +87,7 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
                     Nothing -> Nothing
                     Just offsetEnd -> Just (array (0,0) [(0,(offsetIn,offsetEnd-offsetIn))])
 
-  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 (offsetIn,True),mempty)
+  initialScratchMap = newScratchMap regexIn offsetIn
   comp = makeTagComparer (regex_tags regexIn)
 
   test_multiline wt _ prev input =

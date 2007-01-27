@@ -10,10 +10,14 @@ import Control.Monad.RWS(RWS)
 import Data.Array.IArray(Array)
 import Data.Map(Map)
 import Data.Set(Set)
-import Data.IntMap(IntMap)
+import Data.IntMap as IMap (IntMap,findWithDefault)
 import Data.IntSet(IntSet)
 import Data.Sequence(Seq)
 --import Debug.Trace
+
+{-# INLINE look #-}
+look :: Int -> IntMap a -> a
+look key imap = IMap.findWithDefault (common_error "Text.Regex.DFA.Common" ("key "++show key++" not found in look")) key imap
 
 common_error :: String -> String -> a
 common_error moduleName message =
@@ -172,6 +176,8 @@ data DT = Simple' { dt_win :: IntMap {- Index -} (RunState ()) -- ^ Actions to p
 type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,RunState ()))
 -- | Internal convenience type for the text display code
 type DTrans' = [(Index, [(Index, (DoPa, ([(Tag, (Position,Bool))],[String])))])]
+
+
 -- | Internal type.  This is the Monad in which tag commands are
 -- executed to modify the runtime data.
 type RunState = RWS (Position,Position) [String] Scratch
@@ -185,3 +191,6 @@ type Scratch = (IntMap (Position,Bool)     -- ^ Place for all tags, Bool is Fals
 -- append locations but compare starting with front, so use Seq as a
 -- Queue.
 type Orbits = Seq Position    
+-- | Internal type to comapre two Scratch values and pick the "biggest"
+type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the preferred one
+
