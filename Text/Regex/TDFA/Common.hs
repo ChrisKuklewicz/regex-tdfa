@@ -1,17 +1,15 @@
--- | Common supports the Lazy Parsec backend.  It defines all the data
--- types except Pattern and exports everything but the contructors of
--- Pattern.
+-- | Common provides simple functions to the backend.  It defines most
+-- of the data types.
 module Text.Regex.TDFA.Common {- export everything -} where
 
+import Text.Regex.Base(MatchOffset,MatchLength)
 import Control.Monad.RWS(RWS)
-import Data.Array.IArray
---import Data.Monoid
+import Data.Array.IArray(Array)
 import Data.Map(Map)
 import Data.Set(Set)
 import Data.IntMap(IntMap)
 import Data.IntSet(IntSet)
 import Data.Sequence(Seq)
-
 --import Debug.Trace
 
 common_error s t = error ("Explict error in module "++s++" : "++t)
@@ -63,7 +61,7 @@ data ExecOption = ExecOption { captureGroups :: Bool
 --
 -- This has now been augmented to also remember the offset and length
 -- of the matched string.
-type MatchedStrings = IntMap (String,(Int,Int))
+type MatchedStrings = IntMap (String,(MatchOffset,MatchLength))
 
 type BoolMultiline = Bool
 type BoolCaseSensitive = Bool
@@ -78,24 +76,24 @@ type AboutMatch = (StringBeforeMatch,StringOfMatch,StringAfterMatch,[StringSubgr
 -- Used by CorePattern
 type Tag = Int           -- identity of Position tag to set during a transition
 type Index = Int         -- NFA node identity number
--- used by TDFA
+-- Used by TDFA
 type SetIndex = IntSet {- Index -}
 type Position = Int      -- index into the text being searched
--- type Delta = Position -> [(Tag,Position)]
 
 -- | GroupIndex is for indexing submatches from  parenthesized groups (PGroup)
 type GroupIndex = Int
 data GroupInfo = GroupInfo {thisIndex,parentIndex::GroupIndex
                            ,startTag,stopTag::Tag
-                           ,myChildren::[GroupIndex]} deriving Show
+                           ,myChildren::[GroupIndex]           -- ^ groups with this as their parentIndex
+                           } deriving Show
 
 -- | The DFA backend specific 'Regex' type, used by this module's '=~'
 -- and '=~~' operators.
-data Regex = Regex {regex_dfa::DFA
-                   ,regex_init::Index
-                   ,regex_tags::Array Tag OP
-                   ,regex_groups::Array GroupIndex [GroupInfo]
-                   ,regex_compOptions::CompOption
+data Regex = Regex {regex_dfa::DFA                             -- ^ starting DFA state
+                   ,regex_init::Index                          -- ^ index of starting DFA state
+                   ,regex_tags::Array Tag OP                   -- ^ information about each tag
+                   ,regex_groups::Array GroupIndex [GroupInfo] -- ^ information about each group
+                   ,regex_compOptions::CompOption              -- 
                    ,regex_execOptions::ExecOption}
 
 data OP = Maximize | Minimize | Orbit deriving (Eq,Show)  -- whether to prefer large or smaller match indices

@@ -440,6 +440,18 @@ qToNFA compOpt qTop = (q_id startingQNFA
                           return (thisE,ansE)
         return (if mayFirstBeNull then (if clear then this else ans)
                   else this)
+      NonEmpty q ->
+        let e' = case maybeOnlyEmpty qIn of
+                   Just [] -> e
+                   Just wtags -> addWinTags wtags e
+                   Nothing -> err $ "getTransTagless/NonEmpty is supposed to have an emptyNull nullView : "++show qIn
+        in if cannotAccept q then return e' else do
+        mqt <- inStar q e
+        return $ case mqt of
+                   Nothing -> err ("Weird pattern in getTransTagless/NonEmpty: " ++ show qIn)
+                   Just qt -> let qt' = qt { qt_win = [] }  -- very very special edit to fix (.|$){1,3}
+                              in fromQT . mergeQT qt' . getQT $ e'
+
       _ -> err ("This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen" ++ show qIn)
 
   inStar,inStarTagless :: Q -> E -> S (Maybe QT)
@@ -467,6 +479,8 @@ qToNFA compOpt qTop = (q_id startingQNFA
                       return (fmap getQT meAcceptingOut)
       Star {} -> do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
                     return (fmap getQT meAcceptingOut)
+      NonEmpty q -> do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
+                       return (fmap getQT meAcceptingOut)
       Test {} -> return Nothing -- with Or this discards ^ branch in "(^|foo|())*"
       OneChar {} -> err ("OneChar cannot have nullable True")
 
@@ -560,7 +574,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                 then (ac,True)
                 else case maybeOnlyEmpty q of
                        Just [] -> (ac,True)
-                       Just tagList -> (addWinTagsAC tagList ac,False)
+                       Just wtags -> (addWinTagsAC wtags ac,False)
                        _ -> let nQ = fromQT . preferNullViews (nullQ q) . getQT
                             in ((nQ eLoop,fmap nQ mAccepting,Nothing),False)
         if cannotAccept q then return ac0 else mdo
@@ -593,6 +607,19 @@ qToNFA compOpt qTop = (q_id startingQNFA
                 return (thisAll,ansAll)
           return (if mayFirstBeNull then (if clear then thisAC else ansAC)
                     else thisAC)
+      NonEmpty q -> do
+        let ac0@(clearE,_,_) = case maybeOnlyEmpty qIn of
+                                 Just [] -> ac
+                                 Just wtags -> addWinTagsAC wtags ac
+                                 Nothing -> err $ "actNullableTagless/NonEmpty is supposed to have an emptyNull nullView : "++show qIn
+        if cannotAccept q then return ac0 else do -- if cannotAccept is True then starTrans did a lousy (not canOnlyMatchNull) job.
+        (_,mChildAccepting,_) <- act q ac
+        case mChildAccepting of
+          Nothing -> err ("Weird pattern in actNullableTagless/NonEmpty: " ++ show qIn) -- cannotAccept q checked for this (and starTrans!)
+          Just childAccepting -> do
+            let childQT = getQT childAccepting
+                thisAccepting = Just . fromQT . mergeQT childQT . getQT . getE $ ac
+            return (clearE,thisAccepting,Nothing) 
       _ -> err ("This case in Text.Regex.TNFA.TNFA.actNullableTagless cannot happen: "++show qIn)
 
   -- This is applied directly to any qt right before passing to mergeQT

@@ -1,24 +1,21 @@
 module Text.Regex.TDFA.CorePattern(Q(..),P(..),WhichTest(..),Wanted(..),TestInfo,OP(..),SetTestInfo(..),NullView
                                   ,patternToQ,cleanNullView,cannotAccept) where
 
+import Control.Monad(when)
 import Control.Monad.Fix()
 import Control.Monad.RWS
-import Text.Regex.TDFA.Common -- (Tag,GroupInfo(..),GroupIndex,Position,WinTags,DoPa,CompOption(..),mapSnd)
-import Text.Regex.TDFA.Pattern(Pattern(..),starTrans)
-
+import Data.Array.IArray
 import Data.Maybe
 import Data.List
-import Data.Array.IArray
 import Data.Set(Set)
 import qualified Data.Set as Set
--- import Data.IntSet(IntSet)
--- import qualified Data.IntSet as ISet
 import Data.Map(Map)
 import qualified Data.Map as Map
--- import Data.IntMap(IntMap)
--- import qualified Data.IntMap as IMap
-
+import Text.Regex.TDFA.Common -- (Tag,GroupInfo(..),GroupIndex,Position,WinTags,DoPa,CompOption(..),mapSnd)
+import Text.Regex.TDFA.Pattern(Pattern(..),starTrans)
 -- import Debug.Trace
+
+err = common_error "Text.Regex.TDFA.CorePattern"
 
 debug :: (Show a) => a -> b -> b
 debug _ = id
@@ -31,8 +28,10 @@ data P = Empty
               , resetOrbits :: [Tag]   -- child star's orbits to reset
               , firstNull :: Bool      -- Usually True meaning the first pass may match 0 characters
               , unStar :: Q}
-       | Test TestInfo
-       | OneChar Pattern
+       | Test TestInfo                 -- Require the test to be true
+       | OneChar Pattern               -- Bring the Pattern element that accepts a character
+       | NonCapture Q                  -- Semantic command: no group capture in Q
+       | NonEmpty Q                    -- Don't let the Q pattern match nothing
          deriving (Show,Eq)
 
 -- The diagnostics about the pattern
@@ -140,6 +139,8 @@ varies :: Q -> Bool
 varies Q {takes = (_,Nothing)} = True
 varies Q {takes = (x,Just y)} = x/=y
 
+mustAccept :: Q -> Bool
+mustAccept q = (0/=) . fst . takes $ q
 canAccept :: Q -> Bool
 canAccept q = maybe True (0/=) $ snd . takes $ q
 cannotAccept :: Q -> Bool
@@ -206,7 +207,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
   aGroups = makeGroupArray maxGroupIndex (fromRight groups)
 
   -- implicitly inside a PGroup 0 converted into a GroupInfo 0 undefined 0 1
-  monad = go (starTrans pOrig) (Advice 0) (Apply 1)
+  monad = go (starTrans pOrig) (Advice 0) (Advice 1)
   startReader :: GroupIndex
   startReader = 0             -- start inside group 0
   startState :: ([OP]->[OP],Tag)
@@ -312,7 +313,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                nullView = addTagsToNullView (winTags (apply a) (apply b)) . cleanNullView . concatMap nullQ $ qs
            let ans = Q nullView
                        (orTakes . map takes $ qs)
-                       [](apply a) (apply b)
+                       [] (apply a) (apply b)
                        canVary (any childGroups qs) wanted
                        (Or qs)
            return ans
@@ -320,7 +321,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
          PConcat ps -> combineConcat ps m1 m2
          PStar mayFirstBeNull p -> mdo
            let accepts    = canAccept q
-               needsOrbit = varies q || childGroups q  -- otherwise it cannot matter -- XXX change || to &&
+               needsOrbit = varies q && childGroups q  -- otherwise it cannot matter -- XXX change || to &&
                needsTags  = needsOrbit || accepts      -- orbits implies accepts
            a <- if noTag m1 && needsTags then uniq Minimize else return m1
            b <- if noTag m2 && needsTags then uniq Maximize else return m2
@@ -330,7 +331,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
            return $ Q nullView
                       (0,if accepts then Nothing else (Just 0))
                       [] (apply a) (apply b)
-                      accepts (childGroups q) WantsQT
+                      needsTags (childGroups q) WantsQT
                       (Star c resetTags mayFirstBeNull q)
          PCarat dopa -> test (Test_BOL,dopa)
          PDollar dopa -> test (Test_EOL,dopa)
@@ -352,14 +353,23 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                       , childGroups = True
                       , preReset = resetTags ++ (preReset q) }
 
+--         PNonCapture p -> go q m1 m2 -- XXX need to implement
+         PNonEmpty p -> mdo
+           let needsTags = canAccept q
+           a <- if noTag m1 && needsTags then uniq Minimize else return m1
+           b <- if noTag m2 && needsTags then uniq Maximize else return m2
+           q <- go p a (toAdvice b)
+           when (mustAccept q) (err $ "patternToQ : PNonEmpty provided with a *mustAccept* pattern: "++show (p,pOrig))
+           return $ Q (emptyNull (winTags (apply a) (apply b)))   -- The magic of NonEmpty
+                      (0,snd (takes q))                           -- like Or
+                      [] Nothing (apply b)                        -- own the closing tag so it will not end a PGroup
+                      needsTags (childGroups q) (wants q)         -- pulled up from q
+                      (NonEmpty q)
+
          -- these are here for completeness of the case branches, currently starTrans replaces them all
          PPlus {} -> die
          PQuest {} -> die
          PBound {} -> die
-
-
-
-
 
 
 {-
