@@ -1,40 +1,33 @@
-module Text.Regex.TDFA.TDFA(DFA(..),DT(..)
-                           ,examineDFA
-                           ,patternToDFA,nfaToDFA,dfaMap) where
+-- | "Text.Regex.TDFA.TDFA" converts the QNFA from TNFA into the DFA.
+-- A DFA state corresponds to a Set of QNFA states, repesented as list
+-- of Index which are used to lookup the DFA state in a lazy Trie
+-- which holds all possible subsets of QNFA states.
+module Text.Regex.TDFA.TDFA(patternToDFA,DFA(..),DT(..)
+                           ,examineDFA,nfaToDFA,dfaMap) where
 
 import Control.Arrow((***))
--- import Data.Monoid
--- import Control.Monad.Reader
--- import Control.Monad.Writer
--- import Control.Monad.State
+import Control.Monad.Instances()
 import Control.Monad.RWS
-import Control.Monad.Instances
-import Data.List
-import Data.Maybe
-import qualified Data.Sequence as S
-
-import Data.Array.IArray
--- import Data.Set(Set)
--- import qualified Data.Set as Set
--- import Data.IntSet(IntSet)
-import qualified Data.IntSet as ISet
-import Data.Map(Map)
-import qualified Data.Map as Map
+import Data.Array.IArray(Array,(!),bounds)
 import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
+import qualified Data.IntSet as ISet(empty,singleton,toList)
+import Data.List(groupBy,sortBy,foldl')
+import Data.Map(Map)
+import qualified Data.Map as Map(elems,assocs,insert,member,empty,toAscList,fromDistinctAscList)
+import Data.Maybe(isJust)
+import qualified Data.Sequence as S(singleton,(|>))
 
-import Text.Regex.TDFA.TNFA
 import Text.Regex.TDFA.Common
-import Text.Regex.TDFA.CorePattern
-import Text.Regex.TDFA.Pattern
 import Text.Regex.TDFA.IntArrTrieSet(TrieSet)
-import qualified Text.Regex.TDFA.IntArrTrieSet as Trie
-
---import Text.Regex.Base(RegexOptions(defaultCompOpt))
---import Text.Regex.TDFA.ReadRegex(parseRegex)
-
+import qualified Text.Regex.TDFA.IntArrTrieSet as Trie(lookupAsc,fromSinglesMerge)
+import Text.Regex.TDFA.Pattern(Pattern)
+import Text.Regex.TDFA.TNFA(patternToNFA)
 -- import Debug.Trace
 
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
+
+err :: String -> a
 err s = common_error "Text.Regex.TDFA.TDFA"  s
 
 debug :: (Show a) => a -> s -> s
@@ -106,11 +99,11 @@ enterOrbit tag = do
       (m',s') = case IMap.lookup tag m of
                   Nothing -> new
                   Just (_,False) -> new
-                  Just (off,True) -> (m
-                                     ,case IMap.lookup tag s of
-                                        Nothing -> snd new
-                                        Just s_old -> let s_new = (S.|>) s_old pos
-                                                      in seq s_new $ IMap.insert tag s_new s)
+                  Just (_,True) -> (m
+                                   ,case IMap.lookup tag s of
+                                      Nothing -> snd new
+                                      Just s_old -> let s_new = (S.|>) s_old pos
+                                                    in seq s_new $ IMap.insert tag s_new s)
   let msg = ["Entering Orbit "++show (tag,pos)]
   tell msg
   seq m' $ seq s' $ put (m',s')
@@ -133,7 +126,7 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
 
   indexesToDFA = Trie.lookupAsc trie  -- Lookup in cache
     where trie :: TrieSet DFA
-          trie = Trie.fromSingles dlose mergeDFA (bounds aQNFA) indexToDFA
+          trie = Trie.fromSinglesMerge dlose mergeDFA (bounds aQNFA) indexToDFA
 
   indexToDFA :: Index -> DFA  -- used to seed the Trie from the NFA
   indexToDFA i = makeDFA (ISet.singleton source) (qtToDT qtIn)
@@ -225,7 +218,7 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
       nestDT dt1@(Testing' {dt_a=a,dt_b=b}) dt2 = dt1 { dt_a = mergeDT a dt2, dt_b = mergeDT b dt2 }
       nestDT _ _ = err "nestDT called on Simple -- cannot happen"
 
-patternToDFA :: CompOption -> (Pattern,(GroupIndex, Int)) -> (DFA,Index,Array Tag OP,Array GroupIndex [GroupInfo])
+patternToDFA :: CompOption -> (Pattern,(GroupIndex, DoPa)) -> (DFA,Index,Array Tag OP,Array GroupIndex [GroupInfo])
 patternToDFA compOpt pattern = nfaToDFA (patternToNFA compOpt pattern)
 
 dfaMap :: DFA -> Map SetIndex DFA
@@ -313,13 +306,13 @@ cleanWin =  reverse . clean  . reverse
                 check _ _ = True
 
 bestTrans :: (Tag -> OP) -> [TagCommand] -> TagCommand
-bestTrans op [] = err "bestTrans There were no transition in s"
+bestTrans _ [] = err "bestTrans There were no transition in s"
 bestTrans op (f:fs) | null fs = canonical f
                     | otherwise = canonical . snd $ foldl' pick (prep f,f) fs where
   canonical :: TagCommand -> TagCommand
   canonical (dopa,tcs) = (dopa,reverse . clean  . reverse $ tcs)
   prep :: TagCommand -> TagList
-  prep (dopa,tcs) = sortBy (compare `on` fst) . clean . reverse . filter isTagTask $ tcs
+  prep (_,tcs) = sortBy (compare `on` fst) . clean . reverse . filter isTagTask $ tcs
   isTagTask (_,PreUpdate TagTask) = True
   isTagTask (_,PostUpdate TagTask) = True
   isTagTask _ = False

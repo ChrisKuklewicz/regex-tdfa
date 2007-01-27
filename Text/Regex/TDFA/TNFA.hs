@@ -1,55 +1,52 @@
-{- Resetting tags.  There is a need to either create a parallel system
-of tracking in progress group capture along the lines of regex-parsec,
-or to clear some of the tags.
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+-- | "Text.Regex.TDFA.TNFA" converts the CorePattern Q/P data (and its
+-- Pattern leafs) to a QNFA tagged non-deterministic finite automata.
+-- 
+-- This holds every possible way to follow one state by another, while
+-- in the DFA these will be reduced by picking a single best
+-- transition for each (soure,destination) pair.  The transitions are
+-- heavily and often redundantly annotated with tasks to perform, and
+-- this redundancy is reduced when picking the best transition.  So
+-- far, keeping all this information has helped fix bugs in both the
+-- design and implementation.
+--
+-- The QNFA for a Pattern with a starTraned Q/P form with N one
+-- character accepting leaves has at most N+1 nodes.  These nodes
+-- repesent the future choices after accepting a leaf.  The processing
+-- of Or nodes often reduces this number by sharing at the end of the
+-- different paths.  Turning off capturing while compiling the pattern
+-- may (future extension) reduce this further for some patterns by
+-- processing Star with optimizations.  This compact design also means
+-- that tags are assigned not just to be updated before taking a
+-- transition (PreUpdate) but also after the transition (PostUpdate).
+-- 
+-- Uses recursive do notation.
 
-Why do tags needs to be cleared?  Because when looping from the end of
-'a' in (a*) to the beginning all the internal captures are lost.
-
-Where does this show up?  The PStar::Pattern to Star::P conversion is
-a horizon which does not sink tags through or raise tags from.  The
-continuation return from inStar can be preceded by resetting to (-1)
-every tag inside the Star.  Thus making it as pristine as the first
-pass. This has the advantage that no mucking with the GroupInfo is
-required. It should also allow a return of the efficient Or tagging.
-
-A future refinement could reset only the tags involved in
-closing group captures.
-
-This still requires ordering the tags instead of keeping them sorted.
--}
-
-module Text.Regex.TDFA.TNFA(patternToNFA -- ,pickQTrans,cleanWin
-                           ,noWin
-                           -- ,toP,toQ,toNFA,display_NFA
+module Text.Regex.TDFA.TNFA(patternToNFA
                            ,QNFA(..),QT(..),QTrans,TagUpdate(..)) where
 
-import Text.Regex.TDFA.Pattern(Pattern(..))
-import Text.Regex.TDFA.CorePattern(Q(..),P(..),OP(..),WhichTest,cleanNullView,NullView
-                                 ,SetTestInfo(..),Wanted(..),TestInfo,cannotAccept,patternToQ)
-import Text.Regex.TDFA.Common
-import Text.Regex.TDFA.Wrap
--- import Text.Regex.Base(RegexOptions(defaultCompOpt))
--- (DoPa,Index,GroupIndex,GroupInfo,CompOption(..),on,mapFst,mapSnd,norep)
-import Text.Regex.TDFA.ReadRegex(decodePatternSet)
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
-import Data.Monoid
 import Control.Monad.State
-import Data.List
-import Data.Maybe
+import Data.Array.IArray(Array,array)
 import Data.Char(toLower,toUpper,isAlpha)
-
-import Data.Array.IArray
-import Data.Set(Set)
-import qualified Data.Set as Set
--- import Data.IntSet(IntSet)
--- import qualified Data.IntSet as ISet
+import qualified Data.IntMap as IMap(toList,null,unionWith,singleton)
+import Data.List(foldl')
 import Data.Map(Map)
 import qualified Data.Map as Map
--- import Data.IntMap(IntMap)
-import qualified Data.IntMap as IMap
+import Data.Maybe(catMaybes)
+import Data.Monoid(mempty,mappend)
+import Data.Set(Set)
+import qualified Data.Set as Set(singleton,toList,toAscList,insert)
 
+import Text.Regex.TDFA.Common
+import Text.Regex.TDFA.CorePattern(Q(..),P(..),OP(..),WhichTest,cleanNullView,NullView
+                                 ,SetTestInfo(..),Wanted(..),TestInfo,cannotAccept,patternToQ)
+import Text.Regex.TDFA.Pattern(Pattern(..))
+import Text.Regex.TDFA.ReadRegex(decodePatternSet)
 -- import Debug.Trace
 
+err :: String -> a
 err t = common_error "Text.Regex.TDFA.TNFA" t
 
 debug :: (Show a) => a -> s -> s
@@ -102,7 +99,7 @@ qtwin = Simple {qt_win=[(1,PreUpdate TagTask)],qt_trans=mempty,qt_other=mempty}
 qtlose = Simple {qt_win=mempty,qt_trans=mempty,qt_other=mempty}
 
 patternToNFA :: CompOption
-             -> (Text.Regex.TDFA.Pattern.Pattern,(GroupIndex, Int))
+             -> (Text.Regex.TDFA.Pattern.Pattern,(GroupIndex, DoPa))
              -> ((Index,Array Index QNFA)
                 ,Array Tag OP
                 ,Array GroupIndex [GroupInfo])
@@ -270,9 +267,6 @@ newQNFA s qt = do
   put (futureI, oldQs . ((thisI,qnfa):))
   return qnfa
 
-noWin :: TagList -> Bool
-noWin = null
-
 -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
 
 fromQNFA :: QNFA -> E
@@ -375,7 +369,7 @@ prependTags' tcs' (Simple {qt_win=w,qt_trans=t,qt_other=o}) =
   Simple { qt_win = if noWin w then w else tcs' `mappend` w
          , qt_trans = Map.map prependQTrans t
          , qt_other = prependQTrans o }
-  where prependQTrans = IMap.map (map (\(d,tcs) -> (d,tcs' `mappend` tcs)))
+  where prependQTrans = fmap (map (\(d,tcs) -> (d,tcs' `mappend` tcs)))
 
 -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
 
@@ -441,6 +435,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
         return (if mayFirstBeNull then (if clear then this else ans)
                   else this)
       NonEmpty q ->
+        {- This is like actNullable (Or [Empty,q]) without the extra tag to prefer the first Empty branch -}
         let e' = case maybeOnlyEmpty qIn of
                    Just [] -> e
                    Just wtags -> addWinTags wtags e
@@ -449,8 +444,8 @@ qToNFA compOpt qTop = (q_id startingQNFA
         mqt <- inStar q e
         return $ case mqt of
                    Nothing -> err ("Weird pattern in getTransTagless/NonEmpty: " ++ show qIn)
-                   Just qt -> let qt' = qt { qt_win = [] }  -- very very special edit to fix (.|$){1,3}
-                              in fromQT . mergeQT qt' . getQT $ e'
+                   Just qt -> let qt' = qt { qt_win = [] }         -- clear qt_win to the empty failure state
+                              in fromQT . mergeQT qt' . getQT $ e' -- ...and then this sets qt_win to exactly that of e'
 
       _ -> err ("This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen" ++ show qIn)
 
@@ -479,8 +474,8 @@ qToNFA compOpt qTop = (q_id startingQNFA
                       return (fmap getQT meAcceptingOut)
       Star {} -> do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
                     return (fmap getQT meAcceptingOut)
-      NonEmpty q -> do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
-                       return (fmap getQT meAcceptingOut)
+      NonEmpty {} -> do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
+                        return (fmap getQT meAcceptingOut)
       Test {} -> return Nothing -- with Or this discards ^ branch in "(^|foo|())*"
       OneChar {} -> err ("OneChar cannot have nullable True")
 
@@ -608,6 +603,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
           return (if mayFirstBeNull then (if clear then thisAC else ansAC)
                     else thisAC)
       NonEmpty q -> do
+        {- This is like actNullable (Or [Empty,q]) without the extra tag to prefer the first Empty branch -}
         let ac0@(clearE,_,_) = case maybeOnlyEmpty qIn of
                                  Just [] -> ac
                                  Just wtags -> addWinTagsAC wtags ac

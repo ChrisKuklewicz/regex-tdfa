@@ -1,59 +1,63 @@
-module Text.Regex.TDFA.IntArrTrieSet where
+{- |
+This creates a lazy Trie based on a finite range of Ints and is used to
+memorize a function over the subsets of this range.
 
-import Data.List
-import Data.Array
-
-{-
-This creates a Trie based on a finite set of Ints and is used to
-memorize a function over the domain of combinations from that set.
-
-To create one it needs 2 things
-  * Range of keys to bound the space of combinations
-  * Function from a Set (or sorted list) of keys to the item value
+To create a Trie you need two supply 2 things
+  * Range of keys to bound
+  * A function or functions used to construct the value for a subset of keys
 
 The Trie uses the Array type internally.
 -}
+module Text.Regex.TDFA.IntArrTrieSet where
+
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
+
+import Data.Array.IArray(Array,(!),listArray)
 
 data TrieSet v = TrieSet { value :: v
                          , next :: Array Int (TrieSet v) }
 
--- Lists of keys should be sorted.
+-- | This is the accessor for the Trie. The list of keys should be
+-- sorted.
 lookupAsc :: TrieSet v -> [Int] -> v
-lookupAsc (TrieSet {value=v,next=n}) = (\keys ->
-  case keys of
-    [] -> v
-    (key:keys') -> lookupAsc (n!key) keys')
+lookupAsc (TrieSet {value=v,next=n}) =
+  (\keys -> case keys of [] -> v
+                         (key:keys') -> lookupAsc (n!key) keys')
 
--- Lists of keys should be sorted.
-fromBounds :: (Int,Int) -> ([Int] -> v) -> TrieSet v
+-- | This is a Trie constructor for a complete range of keys.
+fromBounds :: (Int,Int)     -- ^ (lower,upper) range of keys, lower<=upper
+           -> ([Int] -> v)  -- ^ Function from list of keys to its value.
+                            --   It must work for distinct ascending lists.
+           -> TrieSet v     -- ^ The constructed Trie
 fromBounds (start,stop) keysToValue = build id start where
   build keys low = TrieSet { value = keysToValue (keys [])
                            , next = listArray (low,stop)
                                     [build (keys.(x:)) (succ x) | x <- [low..stop] ] }
 
-fromSingles ::  v -> (v->v->v) -> (Int,Int) -> (Int->v) -> TrieSet v
-fromSingles emptyValue mergeValues bound keyToValue = trieSet where
-  keysToValue' = assembleAsc emptyValue mergeValues keyToValue keysToValue
-  keysToValue = lookupAsc trieSet
+-- | This is a Trie constructor for a complete range of keys that uses
+-- a function from single values and a merge operation on values to
+-- fill the Trie.
+fromSinglesMerge :: v          -- ^ value for (lookupAsc trie [])
+                 -> (v->v->v)  -- ^ merge operation on values
+                 -> (Int,Int)  -- ^ (lower,upper) range of keys, lower<=upper
+                 -> (Int->v)   -- ^ Function from a single key to its value
+                 -> TrieSet v  -- ^ The constructed Trie
+fromSinglesMerge emptyValue mergeValues bound keyToValue = trieSet where
   trieSet = fromBounds bound keysToValue'
-
--- This takes a function which can merge a list of values and a method
--- to convert individual keys to values.  The list of keys must be
--- distince and in ascending order.
-fromSingles' :: ([v]->v) -> (Int,Int)-> (Int->v) -> TrieSet v
-fromSingles' mergeValues bound keyToValue = trieSet where
-  keysToValue' = combiningAsc mergeValues keyToValue
-  trieSet = fromBounds bound keysToValue'
-
-combiningAsc :: ([v]->v) -> (Int->v) -> ([Int] -> v)
-combiningAsc mergeValues keyToValue = mergeValues . map keyToValue
-
--- Helper function to create lookup function
-assembleAsc :: v -> (v->v->v) -> (Int->v) -> ([Int] -> v) -> ([Int] -> v)
-assembleAsc emptyValue mergeValues keyToValue keysToValue = keysToValue' where
   keysToValue' keys =
-   case keys of
-     [] -> emptyValue
-     [key] -> keyToValue key
-     _ -> mergeValues (keysToValue (init keys)) (keysToValue [last keys])
+    case keys of
+      [] -> emptyValue
+      [key] -> keyToValue key
+      _ -> mergeValues (keysToValue (init keys)) (keysToValue [last keys])
+  keysToValue = lookupAsc trieSet
 
+-- | This is a Trie constructor for a complete range of keys that uses
+-- a function from single values and a sum operation of values to fill
+-- the Trie.
+fromSinglesSum :: ([v]->v)   -- ^ summation operation for values
+               -> (Int,Int)  -- ^ (lower,upper) range of keys, lower <= upper
+               -> (Int->v)   -- ^ Function from a single key to its value
+               -> TrieSet v  -- ^ The constructed Trie
+fromSinglesSum mergeValues bound keyToValue = trieSet where
+  trieSet = fromBounds bound keysToValue'
+  keysToValue' = mergeValues . map keyToValue

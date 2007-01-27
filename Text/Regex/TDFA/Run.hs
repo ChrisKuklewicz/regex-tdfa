@@ -1,27 +1,27 @@
+-- | "Text.Regex.TDFA.Run" is the main module for matching a DFA
+-- against a String.  Many of the associated functions are exported to
+-- other modules to help match against other types.
 module Text.Regex.TDFA.Run where -- (findMatch,findMatchAll,countMatchAll) where
 
---import Control.Monad
-import Control.Monad.RWS
-import Data.Array.IArray
--- import Data.Map(Map)
-import qualified Data.Map as Map
+import Control.Monad(guard,mplus)
+import Control.Monad.RWS(execRWS)
+import Data.Monoid(Monoid(..))
+import Data.Array.IArray(Array,(!),array,bounds,assocs)
+import Data.List(maximumBy)
+import qualified Data.Map as Map(lookup,null)
 import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
-import Data.Monoid
-import Data.Maybe
-import Data.List
+import Data.Maybe(isJust,isNothing)
 import Data.Sequence(viewl,ViewL(..))
-import qualified Data.Sequence as S
 
-import Text.Regex.Base
+import Text.Regex.Base(Extract(..),MatchArray,RegexOptions(..))
 import Text.Regex.TDFA.Common
-import Text.Regex.TDFA.ReadRegex
-import Text.Regex.TDFA.CorePattern
-import Text.Regex.TDFA.TDFA
-import Text.Regex.TDFA.Wrap
-
+import Text.Regex.TDFA.Wrap()
 -- import Debug.Trace
 
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
+
+err :: String -> a
 err = common_error "Text.Regex.TDFA.Run"
 
 type TagValues = IntMap {- Tag -} Position
@@ -52,16 +52,16 @@ makeTagComparer aTags = (\ tv1 tv2 ->
             Maximize -> compare pos1 pos2
             Minimize -> (flip compare) pos1 pos2
             Orbit -> compareOrbits (IMap.lookup tag (snd tv1)) (IMap.lookup tag (snd tv2))
-        check all@(Just (tag,(pos1,_))) Nothing =
+        check all1@(Just (tag,(_,_))) Nothing =
           case aTags!tag of
             Maximize -> GT
             Minimize -> LT -- errMsg $ "tagComparer TODO: Minimize tag in 1st without one in 2nd "++show all
-            Orbit -> errMsg $ "tagComparer TODO: Orbit tag in 1st without one in 2nd " ++ show all
-        check Nothing all@(Just (tag,(pos2,_))) =
+            Orbit -> errMsg $ "tagComparer TODO: Orbit tag in 1st without one in 2nd " ++ show all1
+        check Nothing all2@(Just (tag,(_,_))) =
           case aTags!tag of
             Maximize -> LT
             Minimize -> GT -- errMsg $ "tagComparer TODO: Minimize tag in 2nd without one in 1st "++show all
-            Orbit -> errMsg $ "tagComparer TODO: Orbit tag in 2nd without one in 1st " ++ show all
+            Orbit -> errMsg $ "tagComparer TODO: Orbit tag in 2nd without one in 1st " ++ show all2
         check Nothing Nothing = EQ
       compareOrbits (Just pos1) (Just pos2) = comparePos (viewl pos1) (viewl pos2)
         where comparePos EmptyL EmptyL = EQ
@@ -73,62 +73,6 @@ makeTagComparer aTags = (\ tv1 tv2 ->
     
   in compareWith tagComparer tv1' tv2')
 
-
-{-
--- Returns GT if the first item is preferred. I could generate test
--- cases to be sure about all the Maximize cases.  The minimize cases
--- look stranger to trigger, so I am leaving them as errors until I am
--- certain what to put there.
-makeTagComparer :: Array Tag OP -> TagComparer
-makeTagComparer tags = (\ tv1 tv2 ->
-  let tv1' = IMap.toAscList . fst $ tv1
-      tv2' = IMap.toAscList . fst $ tv2
-      errMsg s = error $ "Text.Regex.TDFA.Run." ++ s ++ " : " ++ unlines [show tags,show tv1,show tv2]
-      comp e1@((t1,v1):rest1) e2@((t2,v2):rest2) =
-        case compare t1 t2 of
-               LT -> case tags!t1 of
-                       Maximize -> GT
-                       Minimize -> errMsg "makeTagComparer.comp: tv1 Minimize without tv2, bestCase LT"
-                       Orbit -> errMsg "makeTagComparer.comp: tv1 Orbit without tv2, bestCase LT"
-               EQ -> case tags!t1 of
-                       Minimize -> compare v2 v1 `mappend` comp rest1 rest2
-                       Maximize -> compare v1 v2 `mappend` comp rest1 rest2
-                       Orbit | v1 /= v2 -> -- trace ("&&& : "++show (tags,(tv1,tv2),(e1,e2))) $
-                                           (compare) v1 v2
- -- always want to start earlier, but the v1/=v2 case was exposed due
- -- to some Reset as end of group/beginning of Star and this implies
- -- it should have been convered by that Maximize tag, so use compare
- -- and not (flip compare).  But I know of no cases that depend on
- -- flip yet!
-                             -- errMsg "makeTagComparer.comp: non-identical orbit pos"
-                             -- "aaaaaa" =~ "(a*)+"
-                             | otherwise -> compareOrbits (IMap.lookup t1 (snd tv1)) (IMap.lookup t2 (snd tv2))
-                                            `mappend` comp rest1 rest2
-               GT -> case tags!t2 of 
-                       Maximize -> LT
-                       Minimize -> errMsg "makeTagComparer.comp: tv2 Minimize without tv1, bestCase GT"
-                       Orbit -> errMsg "makeTagComparer.comp: tv2 Orbit without tv1, bestCase GT"
--- "AAAc" =~ "(A|A)((.*)*)+(A)?|."  gets ("","AAAc","",["A","AAc","",""]),("","AAAc","",["A","","",""]))
-        where                         
-          compareOrbits (Just pos1) (Just pos2) = comparePos (viewl pos1) (viewl pos2)
-            where comparePos EmptyL EmptyL = EQ
-                  comparePos EmptyL _ = GT
-                  comparePos _ EmptyL = LT
-                  comparePos (p1:<ps1) (p2:<ps2) = compare p1 p2 `mappend` comparePos (viewl ps1) (viewl ps2)
-          compareOrbits _ _ = errMsg ("makeTagComparer.compareOrbits: Nothing found in Scratch"++show (e1,e2))
-      comp ((t1,_):_) [] = case tags!t1 of
-                              Maximize -> GT
-                              Minimize -> errMsg "makeTagComparer.comp: tv1 Minimize longer, bestCase LT"
-                              Orbit -> errMsg "makeTagComparer.comp: tv1 Orbit longer, bestCase LT"
-      comp [] ((t2,_):_) = case tags!t2 of
-                              Maximize -> LT
-                              Minimize -> errMsg "makeTagComparer.comp: tv2 Minimize longer, bestCase GT"
-                              Orbit -> errMsg "makeTagComparer.comp: tv2 Orbit longer, bestCase GT"
-      comp [] [] = EQ
-        
-  in comp tv1' tv2'
- )
--}
 {-# INLINE look #-}
 look :: Int -> IntMap a -> a
 look key imap = IMap.findWithDefault (error ("key "++show key++" not found in Text.Regex.TDFA.Run.look")) key imap
@@ -145,7 +89,7 @@ tagsToGroups aGroups (tags,orbits) | False && not (IMap.null orbits) = -- XXX di
           where startPos = fst $ look 0 tags
                 stopPos = fst $ look 1 tags
         checkAll (this_index,these_groups) = (this_index,if null good then (-1,0) else head good)
-          where good = do (GroupInfo _ parent start stop _) <- these_groups -- Monad []
+          where good = do (GroupInfo _ parent start stop) <- these_groups -- Monad []
                           (startPos,_) <- IMap.lookup start tags
                           (stopPos,validStop) <- IMap.lookup stop tags
                           guard validStop

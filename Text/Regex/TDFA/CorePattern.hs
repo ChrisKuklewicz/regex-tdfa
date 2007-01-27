@@ -1,20 +1,44 @@
-module Text.Regex.TDFA.CorePattern(Q(..),P(..),WhichTest(..),Wanted(..),TestInfo,OP(..),SetTestInfo(..),NullView
+-- | The CorePattern module deconstructs the Pattern tree created by
+-- ReadRegex.parseRegex and returns a simpler Q/P tree with
+-- annotations at each Q node.  This will be converted by the TNFA
+-- module into a QNFA finite automata.
+--
+-- Of particular note, this Pattern to Q/P conversion creates and
+-- assigns all the internal Tags that will be used during the matching
+-- process, and associates the captures groups with the tags that
+-- represent their starting and ending locations and with their
+-- immediate parent group.
+--
+-- Each Maximize and Minimize tag is held as either a preTag or a
+-- postTag by one and only one location in the Q/P tree.  The Orbit
+-- tags are each held by one and only one Star node.  Tags that stop a
+-- Group are also held in perhaps numerous preReset lists.
+--
+-- The additional nullQ::nullView field of Q records the potentially
+-- complex information about what tests and tags must be used if the
+-- pattern unQ::P matches 0 zero characters.  There can be redundancy
+-- in nullView, which is eliminated by cleanNullView.
+--
+-- Uses recursive do notation.
+module Text.Regex.TDFA.CorePattern(Q(..),P(..),WhichTest(..),Wanted(..)
+                                  ,TestInfo,OP(..),SetTestInfo(..),NullView
                                   ,patternToQ,cleanNullView,cannotAccept) where
 
-import Control.Monad(when)
-import Control.Monad.Fix()
-import Control.Monad.RWS
-import Data.Array.IArray
-import Data.Maybe
-import Data.List
-import Data.Set(Set)
-import qualified Data.Set as Set
+import Control.Monad.RWS {- all -}
+import Data.Array.IArray(Array,(!),accumArray,listArray)
+import Data.List(sort)
 import Data.Map(Map)
-import qualified Data.Map as Map
-import Text.Regex.TDFA.Common -- (Tag,GroupInfo(..),GroupIndex,Position,WinTags,DoPa,CompOption(..),mapSnd)
+import qualified Data.Map as Map(singleton,null,assocs,keysSet)
+import Data.Maybe(isNothing)
+import Data.Set(Set)
+import qualified Data.Set as Set(singleton,toList,isSubsetOf)
+import Text.Regex.TDFA.Common {- all -}
 import Text.Regex.TDFA.Pattern(Pattern(..),starTrans)
 -- import Debug.Trace
 
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
+
+err :: String -> a
 err = common_error "Text.Regex.TDFA.CorePattern"
 
 debug :: (Show a) => a -> b -> b
@@ -30,7 +54,6 @@ data P = Empty
               , unStar :: Q}
        | Test TestInfo                 -- Require the test to be true
        | OneChar Pattern               -- Bring the Pattern element that accepts a character
-       | NonCapture Q                  -- Semantic command: no group capture in Q
        | NonEmpty Q                    -- Don't let the Q pattern match nothing
          deriving (Show,Eq)
 
@@ -39,8 +62,8 @@ data Q = Q {nullQ :: NullView         -- Ordered list of nullable views
            ,takes :: (Position,Maybe Position)  -- Range of number of accepted characters
            ,preReset :: [Tag]         -- Tags to "reset" (XXX only used by Star and PStar/PGroup)
            ,preTag,postTag :: Maybe Tag -- Tags assigned around this pattern
-           ,tagged :: Bool            -- Whether this node should be tagged (XXX only used in patternToQ/PStar)
-           ,childGroups :: Bool       -- Whether unQ has any PGroups (XXX only used in patternToQ/POr)
+           ,tagged :: Bool            -- Whether this node should be tagged -- patternToQ use only
+           ,childGroups :: Bool       -- Whether unQ has any PGroups -- patternToQ use only
            ,wants :: Wanted           -- What kind of continuation is used by this pattern
            ,unQ :: P} deriving (Eq)
 
@@ -175,7 +198,7 @@ getChildTags :: Q -> [Tag]
 getChildTags q = maybe id (:) (preTag q) $ maybe (childTags q) (:childTags q) (postTag q)
 -}
 
-type PM = RWS GroupIndex [Either Tag GroupInfo] ([OP]->[OP],Tag) 
+type PM = RWS (Maybe GroupIndex) [Either Tag GroupInfo] ([OP]->[OP],Tag) 
 type HHQ = HandleTag  -- m1 : info about left or pre-tag, currently NoTag or Advice and never Apply
         -> HandleTag  -- m2 : info about right or post-tag, currently NoTag or Apply, and top-level Advice
         -> PM Q
@@ -189,18 +212,14 @@ fromRight [] = []
 fromRight ((Right x):xs) = x:fromRight xs
 fromRight ((Left _):xs) = fromRight xs
 
-partEither :: [Either Tag GroupInfo] -> ([Tag],[GroupInfo])
-partEither = helper id id where
+partitionEither :: [Either Tag GroupInfo] -> ([Tag],[GroupInfo])
+partitionEither = helper id id where
   helper :: ([Tag]->[Tag]) -> ([GroupInfo]->[GroupInfo]) -> [Either Tag GroupInfo] -> ([Tag],[GroupInfo])
   helper ls rs [] = (ls [],rs [])
   helper ls rs ((Right x):xs) = helper  ls      (rs.(x:)) xs
   helper ls rs ((Left  x):xs) = helper (ls.(x:)) rs       xs
 
----
-
----
-
-patternToQ :: CompOption -> (Pattern,(GroupIndex,Int)) -> (Q,Array Tag OP,Array GroupIndex [GroupInfo])
+patternToQ :: CompOption -> (Pattern,(GroupIndex,DoPa)) -> (Q,Array Tag OP,Array GroupIndex [GroupInfo])
 patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
   (tnfa,(tag_dlist,nextTag),groups) = runRWS monad startReader startState
   aTags = listArray (0,pred nextTag) (tag_dlist [])
@@ -208,37 +227,49 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
 
   -- implicitly inside a PGroup 0 converted into a GroupInfo 0 undefined 0 1
   monad = go (starTrans pOrig) (Advice 0) (Advice 1)
-  startReader :: GroupIndex
-  startReader = 0             -- start inside group 0
+  startReader :: Maybe GroupIndex
+  startReader = Just 0                           -- start inside group 0, capturing enabled
   startState :: ([OP]->[OP],Tag)
   startState = ( (Minimize:) . (Maximize:) , 2)  -- Tag 0 is Minimized and Tag 1 is maximized.
 
-  -- Give the monad operations more meaningful names
+  -- Specialize the monad operations and give more meaningful names
+  makeOrbit :: PM (Maybe Tag)
+  makeOrbit = do Apply x <- uniq Orbit
+                 tell [Left x]
+                 return (Just x)
+
+  withOrbit :: PM a -> PM (a,[Tag])
+  withOrbit = listens childStars
+    where childStars x = let (ts,_) = partitionEither x in ts
+
+  getParentIndex :: PM (Maybe GroupIndex)
   getParentIndex = ask
 
   makeGroup :: GroupInfo -> PM ()
   makeGroup = tell . (:[]) . Right
 
-  makeOrbit = do Apply x <- uniq Orbit
-                 tell [Left x]
-                 return (Just x)
+  nonCapture :: PM  a -> PM a
+  nonCapture = local (const Nothing)
 
-  withParent :: GroupIndex -> PM a -> PM (a,([GroupIndex],[Tag]))
-  withParent this = local (const this) . listens childGroups
-    where childGroups x = let (_,gs) = partEither x
-                              children :: [GroupIndex]
-                              children = norep . sort . map thisIndex . filter ((this==).parentIndex) $ gs
-                          in (children, concatMap (map stopTag . (aGroups!)) (this:children))
+  withParent :: GroupIndex -> PM a -> PM (a,[Tag])
+  withParent this = local (const (Just this)) . listens childGroupInfo
+    where childGroupInfo x =
+            let (_,gs) = partitionEither x
+                children :: [GroupIndex]
+                children = norep . sort . map thisIndex
+                           -- filter to get only immediate children (efficiency)
+                           . filter ((this==).parentIndex) $ gs
+            in concatMap (map stopTag . (aGroups!)) (this:children)
 
-  withOrbit = listens childStars
-    where childStars x = let (ts,_) = partEither x in ts
-
+  uniq :: OP -> PM HandleTag
   uniq newOp = do (op,s) <- get                -- generate the next tag with bias newOp
                   let op' = op . (newOp:)
                       s' = succ s
                   put $! debug ("\n"++show (s,newOp)++"\n") (op',s')
                   return (Apply s) -- someone will need to apply it
 
+  -- Must not pass in an empty list
+  combineConcat :: [Pattern] -> HHQ
   combineConcat | rightAssoc compOpt = (\ps -> foldr combineSeq (go (last ps)) (map go $ init ps))
                 | otherwise          = (\ps -> foldl combineSeq (go (head ps)) (map go $ tail ps)) -- libtre default
     where combineSeq :: HHQ -> HHQ -> HHQ
@@ -264,37 +295,25 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
     let die = error $ "patternToQ cannot handle "++show pIn -- assume (starTrans) has been run already
         nil = return $ Q {nullQ=emptyNull (apply m1 `winTags` apply m2) -- No tests, just empty
                          ,takes=(0,Just 0)
-                         ,preReset=[]
-                         ,preTag=apply m1
-                         ,postTag=apply m2
-                         ,tagged=False
-                         ,childGroups=False
-                         ,wants=WantsEither
+                         ,preReset=[],preTag=apply m1,postTag=apply m2
+                         ,tagged=False,childGroups=False,wants=WantsEither
                          ,unQ=Empty}
-        one = return $ Q {nullQ=notNull              -- one character accepted (just store P type)
+        one = return $ Q {nullQ=notNull
                          ,takes=(1,Just 1)
-                         ,preReset=[]
-                         ,preTag=apply m1
-                         ,postTag=apply m2
-                         ,tagged=False
-                         ,childGroups=False
-                         ,wants=WantsQNFA
+                         ,preReset=[],preTag=apply m1,postTag=apply m2
+                         ,tagged=False,childGroups=False,wants=WantsQNFA
                          ,unQ = OneChar pIn}
-        test myTest = return $ Q {nullQ=testNull myTest (apply m1 `winTags` apply m2) -- anchor of some sort
+        test myTest = return $ Q {nullQ=testNull myTest (apply m1 `winTags` apply m2)
                                  ,takes=(0,Just 0)
-                                 ,preTag=apply m1
-                                 ,preReset=[]
-                                 ,postTag=apply m2
-                                 ,tagged=False
-                                 ,childGroups=False
-                                 ,wants=WantsQT
+                                 ,preReset=[],preTag=apply m1,postTag=apply m2
+                                 ,tagged=False,childGroups=False,wants=WantsQT
                                  ,unQ=Test myTest }
     in case pIn of
          PEmpty -> nil
          POr [] -> nil
          POr [p] -> go p m1 m2
          POr ps -> mdo
-           let canVary = varies ans || childGroups ans -- how to detect "abc|a(b)c" ? need childGroups
+           let canVary = varies ans || childGroups ans -- childGroups detects that "abc|a(b)c" needs tags
            a <- if noTag m1 && canVary then uniq Minimize else return m1
            b <- if noTag m2 && canVary then uniq Maximize else return m2
            let aAdvice = toAdvice a
@@ -344,68 +363,33 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
          -- a PGroup can share a preTag (with Advice) with other branches but must have a postTag of Apply
          PGroup Nothing p -> go p m1 m2
          PGroup (Just this) p -> do
-           a <- if noTag m1 then uniq Minimize else return m1
-           b <- if isNothing (apply m2) then uniq Maximize else return m2
-           parent <- getParentIndex
-           (q,(children,resetTags)) <- withParent this $ go p a b
-           makeGroup (GroupInfo this parent (fromHandleTag a) (fromHandleTag b) children)
-           return $ q { tagged = True
-                      , childGroups = True
-                      , preReset = resetTags ++ (preReset q) }
+           mParent <- getParentIndex
+           case mParent of
+             Nothing -> go p m1 m2
+             Just parent -> do
+               a <- if noTag m1 then uniq Minimize else return m1
+               b <- if isNothing (apply m2) then uniq Maximize else return m2
+               (q,resetTags) <- withParent this $ go p a b
+               makeGroup (GroupInfo this parent (fromHandleTag a) (fromHandleTag b))
+               return $ q { tagged = True
+                          , childGroups = True
+                          , preReset = resetTags ++ (preReset q) }
 
---         PNonCapture p -> go q m1 m2 -- XXX need to implement
+         PNonCapture p -> nonCapture (go p m1 m2)
+
          PNonEmpty p -> mdo
            let needsTags = canAccept q
            a <- if noTag m1 && needsTags then uniq Minimize else return m1
            b <- if noTag m2 && needsTags then uniq Maximize else return m2
-           q <- go p a (toAdvice b)
+           q <- go p (toAdvice a) (toAdvice b)
            when (mustAccept q) (err $ "patternToQ : PNonEmpty provided with a *mustAccept* pattern: "++show (p,pOrig))
            return $ Q (emptyNull (winTags (apply a) (apply b)))   -- The magic of NonEmpty
                       (0,snd (takes q))                           -- like Or
-                      [] Nothing (apply b)                        -- own the closing tag so it will not end a PGroup
-                      needsTags (childGroups q) (wants q)         -- pulled up from q
+                      [] (apply a) (apply b)                      -- own the closing tag so it will not end a PGroup
+                      needsTags (childGroups q) (wants q)         -- the test case is "x" =~ "(.|$){1,3}"
                       (NonEmpty q)
 
          -- these are here for completeness of the case branches, currently starTrans replaces them all
          PPlus {} -> die
          PQuest {} -> die
          PBound {} -> die
-
-
-{-
-      combineRight :: Pattern -> HHQ -> HHQ
-      combineRight cFront pEnd m1 m2 = mdo
-        let bothVary = varies qFront && varies qEnd
-        a <- if noTag m1 && bothVary then uniq Minimize else return m1 -- Why was this Maximize?
-        b <- if noTag m2 && bothVary then uniq Maximize else return m2
-        mid <- case (noTag a,canAccept qFront,noTag b,canAccept qEnd) of
-                 (False,False,_,_) -> return (toAdvice a)
-                 (_,_,False,False) -> return (toAdvice b)
-                 _ -> if tagged qFront || tagged qEnd then uniq Maximize else return NoTag
-        qFront <- go cFront a mid
-        qEnd <- pEnd (toAdvice mid) b
-        let wanted = if WantsEither == wants qEnd then wants qFront else wants qEnd
-        return $ Q (mergeNullViews (nullQ qFront) (nullQ qEnd))
-                   (seqTake (takes qFront) (takes qEnd))
-                   Nothing Nothing []
-                   bothVary (childGroups qFront || childGroups qEnd) wanted
-                   (Seq qFront qEnd)
-
-      combineLeft :: HHQ -> Pattern -> HHQ
-      combineLeft cFront pEnd m1 m2 = mdo
-        let bothVary = varies qFront && varies qEnd
-        a <- if noTag m1 && bothVary then uniq Minimize else return m1 -- Why was this Maximize?
-        b <- if noTag m2 && bothVary then uniq Maximize else return m2
-        mid <- case (noTag a, canAccept qFront, noTag b, canAccept qEnd) of
-                 (False,False,_    ,_    ) -> return (toAdvice a)
-                 (_    ,_    ,False,False) -> return (toAdvice b)
-                 _ -> if tagged qFront || tagged qEnd then uniq Maximize else return NoTag
-        qFront <- cFront a mid
-        qEnd <- go pEnd (toAdvice mid) b
-        let wanted = if WantsEither == wants qEnd then wants qFront else wants qEnd
-        return $ Q (mergeNullViews (nullQ qFront) (nullQ qEnd))
-                   (seqTake (takes qFront) (takes qEnd))
-                   Nothing Nothing []
-                   bothVary (childGroups qFront || childGroups qEnd) wanted
-                   (Seq qFront qEnd)
--}

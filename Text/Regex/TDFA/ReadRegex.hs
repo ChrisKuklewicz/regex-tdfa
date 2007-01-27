@@ -1,29 +1,35 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
--- | This is a version of ReadRegex that allows NUL characters.
+-- | This is a POSIX version of parseRegex that allows NUL characters.
 -- Lazy/Possessive/Backrefs are not recognized.  Anchors ^ and $ are
--- now recognized (they used to be errors).
-module Text.Regex.TDFA.ReadRegex (GroupIndex,parseRegex,decodePatternSet,legalCharacterClasses) where
+-- not recognized.
+module Text.Regex.TDFA.ReadRegex (parseRegex
+                                 ,decodePatternSet
+                                 ,legalCharacterClasses) where
 
-{- By Chris Kuklewicz, 2006. BSD License, see the LICENSE file. -}
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
-import Text.Regex.TDFA.Pattern
+import Text.Regex.TDFA.Pattern {- all -}
 import Text.ParserCombinators.Parsec((<|>), (<?>),
-  unexpected, try, runParser, many, getState, setState, GenParser, ParseError,
+  unexpected, try, runParser, many, getState, setState, CharParser, ParseError,
   sepBy1, option, notFollowedBy, many1, lookAhead, eof, between,
   string, noneOf, digit, char, anyChar)
 import Control.Monad(liftM, when, guard)
-import qualified Data.Set as Set(fromList, toList, insert,empty)
+import qualified Data.Set as Set(Set,fromList, toList, insert,empty)
 
--- | BracketElement is internal only
+-- | BracketElement is internal to this module
 data BracketElement = BEChar Char | BEChars String | BEColl String | BEEquiv String | BEClass String
 
-parseRegex :: String -> Either ParseError (Pattern,(GroupIndex,Int))
+-- | Return either an error message or a tuple of the Pattern and the
+-- largest group index and the largest DoPa index (both have smallest
+-- index of 1).  Since the regular expression is supplied as [Char] it
+-- automatically supports unicode and '\NUL' characters.
+parseRegex :: String -> Either ParseError (Pattern,(GroupIndex,DoPa))
 parseRegex x = runParser (do pat <- p_regex
                              eof
-                             subs <- getState
-                             return (pat,subs)) (0,0) x x
+                             (lastGroupIndex,lastDopa) <- getState
+                             return (pat,(lastGroupIndex,DoPa lastDopa))) (0,0) x x
 
-p_regex :: GenParser Char (GroupIndex,Int) Pattern
+p_regex :: CharParser (GroupIndex,Int) Pattern
 p_regex = liftM POr $ sepBy1 p_branch (char '|')
 
 -- man re_format helps alot, it says one-or-more pieces so this is
@@ -132,15 +138,23 @@ p_set_elem_char = do
 
 -- | decodePatternSet cannot handle collating element and treats
 -- equivalence classes as just their definition and nothing more.
+decodePatternSet :: PatternSet -> Set.Set Char
 decodePatternSet (PatternSet msc mscc _ msec) =
   let baseMSC = maybe Set.empty id msc
       withMSCC = foldl (flip Set.insert) baseMSC  (maybe [] (concatMap decodeCharacterClass . Set.toList) mscc)
       withMSEC = foldl (flip Set.insert) withMSCC (maybe [] (concatMap unSEC . Set.toList) msec)
   in withMSEC
 
+-- | This is the list of recognized [: :] character classes, others
+-- are decoded as empty.
+legalCharacterClasses :: [String]
 legalCharacterClasses = ["alnum","digit","punct","alpha","graph"
   ,"space","blank","lower","upper","cntrl","print","xdigit","word"]
 
+-- | This returns the disctince ascending list of characters
+-- represented by [: :] values in legalCharacterClasses; unrecognized
+-- class names return an empty string
+decodeCharacterClass :: PatternSetCharacterClass -> String
 decodeCharacterClass (PatternSetCharacterClass s) =
   case s of
     "alnum" -> ['0'..'9']++['a'..'z']++['A'..'Z']

@@ -1,13 +1,11 @@
-{-# OPTIONS_GHC -fglasgow-exts  -fno-warn-orphans #-}
-{-|
-The "Text.Regex.Lib.WrapDFAEngine" provides the backend for
-"Text.Regex.DFA".  This provides the 'Regex' type and 'RegexOptions'
-instance for them, and 'RegexMaker' instances for 'String' and 'ByteString'.
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+-- | "Text.Regex.TDFA.Wrap" provides the instance of RegexOptions and
+-- the definition of (=~) and (=~~).  This is all re-exported by
+-- "Text.Regex.TDFA".
 
-Details on the DFA engine can be found in "Text.Regex.DFA" and license
-information in "Text.Regex.Lazy.DFAEngine".
--}
 module Text.Regex.TDFA.Wrap(Regex(..),CompOption(..),ExecOption(..),(=~),(=~~)) where
+
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
 import Text.Regex.Base.RegexLike(RegexMaker(..),RegexOptions(..),RegexContext(..))
 import Text.Regex.TDFA.Common(CompOption(..),ExecOption(..),Regex(..))

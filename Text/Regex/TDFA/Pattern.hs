@@ -1,11 +1,6 @@
 -- | This "Text.Regex.TDFA.Pattern" module provides the 'Pattern' data
 -- type and its subtypes.  This 'Pattern' type is used to represent
--- the parsed form of a Regular Expression and is syntax independent.
---
--- It is possible to construct values of 'Pattern' that are invalid
--- regular expressions.
---
--- There are also several 
+-- the parsed form of a Regular Expression.  
 module Text.Regex.TDFA.Pattern
     (Pattern(..)
     ,PatternSet(..)
@@ -15,29 +10,32 @@ module Text.Regex.TDFA.Pattern
     ,GroupIndex
     ,DoPa(..)
     ,showPattern
+-- ** Internal use
     ,starTrans
-    ,simplify'
-    ,dfsPattern
-    ,starTrans'
+-- ** Internal use, Operations to support debugging under ghci
+    ,starTrans',simplify',dfsPattern
     ) where
 
-{- By Chris Kuklewicz, 2006. BSD License, see the LICENSE file. -}
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
 import Data.List(intersperse,partition)
 import qualified Data.Set as Set(toAscList,toList)
 import Data.Set(Set)
-import Text.Regex.TDFA.Common(DoPa(..),GroupIndex)
+import Text.Regex.TDFA.Common(DoPa(..),GroupIndex,common_error)
 
--- | GroupIndex is for indexing submatches from  parenthesized groups (PGroup)
--- type GroupIndex = Int
+err :: String -> a
+err = common_error "Text.Regex.TDFA.Pattern"
 
+-- | Pattern is the type returned by the regular expression parser.
+-- This is consumed by the CorePattern module and the tender leaves
+-- are nibbled by the TNFA module.
 data Pattern = PEmpty
-             | PGroup  (Maybe GroupIndex) Pattern -- Nothing to indicate non matching
+             | PGroup  (Maybe GroupIndex) Pattern -- Nothing to indicate non-matching PGroup
              | POr     [Pattern]
              | PConcat [Pattern]
              | PQuest  Pattern
              | PPlus   Pattern
-             | PStar   Bool Pattern
+             | PStar   Bool Pattern               -- True means mayFirstBeNull is True
              | PBound  Int (Maybe Int) Pattern
              -- The rest of these need an index of where in the regex string it is from
              | PCarat  {getDoPa::DoPa}
@@ -48,11 +46,16 @@ data Pattern = PEmpty
              | PAnyNot {getDoPa::DoPa,getPatternSet::PatternSet} -- Inverted square bracketed things
              | PEscape {getDoPa::DoPa,getPatternChar::Char}       -- Backslashed Character
              | PChar   {getDoPa::DoPa,getPatternChar::Char}       -- Specific Character
-             -- The following are semantic tags created in starTrans
+             -- The following are semantic tags created in starTrans, not the parser
              | PNonCapture Pattern
              | PNonEmpty Pattern
                deriving (Eq,Show)
 
+-- | I have not been checking, but this should have the property that
+-- parsing the resulting string should result in an identical Pattern.
+-- This is not true if starTrans has created PNonCapture and PNonEmpty
+-- values or a (PStar False).  The contents of a "[ ]" grouping are
+-- always shown in a sorted canonical order.
 showPattern :: Pattern -> String
 showPattern pIn =
   case pIn of
@@ -62,6 +65,7 @@ showPattern pIn =
     PConcat ps -> concatMap showPattern ps
     PQuest p -> (showPattern p)++"?"
     PPlus p -> (showPattern p)++"+"
+    -- If PStar has mayFirstBeNull False then reparsing will forget this flag
     PStar _ p -> (showPattern p)++"*"
     PBound i (Just j) p | i==j -> showPattern p ++ ('{':show i)++"}"
     PBound i mj p -> showPattern p ++ ('{':show i) ++ maybe ",}" (\j -> ',':show j++"}") mj
@@ -73,6 +77,9 @@ showPattern pIn =
     PAnyNot _ ps ->  ('[':'^':show ps)++"]"
     PEscape _ c -> '\\':c:[]
     PChar _ c -> [c]
+    -- The following were not directly from the parser, and will not be parsed in properly
+    PNonCapture p -> showPattern p
+    PNonEmpty p -> showPattern p
   where groupRange x n (y:ys) = if (fromEnum y)-(fromEnum x) == n then groupRange x (succ n) ys
                                 else (if n <=3 then take n [x..]
                                       else x:'-':(toEnum (pred n+fromEnum x)):[]) ++ groupRange y 1 ys
@@ -119,12 +126,13 @@ instance Show PatternSetCollatingElement where
 instance Show PatternSetEquivalenceClass where
   showsPrec _ p = showChar '[' . showChar '=' . shows (unSEC p) . showChar '=' . showChar ']'
 
-
 -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
 
--- We don't need Transitions.hs since I copied the modified starTrans code here
-
--- Do the transformation and simplification in a single traversal
+-- | Do the transformation and simplification in a single traversal.
+-- This removes the PPlus PQuest and PBound values for POr and PEmpty
+-- and PStar True/False.  For some PBound values it creates PNonEmpty
+-- and PNonCapture.  It also simplifies to flatten out nested POr and
+-- PConcat instances and elimiate some uneeded PEmpty values.
 starTrans :: Pattern -> Pattern
 starTrans = dfsPattern (simplify' . starTrans')
 
@@ -144,9 +152,11 @@ dfsPattern f = dfs
                        PBound i mi p -> unary (PBound i mi) p
                        _ -> f pattern
 
+{- Replace by PNonCapture
 unCapture = dfsPattern unCapture' where
   unCapture' (PGroup (Just _) p) = PGroup Nothing p
   unCapture' x = x
+-}
 
 starTrans' :: Pattern -> Pattern
 starTrans' pIn =
@@ -154,7 +164,7 @@ starTrans' pIn =
     PQuest p -> POr [p,PEmpty]
 
 {- The PStar should not capture 0 characters on its first iteration,
-   so set its flag to False
+   so set its mayFirstBeNull flag to False
  -}
     PPlus  p -> PConcat [p,simplify' $ PStar False p]
 
@@ -175,7 +185,7 @@ starTrans' pIn =
    group capture so change the PGroups to False or wrap in PNonCapture.
 -}
     PBound i Nothing  p -> PConcat $ apply (p':) (pred i) [p,simplify' $ PStar False p]
-      where p' = unCapture p -- XXX cleanup
+      where p' = nonCapture' p -- XXX cleanup
 
 {- p{0,2} is (pp?)? is p?p? and p{0,3} is (p(pp?)?)? is p?p?p?
    p{1,2} is pp{0,1} is pp?
@@ -209,16 +219,13 @@ starTrans' pIn =
     PBound 0 (Just j) p | cannotMatchNull p -> apply (quest' . (concat' p)) (pred j) (quest' p)
                         | canOnlyMatchNull p -> quest' p
                         | otherwise -> POr [ simplify' (PConcat (p : replicate (pred j) (nonEmpty' p))) , PEmpty ]
---                        | otherwise -> quest' . concat' p $ apply (nonEmpty' . (concat' p)) (j-2) (nonEmpty' p)
 --
     PBound i (Just j) p | i == j    -> PConcat $ apply (p':) (pred i) [p]
                         | cannotMatchNull p -> PConcat $ apply (p':) (pred i) $ (p:) $ 
                                                  [apply (quest' . (concat' p)) (pred (j-i)) (quest' p)]
                         | canOnlyMatchNull p -> p
                         | otherwise -> PConcat $ (replicate (pred i) p') ++ p : (replicate (j-i) (nonEmpty' p))
---                        | otherwise -> PConcat $ apply (p':) (pred i) $ (p:) $
---                                         [apply (nonEmpty' . (concat' p)) (pred (j-i)) (nonEmpty' p)]
-      where p' = unCapture p -- XXX cleanup
+      where p' = nonCapture' p -- XXX cleanup
     -- Left intact
     PEmpty -> pass
     PGroup {} -> pass
@@ -232,10 +239,13 @@ starTrans' pIn =
     PAnyNot {} -> pass
     PEscape {} -> pass
     PChar {} -> pass
+    PNonCapture {} -> pass
+    PNonEmpty {} -> pass
   where
     quest' = (\p -> simplify' $ POr [p,PEmpty])  -- require p to have been simplified
     concat' a b = simplify' $ PConcat [a,b]      -- require a and b to have been simplified
     nonEmpty' = PNonEmpty
+    nonCapture' = PNonCapture
     apply f n x = foldr ($) x (replicate n f)
     pass = pIn
 
@@ -267,17 +277,17 @@ flatten (POr ps) = (concatMap (\x -> case x of
 flatten (PConcat ps) = (concatMap (\x -> case x of
                                            PConcat ps' -> ps'
                                            p -> [p]) ps)
-flatten _ = error "flatten can only be applied to POr or PConcat"
+flatten _ = err "flatten can only be applied to POr or PConcat"
 
 notPEmpty :: Pattern -> Bool
 notPEmpty PEmpty = False
 notPEmpty _      = True
 
-
 -- | If 'cannotMatchNull' returns 'True' then it is known that the
 -- 'Pattern' will never accept an empty string.  If 'cannotMatchNull'
 -- returns 'False' then it is possible but not definite that the
 -- 'Pattern' could accept an empty string.
+cannotMatchNull :: Pattern -> Bool
 cannotMatchNull pIn =
   case pIn of
     PEmpty -> False
@@ -315,4 +325,6 @@ canOnlyMatchNull pIn =
     PBound _ _ p -> canOnlyMatchNull p
     PCarat _ -> True
     PDollar _ -> True
+    PNonCapture p -> canOnlyMatchNull p
+    PNonEmpty p -> canOnlyMatchNull p -- like PQuest
     _ ->False
