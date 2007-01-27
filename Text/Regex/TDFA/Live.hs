@@ -1,3 +1,4 @@
+-- | This is loaded in to ghci to test TDFA live
 module Text.Regex.TDFA.Live where
 
 import Data.Array
@@ -14,7 +15,9 @@ import Text.Regex.TDFA.TDFA
 import Text.Regex.TDFA.Wrap
 import Text.Regex.TDFA.Run
 
-import qualified Text.Regex.TRE as TRE
+-- import qualified Text.Regex.TRE as TRE
+
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
 toP = either (error.show) id . parseRegex 
 toQ = patternToQ defaultCompOpt . toP
@@ -77,7 +80,7 @@ regressOP op =
 
 regress = regressOP (tdfa)
 
-regressTRE = regressOP (TRE.=~)
+-- regressTRE = regressOP (TRE.=~)
 
 full = putStr . unlines . fullspec
 

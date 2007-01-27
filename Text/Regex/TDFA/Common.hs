@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fglasgow-exts #-}
 -- | Common provides simple functions to the backend.  It defines most
 -- of the data types.  All modules should call error via the
 -- common_error function below.

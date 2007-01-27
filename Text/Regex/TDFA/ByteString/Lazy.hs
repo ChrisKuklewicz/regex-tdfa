@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fglasgow-exts -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-| 
 This modules provides 'RegexMaker' and 'RegexLike' instances for using
 'ByteString' with the DFA backend ("Text.Regex.Lib.WrapDFAEngine" and
@@ -17,18 +17,18 @@ module Text.Regex.TDFA.ByteString.Lazy(
  ,regexec
  ) where
 
-import Data.Maybe
-import Data.Array
-import Text.Regex.TDFA.ReadRegex(parseRegex)
+import Data.Array((!),elems)
 import qualified Data.ByteString.Lazy.Char8 as L
-import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
--- import Text.Regex.TDFA.CorePattern
--- import Text.Regex.TDFA.TNFA
-import Text.Regex.TDFA.TDFA
-import Text.Regex.TDFA.RunLBS
-import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
+
+import Text.Regex.Base(MatchArray,RegexContext(..),RegexMaker(..),RegexLike(..))
 import Text.Regex.Base.Impl(polymatch,polymatchM)
-import Text.Regex.Base
+import Text.Regex.TDFA.ReadRegex(parseRegex)
+import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
+import Text.Regex.TDFA.TDFA(patternToDFA)
+import Text.Regex.TDFA.RunLBS(findMatch,findMatchAll,countMatchAll)
+import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
+
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
 instance RegexContext Regex L.ByteString L.ByteString where
   match = polymatch
@@ -58,7 +58,7 @@ compile compOpt execOpt bs =
 
 execute :: Regex      -- ^ Compiled regular expression
         -> L.ByteString -- ^ ByteString to match against
-        -> Either String (Maybe (Array Int (Int,Int)))
+        -> Either String (Maybe MatchArray)
 execute r bs = Right (matchOnce r bs)
 
 regexec :: Regex      -- ^ Compiled regular expression

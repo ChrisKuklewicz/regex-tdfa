@@ -17,18 +17,18 @@ module Text.Regex.TDFA.ByteString(
  ,regexec
  ) where
 
-import Data.Maybe
-import Data.Array
-import Text.Regex.TDFA.ReadRegex(parseRegex)
+import Data.Array((!),elems)
 import qualified Data.ByteString.Char8 as B
-import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
--- import Text.Regex.TDFA.CorePattern
--- import Text.Regex.TDFA.TNFA
-import Text.Regex.TDFA.TDFA
-import Text.Regex.TDFA.RunBS
-import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
+
+import Text.Regex.Base(MatchArray,RegexContext(..),RegexMaker(..),RegexLike(..))
 import Text.Regex.Base.Impl(polymatch,polymatchM)
-import Text.Regex.Base
+import Text.Regex.TDFA.ReadRegex(parseRegex)
+import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
+import Text.Regex.TDFA.TDFA(patternToDFA)
+import Text.Regex.TDFA.RunBS(findMatch,findMatchAll,countMatchAll)
+import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
+
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
 instance RegexContext Regex B.ByteString B.ByteString where
   match = polymatch
@@ -40,9 +40,9 @@ instance RegexMaker Regex CompOption ExecOption B.ByteString where
 instance RegexLike Regex B.ByteString where
   matchOnce = findMatch
   matchAll = findMatchAll
+  matchCount = countMatchAll
 -- matchTest
 -- matchOnceText
--- matchCount
 -- matchTextAll
 
 compile :: CompOption -- ^ Flags (summed together)
@@ -58,7 +58,7 @@ compile compOpt execOpt bs =
 
 execute :: Regex      -- ^ Compiled regular expression
         -> B.ByteString -- ^ ByteString to match against
-        -> Either String (Maybe (Array Int (Int,Int)))
+        -> Either String (Maybe MatchArray)
 execute r bs = Right (matchOnce r bs)
 
 regexec :: Regex      -- ^ Compiled regular expression

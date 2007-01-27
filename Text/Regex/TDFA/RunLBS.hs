@@ -1,28 +1,24 @@
+-- | This is an adaptation of RunBS/Run for Data.ByteString.Lazy.Char8.
+-- There is an issue that Lazy streams are indexed by Int64 instead of Int.
 module Text.Regex.TDFA.RunLBS(findMatch,findMatchAll,countMatchAll) where
 
-import Control.Monad
-import Data.Array.IArray
--- import Data.Map(Map)
-import qualified Data.Map as Map
+import Control.Monad(MonadPlus(..))
+import Data.Array.IArray((!),array)
+import qualified Data.ByteString.Lazy.Char8 as B
+import Data.Int(Int64)
 import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
-import Data.Maybe
-import Data.Monoid
-import Data.List
+import qualified Data.Map as Map
+import Data.Maybe(isJust)
+import Data.Monoid(Monoid(..))
+import Data.List(maximumBy)
 
-import qualified Data.ByteString.Lazy.Char8 as B
-
-import Text.Regex.Base
+import Text.Regex.Base(MatchArray)
 import Text.Regex.TDFA.Common
-import Text.Regex.TDFA.CorePattern
-import Text.Regex.TDFA.TDFA
-import Text.Regex.TDFA.Wrap
-
 import Text.Regex.TDFA.Run(makeTagComparer,tagsToGroups,update)
-
-import Data.Int(Int64)
-
 -- import Debug.Trace
+
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
 {-# INLINE look #-}
 look :: Int -> IntMap a -> a
@@ -78,7 +74,7 @@ matchHere regexIn offsetIn input = ans where
                     Nothing -> Nothing
                     Just offsetEnd -> Just (array (0,0) [(0,(fromEnum offsetIn,fromEnum $ offsetEnd-offsetIn))])
 
-  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 (fromEnum offsetIn),mempty)
+  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 (fromEnum offsetIn,True),mempty)
   comp = makeTagComparer (regex_tags regexIn)
 
   final :: Int64

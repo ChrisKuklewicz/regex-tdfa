@@ -29,21 +29,21 @@ Beyond posix:
 module Text.Regex.TDFA(getVersion
                       ,module Text.Regex.TDFA.Wrap
                       ,module Text.Regex.TDFA.String
---                      ,module Text.Regex.TDFA.ByteString
---                      ,module Text.Regex.TDFA.ByteString.Lazy
---                      ,module Text.Regex.TDFA.Sequence
+                      ,module Text.Regex.TDFA.ByteString
+                      ,module Text.Regex.TDFA.ByteString.Lazy
+                      ,module Text.Regex.TDFA.Sequence
                       ,module Text.Regex.Base) where
 
-import Text.Regex.TDFA.Wrap(Regex,CompOption(..),ExecOption(..),(=~),(=~~))
-import Text.Regex.TDFA.String()
---import Text.Regex.TDFA.Sequence()
---import Text.Regex.TDFA.ByteString()
---import Text.Regex.TDFA.ByteString.Lazy()
-import Text.Regex.Base
 import Data.Version(Version(..))
+import Text.Regex.Base
+import Text.Regex.TDFA.String()
+import Text.Regex.TDFA.ByteString()
+import Text.Regex.TDFA.ByteString.Lazy()
+import Text.Regex.TDFA.Sequence()
+import Text.Regex.TDFA.Wrap(Regex,CompOption(..),ExecOption(..),(=~),(=~~))
 
 getVersion :: Version
-getVersion = Version { versionBranch = [0,51]
+getVersion = Version { versionBranch = [0,55]
                      , versionTags = ["tdfa","unstable"]
                      }
 

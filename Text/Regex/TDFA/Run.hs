@@ -1,7 +1,8 @@
 -- | "Text.Regex.TDFA.Run" is the main module for matching a DFA
 -- against a String.  Many of the associated functions are exported to
 -- other modules to help match against other types.
-module Text.Regex.TDFA.Run where -- (findMatch,findMatchAll,countMatchAll) where
+module Text.Regex.TDFA.Run (findMatch,findMatchAll,countMatchAll
+                           ,makeTagComparer,tagsToGroups,update) where
 
 import Control.Monad(guard,mplus)
 import Control.Monad.RWS(execRWS)
@@ -14,7 +15,7 @@ import qualified Data.IntMap as IMap
 import Data.Maybe(isJust,isNothing)
 import Data.Sequence(viewl,ViewL(..))
 
-import Text.Regex.Base(Extract(..),MatchArray,RegexOptions(..))
+import Text.Regex.Base(MatchArray,RegexOptions(..))
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.Wrap()
 -- import Debug.Trace
@@ -24,7 +25,6 @@ import Text.Regex.TDFA.Wrap()
 err :: String -> a
 err = common_error "Text.Regex.TDFA.Run"
 
-type TagValues = IntMap {- Tag -} Position
 type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the preferred one
 
 compareWith :: (Ord x,Monoid a) => (Maybe (x,b) -> Maybe (x,c) -> a) -> [(x,b)] -> [(x,c)] -> a
@@ -101,56 +101,54 @@ tagsToGroups aGroups (tags,orbits) | False && not (IMap.null orbits) = -- XXX di
                           return (startPos,stopPos-startPos)
 
 {-# INLINE findMatch #-}
-findMatch :: (Extract a) => (a -> Bool) -> (a->(Char,a)) 
-          -> Regex -> a -> Maybe MatchArray
-findMatch isNull headTail regexIn stringIn = loop 0 '\n' stringIn where
+findMatch :: Regex -> String -> Maybe MatchArray
+findMatch regexIn stringIn = loop 0 '\n' stringIn where
   loop offset prev input =
-    let result = matchHere isNull headTail regexIn offset prev input
+    let result = matchHere regexIn offset prev input
     in if isJust result then result
-         else if isNull input then Nothing
-                else let (prev',input') = headTail input
-                         offset' = succ offset
-                     in seq offset' $
-                        loop offset' prev' input'
+         else case input of
+                [] -> Nothing
+                (prev':input') -> 
+                  let offset' = succ offset
+                  in seq offset' $
+                     loop offset' prev' input'
 
 {-# INLINE findMatchAll #-}
-findMatchAll :: (Extract a) => (a -> Bool) -> (a->(Char,a))
-             -> Regex -> a -> [MatchArray]
-findMatchAll isNull headTail regexIn stringIn = loop 0 '\n' stringIn where
+findMatchAll :: Regex -> String -> [MatchArray]
+findMatchAll regexIn stringIn = loop 0 '\n' stringIn where
   loop offset prev input =
-    case matchHere isNull headTail regexIn offset prev input of
-      Nothing -> if isNull input then []
-                   else let (prev',input') = headTail input
-                            offset' = succ offset
-                        in seq offset' $
-                           loop offset' prev' input'
+    case matchHere regexIn offset prev input of
+      Nothing -> case input of
+                   [] -> []
+                   (prev':input') ->
+                     let offset' = succ offset
+                     in seq offset' $
+                        loop offset' prev' input'
       Just ma -> ma : let (start,len) = ma!0
-                      in if isNull input || len == 0 then []
-                           else let offset' = start + len          -- start >= offset; len > 0
+                      in if null input || len == 0 then []
+                           else let offset' = start + len     -- start >= offset; len > 0
                                     skip = (offset' - offset) -- skip >= 0
-                                    post = after (pred skip) input
-                                    (prev',input') = headTail post
+                                    (prev':input') = drop (pred skip) input
                                 in seq offset' $
                                    loop offset' prev' input'
 
 {-# INLINE countMatchAll #-}
-countMatchAll :: (Extract a) => (a -> Bool) -> (a->(Char,a))
-              -> Regex -> a -> Int
-countMatchAll isNull headTail regexIn stringIn = loop 0 '\n' stringIn $! 0 where
+countMatchAll :: Regex -> String -> Int
+countMatchAll regexIn stringIn = loop 0 '\n' stringIn $! 0 where
   regex = setExecOpts (ExecOption {captureGroups = False,testMatch = False}) regexIn
   loop offset prev input count =
-    case matchHere isNull headTail regex offset prev input of
-      Nothing -> if isNull input then count
-                   else let (prev',input') = headTail input
-                            offset' = succ offset
-                        in seq offset' $ 
-                           loop offset' prev' input' $! count
+    case matchHere  regex offset prev input of
+      Nothing -> case input of
+                   [] -> count
+                   (prev':input') ->
+                     let offset' = succ offset
+                     in seq offset' $ 
+                        loop offset' prev' input' $! count
       Just ma -> let (start,len) = ma!0
-                 in if isNull input then count
+                 in if null input then count
                       else let offset' = start + len     -- start >= offset; len > 0
                                skip = (offset' - offset) -- skip >= 0
-                               post = after (pred skip) input
-                               (prev',input') = headTail post
+                               (prev':input') = drop (pred skip) input
                            in seq offset' $
                               loop offset' prev' input' $! succ count
 
@@ -159,10 +157,9 @@ update :: RunState () -> Position -> Scratch -> (Scratch,[String])
 update rs p sIn = execRWS rs (p,succ p) sIn
 
 {-# INLINE matchHere #-}
-matchHere ::  forall a. (Extract a) => (a -> Bool) -> (a->(Char,a)) 
-              -> Regex -> Position -> Char -> a
-              -> Maybe MatchArray
-matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
+matchHere :: Regex -> Position -> Char -> String
+          -> Maybe MatchArray
+matchHere regexIn offsetIn prevIn inputIn = ans where
   ans = if captureGroups (regex_execOptions regexIn)
           then fmap (tagsToGroups (regex_groups regexIn)) $
                  runHere Nothing (d_dt (regex_dfa regexIn)) initialScratchMap offsetIn prevIn inputIn
@@ -176,17 +173,17 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
 
   test_multiline wt _ prev input =
     case wt of Test_BOL -> prev == '\n'
-               Test_EOL -> if isNull input then True
-                             else let (next,_) = headTail input
-                                  in next == '\n'
+               Test_EOL -> case input of
+                             [] -> True
+                             (next:_) -> next == '\n'
 
   test_singleline wt off _ input =
     case wt of Test_BOL -> off == 0
-               Test_EOL -> isNull input
+               Test_EOL -> null input
 
   test = if multiline (regex_compOptions regexIn) then test_multiline else test_singleline
   
-  runHere :: Maybe Scratch -> DT -> IntMap Scratch -> Position -> Char -> a -> Maybe Scratch
+  runHere :: Maybe Scratch -> DT -> IntMap Scratch -> Position -> Char -> String -> Maybe Scratch
   runHere winning dt tags off prev input = 
     let best (destIndex,mSourceDelta) = (destIndex
                                         ,maximumBy comp 
@@ -209,18 +206,19 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
                                       . IMap.toList $ w
        
            in seq winning' $ -- trace ("\n@@@ " ++ show (off,tags,winning')) $
-              if isNull input then winning' else
-                let (c,input') = headTail input
-                in case Map.lookup c t `mplus` o of
-                     Nothing -> winning'
-                     Just (dfa,trans) -> let dt' = d_dt dfa
-                                             tags' = IMap.fromAscList
-                                                     . map best
-                                                     . IMap.toAscList $ trans
-                                             off' = succ off
-                                             prev' = c
-                                         in seq off' $
-                                            runHere winning' dt' tags' off' prev' input'
+              case input of
+                [] -> winning'
+                (c:input') ->
+                  case Map.lookup c t `mplus` o of
+                    Nothing -> winning'
+                    Just (dfa,trans) -> let dt' = d_dt dfa
+                                            tags' = IMap.fromAscList
+                                                    . map best
+                                                    . IMap.toAscList $ trans
+                                            off' = succ off
+                                            prev' = c
+                                        in seq off' $
+                                           runHere winning' dt' tags' off' prev' input'
          Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
            if test wt off prev input
              then runHere winning a tags off prev input
@@ -231,15 +229,17 @@ matchHere isNull headTail regexIn offsetIn prevIn inputIn = ans where
       Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
         let winning' = if IMap.null w then winning else Just off
         in seq winning' $
-           if Map.null t && isNothing o || isNull input then winning' else
-             let (c,input') = headTail input
-             in case Map.lookup c t `mplus` o of
-                  Nothing -> winning'
-                  Just (dfa,_) -> let dt' = d_dt dfa
-                                      off' = succ off
-                                      prev' = c
-                                  in seq off' $
-                                     runHereNoCap winning' dt' off' prev' input'
+           if Map.null t && isNothing o then winning' else
+             case input of
+               [] -> winning'
+               (c:input') ->
+                 case Map.lookup c t `mplus` o of
+                   Nothing -> winning'
+                   Just (dfa,_) -> let dt' = d_dt dfa
+                                       off' = succ off
+                                       prev' = c
+                                   in seq off' $
+                                      runHereNoCap winning' dt' off' prev' input'
       Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
         if test wt off prev input
           then runHereNoCap winning a off prev input

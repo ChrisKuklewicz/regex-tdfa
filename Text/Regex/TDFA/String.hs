@@ -1,9 +1,7 @@
-{-# OPTIONS_GHC -fglasgow-exts -fno-warn-orphans #-}
-{-| 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+{- | 
 This modules provides 'RegexMaker' and 'RegexLike' instances for using
-'String' with the TDFA backend ("Text.Regex.Lib.WrapTDFAEngine" and
-"Text.Regex.Lazy.TDFAEngine").  This module is usually used via import
-"Text.Regex.TDFA".
+'String' with the TDFA backend.
 
 This exports instances of the high level API and the medium level
 API of 'compile','execute', and 'regexec'.
@@ -21,22 +19,23 @@ module Text.Regex.TDFA.String(
  ,regexec
  ) where
 
-import Data.Array
+import Data.Array((!),elems)
 
-import Text.Regex.Base.RegexLike(RegexMaker(..),RegexLike(..),RegexContext(..),MatchOffset,MatchLength,MatchArray)
-
-import Text.Regex.TDFA.ReadRegex(parseRegex)
-import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
--- import Text.Regex.TDFA.CorePattern
--- import Text.Regex.TDFA.TNFA
-import Text.Regex.TDFA.TDFA
-import Text.Regex.TDFA.Run
---import Text.Regex.TDFA.Engine(findRegex,matchesRegex,countRegex,accept)
 import Text.Regex.Base.Impl(polymatch,polymatchM)
--- import Text.Regex.Base
+import Text.Regex.Base.RegexLike(RegexMaker(..),RegexLike(..),RegexContext(..),MatchOffset,MatchLength,MatchArray)
+import Text.Regex.TDFA.Common(common_error)
+import Text.Regex.TDFA.ReadRegex(parseRegex)
+import Text.Regex.TDFA.Run(findMatch,findMatchAll,countMatchAll)
+import Text.Regex.TDFA.TDFA(patternToDFA)
+import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
+
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
+
+err :: String -> a
+err = common_error "Text.Regex.TDFA.String"
 
 unwrap :: Either String v -> v
-unwrap x = case x of Left err -> error ("Text.Regex.TDFA.String died: "++ err)
+unwrap x = case x of Left msg -> err ("Text.Regex.TDFA.String died: "++msg)
                      Right v -> v
 
 compile  :: CompOption -- ^ Flags (summed together)
@@ -45,7 +44,7 @@ compile  :: CompOption -- ^ Flags (summed together)
          -> Either String Regex -- ^ Returns: the compiled regular expression
 compile compOpt execOpt source =
   case parseRegex source of
-    Left err -> Left ("parseRegex for Text.Regex.TDFA.String failed:"++show err)
+    Left msg -> Left ("parseRegex for Text.Regex.TDFA.String failed:"++show msg)
     Right pattern ->
       let (dfa,i,tags,groups) = patternToDFA compOpt pattern
       in Right (Regex dfa i tags groups compOpt execOpt)
@@ -70,15 +69,11 @@ regexec r s =
           rest = map fst (tail (elems mt)) -- will be []
       in Right (Just (pre,main,post,rest))
 
-{-# INLINE headTail #-}
-headTail :: String -> (Char,String)
-headTail s = (head s,tail s)
-
 -- Minimal defintion for now
 instance RegexLike Regex String where
-  matchOnce = findMatch null headTail
-  matchAll = findMatchAll null headTail
-  matchCount = countMatchAll null headTail
+  matchOnce = findMatch
+  matchAll = findMatchAll
+  matchCount = countMatchAll
 -- matchTest
 -- matchOnceText
 -- matchTextAll

@@ -1,30 +1,29 @@
+-- | This is a version of Run that caters to Data.ByteString.Char8
 module Text.Regex.TDFA.RunBS(findMatch,findMatchAll,countMatchAll) where
 
-import Control.Monad
-import Data.Array.IArray
--- import Data.Map(Map)
-import qualified Data.Map as Map
+import Control.Monad(MonadPlus(..))
+import Data.Array.IArray((!),array)
+import qualified Data.ByteString.Char8 as B
 import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
-import Data.Maybe
-import Data.Monoid
-import Data.List
+import Data.List(maximumBy)
+import qualified Data.Map as Map(lookup)
+import Data.Maybe(isJust)
+import Data.Monoid(Monoid(..))
 
-import qualified Data.ByteString.Char8 as B
-
-import Text.Regex.Base
+import Text.Regex.Base(MatchArray)
 import Text.Regex.TDFA.Common
-import Text.Regex.TDFA.CorePattern
-import Text.Regex.TDFA.TDFA
-import Text.Regex.TDFA.Wrap
-
 import Text.Regex.TDFA.Run(makeTagComparer,tagsToGroups,update)
-
 -- import Debug.Trace
+
+{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
+
+err :: String -> a
+err = common_error "Text.Regex.TDFA.RunBS"
 
 {-# INLINE look #-}
 look :: Int -> IntMap a -> a
-look key imap = IMap.findWithDefault (error ("key "++show key++" not found in Text.Regex.TDFA.RunBS.look")) key imap
+look key imap = IMap.findWithDefault (err ("key "++show key++" not found in Text.Regex.TDFA.RunBS.look")) key imap
 
 
 {-# INLINE findMatch #-}
@@ -77,7 +76,7 @@ matchHere regexIn offsetIn input = ans where
                     Nothing -> Nothing
                     Just offsetEnd -> Just (array (0,0) [(0,(offsetIn,offsetEnd-offsetIn))])
 
-  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 offsetIn,mempty)
+  initialScratchMap = IMap.singleton (regex_init regexIn) (IMap.singleton 0 (offsetIn,True),mempty)
   comp = makeTagComparer (regex_tags regexIn)
 
   final = B.length input
