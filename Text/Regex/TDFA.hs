@@ -43,7 +43,7 @@ import Text.Regex.TDFA.Sequence()
 import Text.Regex.TDFA.Wrap(Regex,CompOption(..),ExecOption(..),(=~),(=~~))
 
 getVersion :: Version
-getVersion = Version { versionBranch = [0,56]
+getVersion = Version { versionBranch = [0,57]
                      , versionTags = ["tdfa","unstable"]
                      }
 

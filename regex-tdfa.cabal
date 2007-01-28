@@ -1,5 +1,5 @@
 Name:                   regex-tdfa
-Version:                0.56
+Version:                0.57
 -- Cabal-Version:       >=1.1.6
 License:                BSD3
 License-File:           LICENSE
@@ -24,7 +24,9 @@ Exposed-Modules:        Text.Regex.TDFA.Common
                         Text.Regex.TDFA.Pattern
                         Text.Regex.TDFA.ReadRegex
                         Text.Regex.TDFA.CorePattern
+                        Text.Regex.TDFA.RunState
                         Text.Regex.TDFA.Run
+                        Text.Regex.TDFA.RunSeq
                         Text.Regex.TDFA.RunBS
                         Text.Regex.TDFA.RunLBS
                         Text.Regex.TDFA.String
