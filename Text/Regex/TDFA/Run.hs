@@ -25,7 +25,7 @@ import Text.Regex.TDFA.Wrap()
 {-# INLINE findMatch #-}
 findMatch :: Regex -> String -> Maybe MatchArray
 findMatch regexIn stringIn = loop 0 '\n' stringIn where
-  loop offset prev input =
+  loop offset prev input = {-# SCC "findMatch.loop" #-}
     let result = matchHere regexIn offset prev input
     in if isJust result then result
          else case input of
@@ -38,7 +38,7 @@ findMatch regexIn stringIn = loop 0 '\n' stringIn where
 {-# INLINE findMatchAll #-}
 findMatchAll :: Regex -> String -> [MatchArray]
 findMatchAll regexIn stringIn = loop 0 '\n' stringIn where
-  loop offset prev input =
+  loop offset prev input = {-# SCC "findMatchAll.loop" #-}
     case matchHere regexIn offset prev input of
       Nothing -> case input of
                    [] -> []
@@ -58,7 +58,7 @@ findMatchAll regexIn stringIn = loop 0 '\n' stringIn where
 countMatchAll :: Regex -> String -> Int
 countMatchAll regexIn stringIn = loop 0 '\n' stringIn $! 0 where
   regex = setExecOpts (ExecOption {captureGroups = False,testMatch = False}) regexIn
-  loop offset prev input count =
+  loop offset prev input count = {-# SCC "countMatchAll.loop" #-}
     case matchHere  regex offset prev input of
       Nothing -> case input of
                    [] -> count
@@ -102,10 +102,10 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
   test = if multiline (regex_compOptions regexIn) then test_multiline else test_singleline
   
   runHere :: Maybe Scratch -> DT -> IntMap Scratch -> Position -> Char -> String -> Maybe Scratch
-  runHere winning dt tags off prev input = 
-    let best (destIndex,mSourceDelta) = (destIndex
+  runHere winning dt tags off prev input = {-# SCC "runHere" #-}
+    let best (destIndex,mSourceDelta) = {-# SCC "runHere best" #-}
+                                        (destIndex
                                         ,maximumBy comp 
-                                         . map fst
 --                                       . map (\(m,w) -> trace ("\n>"++show destIndex++'\n':unlines w++"<") (m,w))
                                          . map (\(sourceIndex,(_,rs)) ->
                                                 update rs off (look sourceIndex tags))
@@ -113,9 +113,8 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
     in case dt of
          Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
            let winning' = if IMap.null w then winning
-                            else Just . maximumBy comp
+                            else {-# SCC "runHere winning'" #-} Just . maximumBy comp
 --                                    . (\wins -> trace (unlines . map show $ wins) wins)
-                                      . map fst
 --                                    . map (\(m,written) -> trace ("\n>winning\n"++unlines written++"<") (m,w))
                                       . map (\(sourceIndex,rs) ->
                                                let scratch = look sourceIndex tags
@@ -123,7 +122,7 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
                                                   update rs off scratch)
                                       . IMap.toList $ w
        
-           in seq winning' $ -- trace ("\n@@@ " ++ show (off,tags,winning')) $
+           in -- seq winning' $ -- trace ("\n@@@ " ++ show (off,tags,winning')) $
               case input of
                 [] -> winning'
                 (c:input') ->
@@ -142,11 +141,11 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
              then runHere winning a tags off prev input
              else runHere winning b tags off prev input
 
-  runHereNoCap winning dt off prev input =
+  runHereNoCap winning dt off prev input =  {-# SCC "runHereNoCap" #-}
     case dt of
       Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
         let winning' = if IMap.null w then winning else Just off
-        in seq winning' $
+        in -- seq winning' $
            if Map.null t && isNothing o then winning' else
              case input of
                [] -> winning'

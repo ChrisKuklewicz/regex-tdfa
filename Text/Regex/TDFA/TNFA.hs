@@ -1,3 +1,12 @@
+--  ""
+-- "(A).|()((.|((()))|^){3}){0,3}"
+-- ("",array (0,7) [(0,("",(0,0))),(1,("",(-1,0))),(2,("",(0,0))),(3,("",(0,0))),(4,("",(0,0))),(5,("",(0,0))),(6,("",(0,0))),(7,("",(0,0)))],""),"same")
+-- *** Exception: Text/Regex/TDFA/TNFA.hs:447:40-57: Non-exhaustive patterns in record update
+
+-- full "((.|^){2}){2,4}"
+-- *** Exception: Text/Regex/TDFA/TNFA.hs:453:40-57: Non-exhaustive patterns in record update
+-- Erasing PNonEmpty solves the problem, so the NonEmpty code below is the issue:
+
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- | "Text.Regex.TDFA.TNFA" converts the CorePattern Q/P data (and its
 -- Pattern leafs) to a QNFA tagged non-deterministic finite automata.
@@ -90,8 +99,9 @@ instance Eq QT where
   _ == _ = False
 
 -- This uses the Eq QT instace above
+-- ZZZ
 mkTesting :: QT -> QT
-mkTesting t@(Testing {qt_a=a,qt_b=b}) = if a==b then a else t
+mkTesting t@(Testing {qt_a=a,qt_b=b}) = if a==b then a else t -- Move to nfsToDFA XXX
 mkTesting t = t
 
 qtwin,qtlose :: QT
@@ -206,7 +216,10 @@ applyTest (wt,dopa) qt | nullQT qt = qt
       GT -> q {qt_a = applyTest' (qt_a q)
               ,qt_b = applyTest' (qt_b q)}
 
-mergeAltQT,mergeQT :: QT -> QT -> QT
+mergeQT_2nd,mergeAltQT,mergeQT :: QT -> QT -> QT
+mergeQT_2nd q1 q2 | nullQT q1 = q2  -- prefer winning with w1 then with w2
+                  | otherwise = mergeQTWith (\_ w2 -> w2) q1 q2
+
 mergeAltQT q1 q2 | nullQT q1 = q2  -- prefer winning with w1 then with w2
                  | otherwise = mergeQTWith (\w1 w2 -> if noWin w1 then w2 else w1) q1 q2
 mergeQT q1 q2 | nullQT q1 = q2  -- union wins
@@ -263,7 +276,7 @@ newQNFA :: String -> QT -> S QNFA
 newQNFA s qt = do
   (thisI,oldQs) <- get
   let futureI = succ thisI in seq futureI $ debug (">newQNFA< "++s++" : "++show thisI) $ do
-  let qnfa = mkQNFA thisI qt
+  let qnfa =  mkQNFA thisI qt -- (strictQT qt) -- making strictQNFA kills test (1,11) ZZZ
   put (futureI, oldQs . ((thisI,qnfa):))
   return qnfa
 
@@ -386,15 +399,16 @@ qToNFA compOpt qTop = (q_id startingQNFA
   newTrans :: String -> [Tag] -> Maybe Tag -> Pattern -> E -> S E
   newTrans s resets mPre pat (tags,cont) = do
     i <- case cont of
-           Left qnfa -> return (q_id qnfa)
-           Right qt -> do qnfa <- newQNFA s qt
+           Left qnfa -> return (q_id qnfa)     -- strictQNFA ZZZ no help
+           Right qt -> do qnfa <- newQNFA s qt -- strictQT ZZZ no help
                           return (q_id qnfa)
     let post = promoteTasks PostUpdate tags
         pre = promoteTasks PreUpdate ([(tag,ResetGroupStopTask) | tag<-resets] ++ maybe [] (\tag -> [(tag,TagTask)]) mPre)
-    return . fromQT $ acceptTrans pre pat post i
+    return . fromQT $ acceptTrans pre pat post i -- fromQT $ strictQT no help
 
   getTrans,getTransTagless :: Q -> E -> S E
   getTrans qIn@(Q {preReset=resets,preTag=pre,postTag=post,unQ=pIn}) e = debug (">< getTrans "++show qIn++" <>") $
+--    liftM strictE $ -- ZZZ causes stack overflow in test (1,36)
     case pIn of
       OneChar pat -> newTrans "getTrans/OneChar" resets pre pat . addTag post $ e
       Empty -> return . addGroupResets resets . addTag pre . addTag post $ e
@@ -413,7 +427,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                   else sequence [ getTrans q e | q <- qs ]
         let qts = map getQT eqts
         return (fromQT (foldr1 mergeAltQT qts))
-      Star mOrbit resets mayFirstBeNull q ->
+      Star mOrbit resetTheseOrbits mayFirstBeNull q ->
         let (e',clear) = -- trace ("\n>"++show e++"\n"++show q++"\n<") $
               if notNullable q then (e,True)
                 else case maybeOnlyEmpty q of
@@ -425,7 +439,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
         (this,ans) <- case mqt of
                         Nothing -> err ("Weird pattern in getTransTagless/Star: " ++ show qIn)
                         Just qt -> do
-                          let qt' = resetOrbitsQT resets . enterOrbitQT mOrbit $ qt
+                          let qt' = resetOrbitsQT resetTheseOrbits . enterOrbitQT mOrbit $ qt
                               thisQT = mergeQT qt' . getQT . leaveOrbit mOrbit $ e -- tell child to leave via leaveOrbit/e
                               ansE = fromQT . mergeQT qt' . getQT $ e' -- tell world to skip via e'
                           thisE <- if usesQNFA q
@@ -444,8 +458,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
         mqt <- inStar q e
         return $ case mqt of
                    Nothing -> err ("Weird pattern in getTransTagless/NonEmpty: " ++ show qIn)
-                   Just qt -> let qt' = qt { qt_win = [] }         -- clear qt_win to the empty failure state
-                              in fromQT . mergeQT qt' . getQT $ e' -- ...and then this sets qt_win to exactly that of e'
+                   Just qt -> fromQT . mergeQT_2nd qt . getQT $ e' -- ...and then this sets qt_win to exactly that of e'
 
       _ -> err ("This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen" ++ show qIn)
 
@@ -563,7 +576,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                        else Nothing
         return (eLoop',mAccepting',mQNFA')
 
-      Star mOrbit resets mayFirstBeNull q -> do
+      Star mOrbit resetTheseOrbits mayFirstBeNull q -> do
         let (ac0@(_,mAccepting0,_),clear) =
               if notNullable q
                 then (ac,True)
@@ -583,7 +596,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
             case mChildAccepting of
               Nothing -> err ("Weird pattern in getTransTagless/Star: " ++ show qIn)
               Just childAccepting -> do
-                let childQT = resetOrbitsQT resets . enterOrbitQT mOrbit . getQT $ childAccepting
+                let childQT = resetOrbitsQT resetTheseOrbits . enterOrbitQT mOrbit . getQT $ childAccepting
                     thisQT = mergeQT childQT . getQT . leaveOrbit mOrbit . getE $ ac
                     thisAccepting =
                       case mAccepting of
@@ -896,3 +909,36 @@ applyNullViews nvs win = foldl' dominate qtlose (reverse $ cleanNullView nvs) wh
     in useTest (Set.toList allTests) (Map.assocs sti) win' lose
 -}
 
+{-
+strictE :: E -> E
+strictE x = strict2' id (strictEither' strictQNFA strictQT) x
+
+strictQT qt =
+  case qt of
+    Simple w t o -> seq w $ seq t $ seq o $ qt
+    Testing t d a b -> seq t $ seq d $ seq (strictQT a) $ seq (strictQT b) $ qt
+
+strictQNFA q@(QNFA i qt) = seq i $ seq (strictQT qt) $ q
+
+strictMaybe m =
+  case m of
+    Nothing -> m
+    Just j -> seq j m
+
+strictEither' f g e =
+  case e of
+    Left l -> seq (f l) e
+    Right r -> seq (g r) e
+
+strictEither e = 
+  case e of
+    Left l -> seq l e
+    Right r -> seq r e
+
+strict2' :: (a->a') -> (b->b') -> (a,b) -> (a,b)
+strict2' f g t@(a,b) = seq (f a) $ seq (g b) $ t
+
+strict2 t@(a,b) = seq a $ seq b $ t
+strict3 t@(a,b,c) = seq a $ seq b $ seq c $ t
+strict4 t@(a,b,c,d) = seq a $ seq b $ seq c $ t
+-}

@@ -15,7 +15,7 @@ instance RegexOptions Regex CompOption ExecOption where
   blankExecOpt = defaultExecOpt
   defaultCompOpt = CompOption { caseSensitive = True
                               , multiline = True
-                              , rightAssoc = False
+                              , rightAssoc = True
                               , lastStarGreedy = False
                               }
   defaultExecOpt = ExecOption { captureGroups = True

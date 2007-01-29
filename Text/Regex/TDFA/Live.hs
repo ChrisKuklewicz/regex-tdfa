@@ -22,11 +22,11 @@ import Text.Regex.TDFA.Run
 toP = either (error.show) id . parseRegex 
 toQ = patternToQ defaultCompOpt . toP
 toNFA = patternToNFA defaultCompOpt . toP
-show_NFA = unlines . map show . elems . (\(x,_,_) -> snd x) . toNFA 
+show_NFA s = unlines $ ["NFA START INDEX IS "++show i,show aTagOp,show aGroups] ++ (map show . elems $ nfa)
+ where ((i,nfa),aTagOp,aGroups) = toNFA s
 display_NFA = mapM_ print . elems . (\(x,_,_) -> snd x) . toNFA 
 
 toDFA = nfaToDFA . toNFA
-
 
 testOne s op r = 
   let foo ::  String

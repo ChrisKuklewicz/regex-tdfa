@@ -106,7 +106,6 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
   runHere winning dt tags off prev input = 
     let best (destIndex,mSourceDelta) = (destIndex
                                         ,maximumBy comp 
-                                         . map fst
 --                                       . map (\(m,w) -> trace ("\n>"++show destIndex++'\n':unlines w++"<") (m,w))
                                          . map (\(sourceIndex,(_,rs)) ->
                                                 update rs off (look sourceIndex tags))
@@ -116,7 +115,6 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
            let winning' = if IMap.null w then winning
                             else Just . maximumBy comp
 --                                    . (\wins -> trace (unlines . map show $ wins) wins)
-                                      . map fst
 --                                    . map (\(m,written) -> trace ("\n>winning\n"++unlines written++"<") (m,w))
                                       . map (\(sourceIndex,rs) ->
                                                let scratch = look sourceIndex tags

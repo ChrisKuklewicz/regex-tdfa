@@ -88,7 +88,6 @@ matchHere regexIn offsetIn input = ans where
   runHere winning dt tags off =
     let best (destIndex,mSourceDelta) = (destIndex
                                         ,maximumBy comp 
-                                         . map fst
                                          . map (\(sourceIndex,(_,rs)) ->
                                                 update rs (fromEnum off) (look sourceIndex tags))
                                          . IMap.toList $ mSourceDelta)
@@ -96,7 +95,6 @@ matchHere regexIn offsetIn input = ans where
          Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
            let winning' = if IMap.null w then winning
                             else Just . maximumBy comp
-                                      . map fst
                                       . map (\(sourceIndex,rs) ->
                                                update rs (fromEnum off) (look sourceIndex tags))
                                       . IMap.toList $ w

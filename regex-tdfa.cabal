@@ -1,5 +1,5 @@
 Name:                   regex-tdfa
-Version:                0.57
+Version:                0.60
 -- Cabal-Version:       >=1.1.6
 License:                BSD3
 License-File:           LICENSE
@@ -42,7 +42,7 @@ Extensions:             MultiParamTypeClasses, FunctionalDependencies
 -- GHC-Options:            -Wall
 GHC-Options:            -Wall -Werror -O2
 -- GHC-Options:            -Wall -ddump-minimal-imports
--- GHC-Prog-Options: 
+GHC-Prof-Options:       -auto-all
 -- Hugs-Options:
 -- NHC-Options:
 -- Includes:

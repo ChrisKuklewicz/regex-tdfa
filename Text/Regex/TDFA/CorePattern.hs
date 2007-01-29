@@ -376,6 +376,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                           , preReset = resetTags ++ (preReset q) }
 
          PNonCapture p -> nonCapture (go p m1 m2)
+--         PNonEmpty p -> go p m1 m2
 
          PNonEmpty p -> mdo
            let needsTags = canAccept q

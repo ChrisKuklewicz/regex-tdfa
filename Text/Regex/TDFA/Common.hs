@@ -6,11 +6,13 @@ module Text.Regex.TDFA.Common {- export everything -} where
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
 --import Text.Regex.Base(MatchOffset,MatchLength)
-import Control.Monad.RWS(RWS)
+import Text.Show.Functions()
+import Control.Monad.State(State)
 import Data.Array.IArray(Array)
-import Data.Map(Map)
+import Data.Array.Unboxed(UArray)
+import Data.Map as Map(Map,assocs)
 import Data.Set(Set)
-import Data.IntMap as IMap (IntMap,findWithDefault)
+import Data.IntMap as IMap (IntMap,findWithDefault,assocs)
 import Data.IntSet(IntSet)
 import Data.Sequence(Seq)
 --import Debug.Trace
@@ -49,6 +51,11 @@ mapSnd f = fmap (\ (a,b) -> (a,f b))
 snd3 :: (a,b,c) -> b
 snd3 (_,x,_) = x
 
+flipOrder :: Ordering -> Ordering
+flipOrder GT = LT
+flipOrder LT = GT
+flipOrder EQ = EQ
+
 noWin :: WinTags -> Bool
 noWin = null
 
@@ -68,10 +75,10 @@ data CompOption = CompOption { caseSensitive :: Bool    -- ^ True by default
                              , lastStarGreedy ::  Bool  -- ^ False by default.  This is POSIX correct by takes space and is slower.
                                                         -- Setting this to true will improve performance, and should be done
                                                         -- if you plan to set the captureGroups execoption to False.
-                             }
+                             } deriving (Read,Show)
 data ExecOption = ExecOption { captureGroups :: Bool    -- ^ True by default.  Set to False to improve speed (and space).
                              , testMatch :: Bool        -- ^ False by default. Set to True to quickly return shortest match (w/o groups).
-                             }
+                             } deriving (Read,Show)
 
 {-
 -- | 'MatchedStrings' is an IntMap where the keys are GroupIndex
@@ -159,8 +166,39 @@ type WinTags = TagList
 
 -- | Internal DFA node, identified by the Set of indices of the QNFA
 -- nodes it represents.
-data DFA = DFA { d_id :: SetIndex, d_dt :: DT}
+data DFA = DFA { d_id :: SetIndex, d_dt :: DT} deriving(Show)
 -- | Internal to the DFA node
+data DT = Simple' { dt_win :: IntMap {- Index -} Instructions -- ^ Actions to perform to win
+                  , dt_trans :: Map Char (DFA,DTrans) -- ^ Transition to accept Char
+                  , dt_other :: Maybe (DFA,DTrans) -- ^ Optional default accepting transition
+                  }
+        | Testing' { dt_test :: WhichTest -- ^ The test to perform
+                   , dt_dopas :: Set DoPa -- ^ location(s) of the anchor(s) in the original regexp
+                   , dt_a,dt_b :: DT      -- ^ use dt_a if test is True else use dt_b
+                   }
+
+instance Show DT where show = showDT
+
+showDT :: DT -> String
+showDT (Simple' w t o) = "Simple' { dt_win = " ++ (unlines . map show . IMap.assocs $ w)
+                      ++ "\n        , dt_trans = " ++ (unlines . map (\(char,(dfa,dtrans)) -> "("++show char++", "++show (d_id dfa)++", "
+                                                                                    ++ seeDTrans dtrans ++")") . Map.assocs $ t)
+                      ++ "\n        , dt_other = " ++ maybe "None" (\(dfa,dtrans) -> "("++show (d_id dfa)++", "++ seeDTrans dtrans++")") o
+                      ++ "\n        }"
+
+showDT (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
+                          ++ "\n         , dt_dopas = " ++ show d
+                          ++ "\n         , dt_a = " ++ indent a
+                          ++ "\n         , dt_b = " ++ indent b
+                          ++ "\n         }"
+ where indent = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT
+       spaces = replicate 10 ' '
+
+seeDTrans :: DTrans -> String
+seeDTrans x = concatMap (\(dest,y) -> unlines . map (\(source,ins) -> show (dest,source,ins) ) . IMap.assocs $ y) (IMap.assocs x)
+
+
+{-
 data DT = Simple' { dt_win :: IntMap {- Index -} (RunState ()) -- ^ Actions to perform to win
                   , dt_trans :: Map Char (DFA,DTrans) -- ^ Transition to accept Char
                   , dt_other :: Maybe (DFA,DTrans) -- ^ Optional default accepting transition
@@ -169,15 +207,18 @@ data DT = Simple' { dt_win :: IntMap {- Index -} (RunState ()) -- ^ Actions to p
                    , dt_dopas :: Set DoPa -- ^ location(s) of the anchor(s) in the original regexp
                    , dt_a,dt_b :: DT      -- ^ use dt_a if test is True else use dt_b
                    }
+-}
 -- | Internal type to repesent the commands for the tagged transition.
 -- The outer IntMap is for the destination Index and the inner IntMap
 -- is for the Source Index.  This is convenient since all runtime data
 -- going to the same destination must be compared to find the best.
-type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,RunState ()))
+type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,Instructions))
+-- type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,RunState ()))
 -- | Internal convenience type for the text display code
 type DTrans' = [(Index, [(Index, (DoPa, ([(Tag, (Position,Bool))],[String])))])]
 
 
+{-
 -- | Internal type.  This is the Monad in which tag commands are
 -- executed to modify the runtime data.
 type RunState = RWS (Position,Position) [String] Scratch
@@ -191,6 +232,38 @@ type Scratch = (IntMap (Position,Bool)     -- ^ Place for all tags, Bool is Fals
 -- append locations but compare starting with front, so use Seq as a
 -- Queue.
 type Orbits = Seq Position    
+-}
+
 -- | Internal type to comapre two Scratch values and pick the "biggest"
 type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the preferred one
 
+data Scratch = Scratch
+  { scratchPos :: UArray Tag Position
+  , scratchFlags :: UArray Tag Bool
+  , scratchOrbits :: IntMap {-Tag-} Orbits
+  } deriving (Show) --- XXX shows function
+
+data Orbits = Orbits
+  { inOrbit :: Bool        -- True if enterOrbit, False if LeaveOrbit
+  , getOrbits :: Seq Position
+  } deriving (Show)
+
+data Instructions = Instructions
+  { newPos :: [(Tag,Bool)] -- False is preUpdate, True is postUpdate
+  , newFlags :: [(Tag,Bool)]   -- apply to scratchFlags
+  , newOrbits :: OrbitInstruction
+  } deriving (Show)
+
+type OrbitInstruction = Position -> IntMap {-Tag-} Orbits -> IntMap {-Tag-} Orbits
+
+type CompileIntructions = State
+  ( IntMap Bool
+  , IntMap Bool
+  , IntMap AlterOrbit
+  )
+
+data AlterOrbit = AlterReset                        -- Delete Orbits
+                | AlterLeave                        -- set inOrbit to False if it exists
+                | AlterModify { newInOrbit :: Bool  -- new inOrbit value
+                              , freshOrbit :: Bool} -- True means getOrbits=Seq.empty
+                  deriving (Show)                   -- False means try appening position or else Seq.empty
