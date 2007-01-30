@@ -1,3 +1,7 @@
+
+-- XXX design uncertainty:  should preResets be inserted into nullView?
+-- if not, why not?
+
 -- | The CorePattern module deconstructs the Pattern tree created by
 -- ReadRegex.parseRegex and returns a simpler Q/P tree with
 -- annotations at each Q node.  This will be converted by the TNFA
@@ -22,7 +26,7 @@
 -- Uses recursive do notation.
 module Text.Regex.TDFA.CorePattern(Q(..),P(..),WhichTest(..),Wanted(..)
                                   ,TestInfo,OP(..),SetTestInfo(..),NullView
-                                  ,patternToQ,cleanNullView,cannotAccept) where
+                                  ,patternToQ,cleanNullView,cannotAccept,mustAccept) where
 
 import Control.Monad.RWS {- all -}
 import Data.Array.IArray(Array,(!),accumArray,listArray)
@@ -69,23 +73,45 @@ data Q = Q {nullQ :: NullView         -- Ordered list of nullable views
 
 type TestInfo = (WhichTest,DoPa)
 
--- This is newtype'd to allow for a custom Ord instance
+-- This is newtype'd to allow control over class instances
 -- This is a set of WhichTest where each test has associated pattern location information
 newtype SetTestInfo = SetTestInfo {getTests :: Map WhichTest (Set DoPa)} deriving (Eq,Monoid)
 
--- During the depth first traversal, children are told about bounds by the parent
-data HandleTag = NoTag | Advice Tag | Apply Tag deriving (Show)
+instance Show SetTestInfo where
+  show (SetTestInfo sti) = "SetTestInfo "++show (mapSnd (Set.toList) $ Map.assocs sti)
 
+-- There may be several distinct ways for a subtree to conditionally
+-- (i.e. with a Test) or unconditionally accept 0 characters.  These
+-- are in the list in order of preference, with most preferred listed
+-- first.
 type NullView = [(SetTestInfo,WinTags)]  -- Ordered list of null views, each is a set of tests and tags
 
+-- During the depth first traversal, children are told about tags by the parent
+data HandleTag = NoTag             -- No tag at this boundary
+               | Advice Tag        -- tag at this boundary, applied at higher level in tree
+               | Apply Tag         -- tag at this boundary, may be applied at this node or passed to one child
+                 deriving (Show)
+
+-- Nodes in the tree are labeled by the type kind of continuation they
+-- prefer to be passed when processing.  This makes it possible to
+-- create a smaller number of QNFA states and avoid creating wasteful
+-- QNFA states that won't be reachable in the final automata.
 data Wanted = WantsQNFA | WantsQT | WantsBoth | WantsEither deriving (Eq,Show)
 
 instance Show Q where
   show = showQ
 
-instance Show SetTestInfo where
-  show (SetTestInfo sti) = "SetTestInfo "++show (mapSnd (Set.toList) $ Map.assocs sti)
-
+showQ :: Q -> String
+showQ q = "Q { nullQ = "++show (nullQ q)++
+        "\n  , takes = "++show (takes q)++
+        "\n  , preReset = "++show (preReset q)++
+        "\n  , preTag = "++show (preTag q)++
+        "\n  , postTag = "++show (postTag q)++
+        "\n  , tagged = "++show (tagged q)++
+        "\n  , wants = "++show (wants q)++
+        "\n  , unQ = "++ indent (unQ q)++" }"
+   where indent = unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . show
+         spaces = replicate 10 ' '
 
 -- Smart constructors for NullView
 notNull :: NullView
@@ -97,29 +123,39 @@ emptyNull tags = (mempty, tags) : []
 testNull :: TestInfo -> WinTags -> NullView
 testNull (w,d) tags = (SetTestInfo (Map.singleton w (Set.singleton d)), tags) : []
 
+-- The NullViews are ordered, and later test sets that contain the
+-- tests from any earlier entry will never be chosen.  This function
+-- returns a list with these redundant elements removed.  Note that
+-- the first unconditional entry in the list will be the last entry of
+-- the returned list since the empty set is a subset of any other set.
 cleanNullView :: NullView -> NullView
 cleanNullView [] = []
-cleanNullView (first@(SetTestInfo sti,_):rest) | Map.null sti = first : []
+cleanNullView (first@(SetTestInfo sti,_):rest) | Map.null sti = first : []  -- optimization
                                                | otherwise =
   first : cleanNullView (filter (not . (setTI `Set.isSubsetOf`) . Map.keysSet . getTests . fst) rest)
   where setTI = Map.keysSet sti
 
+-- Ordered Sequence of two NullViews: all ordered combinations of tests and tags.
+-- Order of <- s1 and <- s2 is deliberately chosen to maintain preference priority
 mergeNullViews :: NullView -> NullView -> NullView
--- mergeNullViews = liftM2 (mappend *** mappend)
-mergeNullViews s1 s2 = do
+mergeNullViews s1 s2 = cleanNullView $ do
   (test1,tag1) <- s1
   (test2,tag2) <- s2
   return (mappend test1 test2,mappend tag1 tag2)
+-- mergeNullViews = cleanNullView $ liftM2 (mappend *** mappend)
 
+-- Add (preupdated) tags to all nullviews
 addTagsToNullView :: WinTags -> NullView -> NullView
 addTagsToNullView [] nv = nv
 addTagsToNullView tags nv= do
   (test,tags') <- nv
   return (test,tags `mappend` tags')
 
+-- Concatenated two ranges of number of accepted characters
 seqTake :: (Int, Maybe Int) -> (Int, Maybe Int) -> (Int, Maybe Int)
 seqTake (x1,y1) (x2,y2) = (x1+x2,liftM2 (+) y1 y2)
 
+-- Parallel combination of list of ranges of number of accepted characters
 orTakes :: [(Int, Maybe Int)] -> (Int,Maybe Int)
 orTakes [] = (0,Just 0)
 orTakes ts = let (xs,ys) = unzip ts
@@ -140,32 +176,24 @@ fromHandleTag (Apply tag) = tag
 fromHandleTag (Advice tag) = tag
 fromHandleTag _ = error "fromHandleTag"
 
+-- Shorthand for combining a preTag and a postTag
 winTags :: Maybe Tag -> Maybe Tag -> WinTags
 winTags (Just a) (Just b) = [(a,PreUpdate TagTask),(b,PreUpdate TagTask)]
 winTags (Just a) Nothing  = [(a,PreUpdate TagTask)]
 winTags Nothing  (Just b) = [(b,PreUpdate TagTask)]
 winTags Nothing  Nothing  = mempty
 
-showQ :: Q -> String
-showQ q = "Q { nullQ = "++show (nullQ q)++
-        "\n  , takes = "++show (takes q)++
-        "\n  , preReset = "++show (preReset q)++
-        "\n  , preTag = "++show (preTag q)++
-        "\n  , postTag = "++show (postTag q)++
-        "\n  , tagged = "++show (tagged q)++
-        "\n  , wants = "++show (wants q)++
-        "\n  , unQ = "++ indent (unQ q)++" }"
-   where indent = unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . show
-         spaces = replicate 10 ' '
-
+-- Predicates on the range of number of accepted  characters
 varies :: Q -> Bool
 varies Q {takes = (_,Nothing)} = True
 varies Q {takes = (x,Just y)} = x/=y
 
 mustAccept :: Q -> Bool
 mustAccept q = (0/=) . fst . takes $ q
+
 canAccept :: Q -> Bool
 canAccept q = maybe True (0/=) $ snd . takes $ q
+
 cannotAccept :: Q -> Bool
 cannotAccept q = maybe False (0==) $ snd . takes $ q
 
@@ -193,16 +221,12 @@ cannotAccept q = maybe False (0==) $ snd . takes $ q
 -- 
 -- favoring pushing Apply into the child postTag makes PGroup happier
 
-{-
-getChildTags :: Q -> [Tag]
-getChildTags q = maybe id (:) (preTag q) $ maybe (childTags q) (:childTags q) (postTag q)
--}
-
 type PM = RWS (Maybe GroupIndex) [Either Tag GroupInfo] ([OP]->[OP],Tag) 
-type HHQ = HandleTag  -- m1 : info about left or pre-tag, currently NoTag or Advice and never Apply
-        -> HandleTag  -- m2 : info about right or post-tag, currently NoTag or Apply, and top-level Advice
+type HHQ = HandleTag  -- m1 : info about left boundaary / preTag
+        -> HandleTag  -- m2 : info about right boundary / postTag
         -> PM Q
 
+-- There is no group 0 here, since it is always the whole match and has no parent of its own
 makeGroupArray :: GroupIndex -> [GroupInfo] -> Array GroupIndex [GroupInfo]
 makeGroupArray maxGroupIndex groups = accumArray (\earlier later -> later:earlier) [] (1,maxGroupIndex) filler
     where filler = map (\gi -> (thisIndex gi,gi)) groups
@@ -219,6 +243,7 @@ partitionEither = helper id id where
   helper ls rs ((Right x):xs) = helper  ls      (rs.(x:)) xs
   helper ls rs ((Left  x):xs) = helper (ls.(x:)) rs       xs
 
+-- Partial function: assumes starTrans has been run on the Pattern
 patternToQ :: CompOption -> (Pattern,(GroupIndex,DoPa)) -> (Q,Array Tag OP,Array GroupIndex [GroupInfo])
 patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
   (tnfa,(tag_dlist,nextTag),groups) = runRWS monad startReader startState
@@ -268,14 +293,18 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                   put $! debug ("\n"++show (s,newOp)++"\n") (op',s')
                   return (Apply s) -- someone will need to apply it
 
-  -- Must not pass in an empty list
+  -- Partial function: Must not pass in an empty list
+  -- Policy choices:
+  --  * pass tags to apply to children and have no preTag or postTag here
+  --  * middle 'mid' tag: give to left/front child as postTag so a Group there might claims as stopTag
+  --  * if parent is Group then preReset will become non-empty
   combineConcat :: [Pattern] -> HHQ
   combineConcat | rightAssoc compOpt = (\ps -> foldr combineSeq (go (last ps)) (map go $ init ps))
                 | otherwise          = (\ps -> foldl combineSeq (go (head ps)) (map go $ tail ps)) -- libtre default
     where combineSeq :: HHQ -> HHQ -> HHQ
           combineSeq pFront pEnd = (\ m1 m2 -> mdo
             let bothVary = varies qFront && varies qEnd
-            a <- if noTag m1 && bothVary then uniq Minimize else return m1 -- Why was this Maximize?
+            a <- if noTag m1 && bothVary then uniq Minimize else return m1
             b <- if noTag m2 && bothVary then uniq Maximize else return m2
             mid <- case (noTag a,canAccept qFront,noTag b,canAccept qEnd) of
                      (False,False,_,_) -> return (toAdvice a)
@@ -292,8 +321,8 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                                    )
   go :: Pattern -> HHQ
   go pIn m1 m2 =
-    let die = error $ "patternToQ cannot handle "++show pIn -- assume (starTrans) has been run already
-        nil = return $ Q {nullQ=emptyNull (apply m1 `winTags` apply m2) -- No tests, just empty
+    let die = error $ "patternToQ cannot handle "++show pIn
+        nil = return $ Q {nullQ=emptyNull (apply m1 `winTags` apply m2)
                          ,takes=(0,Just 0)
                          ,preReset=[],preTag=apply m1,postTag=apply m2
                          ,tagged=False,childGroups=False,wants=WantsEither
@@ -313,6 +342,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
          POr [] -> nil
          POr [p] -> go p m1 m2
          POr ps -> mdo
+           -- Exasperation: This POr recursive mdo is very easy to make loop and lockup the program
            let canVary = varies ans || childGroups ans -- childGroups detects that "abc|a(b)c" needs tags
            a <- if noTag m1 && canVary then uniq Minimize else return m1
            b <- if noTag m2 && canVary then uniq Maximize else return m2
@@ -320,6 +350,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                bAdvice = toAdvice b
                -- Due to the recursive-do, it seems that I have to put the if canVary into the op'
                op' = if canVary then uniq Maximize else return bAdvice
+           -- Preference for last branch is implicit: do not need op' to create uniq tag:
            cs <- fmap (++[bAdvice]) $ replicateM (pred $ length ps) op'
            qs <- mapM (\(p,c) -> go p aAdvice c) (zip ps cs)
            let wqs = map wants qs
@@ -340,13 +371,13 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
          PConcat ps -> combineConcat ps m1 m2
          PStar mayFirstBeNull p -> mdo
            let accepts    = canAccept q
-               needsOrbit = varies q && childGroups q  -- otherwise it cannot matter -- XXX change || to &&
-               needsTags  = needsOrbit || accepts      -- orbits implies accepts
+               needsOrbit = varies q && childGroups q  -- otherwise it cannot matter/be observed which path is taken
+               needsTags  = needsOrbit || accepts      -- important tha needsOrbit implies needsTags
            a <- if noTag m1 && needsTags then uniq Minimize else return m1
            b <- if noTag m2 && needsTags then uniq Maximize else return m2
-           c <- if needsOrbit then makeOrbit else return Nothing
-           (q,resetTags) <- withOrbit $ go p NoTag NoTag
-           let nullView = emptyNull (winTags (apply a) (apply b))
+           c <- if needsOrbit then makeOrbit else return Nothing -- any Orbit tag is created after the pre and post tags
+           (q,resetTags) <- withOrbit (go p NoTag NoTag)
+           let nullView = emptyNull (winTags (apply a) (apply b)) -- chosen to represent skipping sub-pattern
            return $ Q nullView
                       (0,if accepts then Nothing else (Just 0))
                       [] (apply a) (apply b)
@@ -360,7 +391,13 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
          PAnyNot {} -> one
          PEscape {} -> one
 
-         -- a PGroup can share a preTag (with Advice) with other branches but must have a postTag of Apply
+         -- A PGroup node in the Pattern tree does not become a node
+         -- in the Q/P tree. A PGroup can share and pass along a
+         -- preTag (with Advice) with other branches, but will pass
+         -- down an Apply postTag.
+         --
+         -- If the parent index is Nothing then this is part of a
+         -- non-capturing subtree and ignored.
          PGroup Nothing p -> go p m1 m2
          PGroup (Just this) p -> do
            mParent <- getParentIndex
@@ -369,13 +406,25 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
              Just parent -> do
                a <- if noTag m1 then uniq Minimize else return m1
                b <- if isNothing (apply m2) then uniq Maximize else return m2
-               (q,resetTags) <- withParent this $ go p a b
+               (q,resetTags) <- withParent this (go p a b)
                makeGroup (GroupInfo this parent (fromHandleTag a) (fromHandleTag b))
-               return $ q { tagged = True
+               return $ q { -- XXX add resetTags to nullQ XXX TODO
+                            tagged = True
                           , childGroups = True
                           , preReset = resetTags ++ (preReset q) }
 
+         -- A PNonCapture node in the Pattern tree does not become a
+         -- node in the Q/P tree.  It sets the parent to Nothing while
+         -- processing the sub-tree.
          PNonCapture p -> nonCapture (go p m1 m2)
+
+
+         -- The NonEmpty node this creates triggers stack overflow
+         -- when processing while converting from Q/P to QNFA/QT in
+         -- the TDFA module. But seemingly only with NonEmpty ($|.)
+         -- under a Star.  Star + NonEmpty + 
+
+-- version to ignore PNonEmpty for debugging comparison
 --         PNonEmpty p -> go p m1 m2
 
          PNonEmpty p -> mdo
@@ -388,7 +437,9 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                       (0,snd (takes q))                           -- like Or
                       [] (apply a) (apply b)                      -- own the closing tag so it will not end a PGroup
                       needsTags (childGroups q) (wants q)         -- the test case is "x" =~ "(.|$){1,3}"
-                      (NonEmpty q)
+                      (NonEmpty q)                                -- .|() overflows, ()|. hangs
+--                    (NonEmpty (q {nullView = emptyNull []}))    -- .|() overflows, ()|. hangs
+--                    (NonEmpty (q {nullView = notNull}))         -- .|() hangs,     ()|. overflows
 
          -- these are here for completeness of the case branches, currently starTrans replaces them all
          PPlus {} -> die

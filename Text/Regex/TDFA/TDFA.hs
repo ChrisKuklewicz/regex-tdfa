@@ -186,7 +186,12 @@ showDFA m (DFA {d_id=i,d_dt=dt}) = "DFA {d_id = "++show (ISet.toList i)
 
 
 
-
+-- pick QTrans can be told the unique source and knows all the
+-- destinations (hmm...along with qt_win)!  So if in ascending destination order the last source
+-- is free to mutatate the old state.  If the QTrans has only one
+-- entry then all we need to do is mutate that entry when making a
+-- transition.
+-- 
 pickQTrans :: Array Tag OP -> QTrans -> [({-Destination-}Index,(DoPa,Instructions))]
 pickQTrans op tr = mapSnd (bestTrans op) . IMap.toList $ tr
 

@@ -1,3 +1,7 @@
+
+-- XXX design uncertainty:  should preResets be inserted into nullView?
+-- if not, why not?
+
 --  ""
 -- "(A).|()((.|((()))|^){3}){0,3}"
 -- ("",array (0,7) [(0,("",(0,0))),(1,("",(-1,0))),(2,("",(0,0))),(3,("",(0,0))),(4,("",(0,0))),(5,("",(0,0))),(6,("",(0,0))),(7,("",(0,0)))],""),"same")
@@ -50,10 +54,11 @@ import qualified Data.Set as Set(singleton,toList,toAscList,insert)
 
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.CorePattern(Q(..),P(..),OP(..),WhichTest,cleanNullView,NullView
-                                 ,SetTestInfo(..),Wanted(..),TestInfo,cannotAccept,patternToQ)
+                                  ,SetTestInfo(..),Wanted(..),TestInfo
+                                  ,mustAccept,cannotAccept,patternToQ)
 import Text.Regex.TDFA.Pattern(Pattern(..))
 import Text.Regex.TDFA.ReadRegex(decodePatternSet)
--- import Debug.Trace
+import Debug.Trace
 
 err :: String -> a
 err t = common_error "Text.Regex.TDFA.TNFA" t
@@ -138,7 +143,7 @@ notNullable = null . nullQ
 
 -- This asks if the preferred (i.e. first) NullView has no tests.
 maybeOnlyEmpty :: Q -> Maybe WinTags
-maybeOnlyEmpty (Q {nullQ = ((SetTestInfo sti,tags):_)}) | Map.null sti = Just tags
+maybeOnlyEmpty (Q {nullQ = ((SetTestInfo sti,tags):_)}) = if Map.null sti then Just tags else Nothing
 maybeOnlyEmpty _ = Nothing
 
 usesQNFA :: Q -> Bool
@@ -428,16 +433,16 @@ qToNFA compOpt qTop = (q_id startingQNFA
         let qts = map getQT eqts
         return (fromQT (foldr1 mergeAltQT qts))
       Star mOrbit resetTheseOrbits mayFirstBeNull q ->
-        let (e',clear) = -- trace ("\n>"++show e++"\n"++show q++"\n<") $
-              if notNullable q then (e,True)
+        let (e',clear) = -- debug ("\n>"++show e++"\n"++show q++"\n<") $
+              if notNullable q then (e,True)  -- subpattern cannot be null
                 else case maybeOnlyEmpty q of
-                       Just [] -> (e,True)
-                       Just tagList -> (addWinTags tagList e,False)
-                       _ -> (fromQT . preferNullViews (nullQ q) . getQT $ e,False)
+                       Just [] -> (e,True)    -- True because null of subpattern is same as skipping subpattern
+                       Just tagList -> (addWinTags tagList e,False) -- null of subpattern NOT same as skipping
+                       _ -> (fromQT . preferNullViews (nullQ q) . getQT $ e,False)  -- is NOT same as skipping
         in if cannotAccept q then return e' else mdo
         mqt <- inStar q this
         (this,ans) <- case mqt of
-                        Nothing -> err ("Weird pattern in getTransTagless/Star: " ++ show qIn)
+                        Nothing -> err ("Weird pattern in getTransTagless/Star: " ++ show (qTop,qIn))
                         Just qt -> do
                           let qt' = resetOrbitsQT resetTheseOrbits . enterOrbitQT mOrbit $ qt
                               thisQT = mergeQT qt' . getQT . leaveOrbit mOrbit $ e -- tell child to leave via leaveOrbit/e
@@ -448,36 +453,37 @@ qToNFA compOpt qTop = (q_id startingQNFA
                           return (thisE,ansE)
         return (if mayFirstBeNull then (if clear then this else ans)
                   else this)
-      NonEmpty q ->
-        {- This is like actNullable (Or [Empty,q]) without the extra tag to prefer the first Empty branch -}
+      {- NonEmpty is like actNullable (Or [Empty,q]) without the extra tag to prefer the first Empty branch -}
+      NonEmpty q ->  trace ("\n> getTrans/NonEmpty"++show qIn)  $ do
+        -- Assertion to check than Pattern.starTrans did its job right:
+        when (cannotAccept q) (err $ "getTransTagless/NonEmpty : provided with a *cannotAccept* pattern: "++show (qTop,qIn))
+        when (mustAccept q) (err $ "getTransTagless/NonEmpty : provided with a *mustAccept* pattern: "++show (qTop,qIn))
         let e' = case maybeOnlyEmpty qIn of
                    Just [] -> e
-                   Just wtags -> addWinTags wtags e
+                   Just wtags -> addWinTags wtags e  -- I suspect this is stupidly duplicating tags
                    Nothing -> err $ "getTransTagless/NonEmpty is supposed to have an emptyNull nullView : "++show qIn
-        in if cannotAccept q then return e' else do
         mqt <- inStar q e
         return $ case mqt of
-                   Nothing -> err ("Weird pattern in getTransTagless/NonEmpty: " ++ show qIn)
+                   Nothing -> err ("Weird pattern in getTransTagless/NonEmpty: " ++ show (qTop,qIn))
                    Just qt -> fromQT . mergeQT_2nd qt . getQT $ e' -- ...and then this sets qt_win to exactly that of e'
+      _ -> err ("This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen" ++ show (qTop,qIn))
 
-      _ -> err ("This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen" ++ show qIn)
-
-  inStar,inStarTagless :: Q -> E -> S (Maybe QT)
+  inStar,inStarNullableTagless :: Q -> E -> S (Maybe QT)
   inStar qIn@(Q {preReset=resets,preTag=pre,postTag=post}) eLoop | notNullable qIn =
     debug (">< inStar/1 "++show qIn++" <>") $
     return . Just . getQT =<< getTrans qIn eLoop
                                                  | otherwise =
     debug (">< inStar/2 "++show qIn++" <>") $
-    return . fmap (prependGroupResets resets . prependTag pre) =<< inStarTagless qIn (addTag post $ eLoop)
+    return . fmap (prependGroupResets resets . prependTag pre) =<< inStarNullableTagless qIn (addTag post $ eLoop)
     
-  inStarTagless qIn eLoop = debug (">< inStarTagless "++show qIn++" <>") $ do
+  inStarNullableTagless qIn eLoop = debug (">< inStarTagless "++show qIn++" <>") $ do
     case unQ qIn of
       Empty -> return Nothing -- with Or this discards () branch in "(^|foo|())*"
       Or [] -> return Nothing
       Or [q] -> inStar q eLoop
       Or qs -> do
         mqts <- if usesQNFA qIn
-                  then do eQNFA <- asQNFA "inStarTagless/Or/usesQNFA" eLoop
+                  then do eQNFA <- asQNFA "inStarNullableTagless/Or/usesQNFA" eLoop
                           sequence [ inStar q eQNFA | q <- qs ]
                   else sequence [inStar q eLoop | q <- qs ]
         let qts = catMaybes mqts
@@ -487,7 +493,8 @@ qToNFA compOpt qTop = (q_id startingQNFA
                       return (fmap getQT meAcceptingOut)
       Star {} -> do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
                     return (fmap getQT meAcceptingOut)
-      NonEmpty {} -> do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
+      NonEmpty {} -> trace ("\n> inStar/NonEmpty"++show qIn) $
+                     do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
                         return (fmap getQT meAcceptingOut)
       Test {} -> return Nothing -- with Or this discards ^ branch in "(^|foo|())*"
       OneChar {} -> err ("OneChar cannot have nullable True")
@@ -594,7 +601,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
   -- XXX  if clear && isJust mChildQNFA then (childQNFA,Just (getQT childQNFA),(mempty,childQNFA))
           (thisAC@(this,_,_),ansAC) <- 
             case mChildAccepting of
-              Nothing -> err ("Weird pattern in getTransTagless/Star: " ++ show qIn)
+              Nothing -> err $ "Weird pattern in getTransTagless/Star: " ++ show (qTop,qIn)
               Just childAccepting -> do
                 let childQT = resetOrbitsQT resetTheseOrbits . enterOrbitQT mOrbit . getQT $ childAccepting
                     thisQT = mergeQT childQT . getQT . leaveOrbit mOrbit . getE $ ac
@@ -615,21 +622,27 @@ qToNFA compOpt qTop = (q_id startingQNFA
                 return (thisAll,ansAll)
           return (if mayFirstBeNull then (if clear then thisAC else ansAC)
                     else thisAC)
-      NonEmpty q -> do
+      NonEmpty q -> trace ("\n> actNullableTagless/NonEmpty"++show qIn) $ do
+        -- We *know* that q is nullable from Pattern and CorePattern checks, but assert here anyway
+        when (mustAccept q) (err $ "actNullableTagless/NonEmpty : provided with a *mustAccept* pattern: "++show (qTop,qIn))
+        when (cannotAccept q) (err $ "actNullableTagless/NonEmpty : provided with a *cannotAccept* pattern: "++show (qTop,qIn))
+
         {- This is like actNullable (Or [Empty,q]) without the extra tag to prefer the first Empty branch -}
-        let ac0@(clearE,_,_) = case maybeOnlyEmpty qIn of
-                                 Just [] -> ac
-                                 Just wtags -> addWinTagsAC wtags ac
-                                 Nothing -> err $ "actNullableTagless/NonEmpty is supposed to have an emptyNull nullView : "++show qIn
-        if cannotAccept q then return ac0 else do -- if cannotAccept is True then starTrans did a lousy (not canOnlyMatchNull) job.
-        (_,mChildAccepting,_) <- act q ac
+        let (clearE,_,_) = case maybeOnlyEmpty qIn of
+                             Just [] -> ac
+                             Just wtags -> addWinTagsAC wtags ac
+                             Nothing -> err $ "actNullableTagless/NonEmpty is supposed to have an emptyNull nullView : "++show (qTop,qIn)
+        (_,mChildAccepting,_) <- actNullable q ac
         case mChildAccepting of
-          Nothing -> err ("Weird pattern in actNullableTagless/NonEmpty: " ++ show qIn) -- cannotAccept q checked for this (and starTrans!)
+          Nothing -> err  $ "Weird pattern in actNullableTagless/NonEmpty: " ++ show (qTop,qIn)
+            -- cannotAccept q checked for this (and starTrans!)
           Just childAccepting -> do
             let childQT = getQT childAccepting
-                thisAccepting = Just . fromQT . mergeQT childQT . getQT . getE $ ac
-            return (clearE,thisAccepting,Nothing) 
-      _ -> err ("This case in Text.Regex.TNFA.TNFA.actNullableTagless cannot happen: "++show qIn)
+                thisAccepting = case mAccepting of
+                                  Nothing -> Just . fromQT $ childQT
+                                  Just futureAcceptingE -> Just . fromQT . mergeQT childQT . getQT $ futureAcceptingE
+            return (clearE,thisAccepting,Nothing)
+      _ -> err $ "This case in Text.Regex.TNFA.TNFA.actNullableTagless cannot happen: "++show (qTop,qIn)
 
   -- This is applied directly to any qt right before passing to mergeQT
   resetOrbitsQT :: [Tag] -> QT -> QT
@@ -673,7 +686,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
          PAnyNot _ ps ->
            let trans = toMap mempty . Set.toAscList . addNewline . decodePatternSet $ ps
            in Simple { qt_win = mempty, qt_trans = trans, qt_other = target }
-         _ -> err ("Cannot acceptTrans pattern "++show pIn)
+         _ -> err ("Cannot acceptTrans pattern "++show (qTop,pIn))
 
 {-
 showQT' :: (Tag -> OP) -> QT -> String

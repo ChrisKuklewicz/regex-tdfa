@@ -1,4 +1,15 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
+
+{- Wrong answer
+
+"A\n_"
+"(^|()|.|()){0,3}()"
+
+("TDFA   ",("",array (0,4) [(0,("",(0,0))),(1,("",(-1,0))),(2,("",(-1,0))),(3,("",(-1,0))),(4,("",(0,0)))],"A\n_"))
+
+-}
+
+
 {-| 
 The "Text.Regex.TDFA" module provides a backend for regular
 expressions. To use it should be imported along with

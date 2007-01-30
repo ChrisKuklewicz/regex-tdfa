@@ -4,7 +4,7 @@ import Control.Monad.RWS
 import Data.Array.IArray(Array,(!),array,bounds,assocs,accumArray,(//))
 import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
-import Data.Sequence as S(singleton,(|>),viewl,ViewL(..)) -- empty XXX  XXX
+import Data.Sequence as S((|>),viewl,ViewL(..)) -- empty XXX  XXX
 
 import Text.Regex.Base(MatchArray)
 import Text.Regex.TDFA.Common
@@ -280,7 +280,7 @@ enterOrbit tag = modifyFlagOrbit tag True changeOrbit where
   changeOrbit = IMap.insertWith overwriteOrbit tag appendNewOrbit
 
   appendNewOrbit = AlterModify {newInOrbit = True, freshOrbit = False} -- try to append
-  startNewOrbit = AlterModify {newInOrbit = True, freshOrbit = True}   -- will start a new series
+  startNewOrbit  = AlterModify {newInOrbit = True, freshOrbit = True}   -- will start a new series
 
   overwriteOrbit _ AlterReset = startNewOrbit
   overwriteOrbit _ AlterLeave = startNewOrbit
@@ -305,11 +305,12 @@ alterOrbit (tag,AlterReset) = Left $ IMap.delete tag
 alterOrbit (tag,AlterLeave) = Left $ IMap.adjust escapeOrbit tag
   where escapeOrbit x = x {inOrbit = False}
 alterOrbit (tag,AlterModify {newInOrbit = inOrbit',freshOrbit = True}) =
-  Right $ (\pos -> IMap.insert tag (Orbits {inOrbit = inOrbit', getOrbits = S.singleton pos}))
+  Left $ IMap.insert tag (Orbits {inOrbit = inOrbit', getOrbits = mempty })
+--  Right $ (\pos -> IMap.insert tag (Orbits {inOrbit = inOrbit', getOrbits = S.singleton ps }))
 alterOrbit (tag,AlterModify {newInOrbit = inOrbit',freshOrbit = False}) =
   Right $ (\pos -> IMap.insertWith (\_ old -> old { getOrbits = getOrbits old |> pos} )
                                    tag
-                                   (Orbits {inOrbit = inOrbit', getOrbits = S.singleton pos}))
+                                   (Orbits {inOrbit = inOrbit', getOrbits = mempty})) -- S.singleton pos}))
 
 assemble :: TagList -> CompileIntructions ()
 assemble spec = sequence_ . map helper $ spec where
