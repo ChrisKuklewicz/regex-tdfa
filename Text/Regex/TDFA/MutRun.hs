@@ -82,20 +82,20 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
   
   runHerePure :: [MatchArray]
   runHerePure = {-# SCC "runHerePure" #-} Lazy.runST (do
-    (SScratch s1 s2) <- Lazy.strictToLazyST (newScratch regexIn offsetIn)
+    (SScratch s1 s2 w0) <- Lazy.strictToLazyST (newScratch regexIn offsetIn)
     let go off prev input = do
           answer <- Lazy.strictToLazyST (runHere Nothing (d_dt (regex_dfa regexIn)) s1 s2 off prev input)
           case answer of
             Nothing -> case input of
                          [] -> return []
                          (prev':input') -> let off' = succ off
-                                           in seq off' $ do () <- Lazy.strictToLazyST (resetScratch regexIn off' s1)
+                                           in seq off' $ do () <- Lazy.strictToLazyST (resetScratch regexIn off' s1 w0)
                                                             go off' prev' input'
             Just (w,(off',prev',input')) -> do
               ma <- Lazy.strictToLazyST (tagsToGroupsST (regex_groups regexIn) w)
               let len = snd (ma!0)
               rest <- if len==0 || null input' then return []
-                        else do () <- Lazy.strictToLazyST (resetScratch regexIn off' s1)
+                        else do () <- Lazy.strictToLazyST (resetScratch regexIn off' s1 w0)
                                 go off' prev' input'
               return (ma:rest)
     go offsetIn prevIn inputIn

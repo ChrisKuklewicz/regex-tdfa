@@ -80,6 +80,7 @@ data MScratch s = MScratch { m_pos :: STArray s Index (Maybe (STUArray s Tag Pos
                            }
 data SScratch s= SScratch { s_1 :: MScratch s
                           , s_2 :: MScratch s
+                          , w_blank :: WScratch s
                           }
 
 data WScratch s = WScratch { w_pos :: STUArray s Tag Position
@@ -91,31 +92,35 @@ freezeScratch :: WScratch s -> ST s Scratch
 freezeScratch (WScratch p f o) = traceCopy ("> freezeScratch") $ do
                                  liftM3 Scratch (freeze p) (freeze f) (freeze o)
 
+newWScratch :: (Tag,Tag) -> ST s (WScratch s)
+newWScratch b_tags =  liftM3 WScratch (newA b_tags (-1)) (newA b_tags False) (newA' b_tags emptyOrbits)
+
 newWScratch_ :: (Tag,Tag) -> ST s (WScratch s)
 newWScratch_ b_tags = liftM3 WScratch (newA_ b_tags) (newA_ b_tags) (newA'_ b_tags)
 
 emptyOrbits :: Orbits
 emptyOrbits = Orbits False mempty
 
+fillArray :: STArray s Int Orbits -> Orbits -> ST s (STArray s Int Orbits)
 fillArray m v = do
   x@(0,b) <- getBounds m
   forM_ (range x) (\i -> unsafeWrite m i v)
   return m
 
-resetScratch :: Regex -> Position -> MScratch s -> ST s ()
-resetScratch regexIn startPos s1 = do
+resetScratch :: Regex -> Position -> MScratch s  -> WScratch s -> ST s ()
+resetScratch regexIn startPos s1 w0 = do
   let i = regex_init regexIn
       b_tags = bounds (regex_tags regexIn)
   oldPos <- unsafeRead (m_pos s1) i
   initialPos <- case oldPos of
                   Nothing -> newA b_tags (-1)
-                  Just pos -> fillArray pos (-1)
+                  Just pos -> copySTU (w_pos w0) pos >> return pos
   unsafeWrite initialPos 0 startPos
   unsafeWrite (m_pos s1) i (Just initialPos)
   oldFlags <- unsafeRead (m_flag s1) i
   initFlags <- case oldFlags of
                  Nothing -> newA b_tags False
-                 Just flags -> fillArray flags False
+                 Just flags -> copySTU (w_flag w0) flags >> return flags
   unsafeWrite initFlags 0 True
   unsafeWrite (m_flag s1) i (Just initFlags)
   oldOrbits <- unsafeRead (m_orbit s1) i
@@ -129,14 +134,15 @@ newScratch regexIn startPos = do
   let i = regex_init regexIn
       b_index = (0,i)
 --  trace ("\n> newScratch: "++show (b_index,b_tags,i,startPos)) $ do
-  s@(SScratch {s_1=s1}) <- newSScratch b_index
-  resetScratch regexIn startPos s1
+  s@(SScratch {s_1=s1,w_blank=w0}) <- newSScratch b_index
+  resetScratch regexIn startPos s1 w0
   return s
 
 newSScratch b_index = do
   s1 <- newMScratch b_index
   s2 <- newMScratch b_index
-  return (SScratch s1 s2)
+  w0 <- newWScratch (b_index)
+  return (SScratch s1 s2 w0)
 
 newMScratch b_index = do
   let n = rangeSize b_index
@@ -520,7 +526,7 @@ tagsToGroupsST aGroups (WScratch {w_pos=p,w_flag=f})= do
         if not f then get this_index gs
           else do
         startPos <- unsafeRead p start
-        stopPos <- unsafeRead p start
+        stopPos <- unsafeRead p stop
         (startParent,lengthParent) <- unsafeRead ma parent
         let ok = (0 <= startParent &&
                   0 <= lengthParent &&
