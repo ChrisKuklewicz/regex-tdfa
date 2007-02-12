@@ -24,7 +24,7 @@ import Text.Regex.Base(MatchArray,RegexContext(..),RegexMaker(..),RegexLike(..))
 import Text.Regex.Base.Impl(polymatch,polymatchM)
 import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
 import Text.Regex.TDFA.TDFA(patternToDFA)
-import Text.Regex.TDFA.RunSeq(findMatch,findMatchAll,countMatchAll)
+import Text.Regex.TDFA.MutRunSeq(findMatch,findMatchAll,countMatchAll)
 import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
 import Text.Regex.TDFA.ReadRegex(parseRegex)
 

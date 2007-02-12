@@ -22,7 +22,7 @@ import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.IntArrTrieSet(TrieSet)
 import qualified Text.Regex.TDFA.IntArrTrieSet as Trie(lookupAsc,fromSinglesMerge)
 import Text.Regex.TDFA.Pattern(Pattern)
-import Text.Regex.TDFA.RunState(compareWith,toInstructions)
+import Text.Regex.TDFA.RunMutState(compareWith,toInstructions)
 import Text.Regex.TDFA.TNFA(patternToNFA)
 -- import Debug.Trace
 

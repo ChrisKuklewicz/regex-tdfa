@@ -25,7 +25,7 @@ import Text.Regex.Base.Impl(polymatch,polymatchM)
 import Text.Regex.TDFA.ReadRegex(parseRegex)
 import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
 import Text.Regex.TDFA.TDFA(patternToDFA)
-import Text.Regex.TDFA.RunLBS(findMatch,findMatchAll,countMatchAll)
+import Text.Regex.TDFA.MutRunLBS(findMatch,findMatchAll,countMatchAll)
 import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}

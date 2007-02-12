@@ -58,7 +58,7 @@ import Text.Regex.TDFA.CorePattern(Q(..),P(..),OP(..),WhichTest,cleanNullView,Nu
                                   ,mustAccept,cannotAccept,patternToQ)
 import Text.Regex.TDFA.Pattern(Pattern(..))
 import Text.Regex.TDFA.ReadRegex(decodePatternSet)
-import Debug.Trace
+-- import Debug.Trace
 
 err :: String -> a
 err t = common_error "Text.Regex.TDFA.TNFA" t
@@ -454,7 +454,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
         return (if mayFirstBeNull then (if clear then this else ans)
                   else this)
       {- NonEmpty is like actNullable (Or [Empty,q]) without the extra tag to prefer the first Empty branch -}
-      NonEmpty q ->  trace ("\n> getTrans/NonEmpty"++show qIn)  $ do
+      NonEmpty q -> debug ("\n> getTrans/NonEmpty"++show qIn)  $ do
         -- Assertion to check than Pattern.starTrans did its job right:
         when (cannotAccept q) (err $ "getTransTagless/NonEmpty : provided with a *cannotAccept* pattern: "++show (qTop,qIn))
         when (mustAccept q) (err $ "getTransTagless/NonEmpty : provided with a *mustAccept* pattern: "++show (qTop,qIn))
@@ -493,7 +493,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                       return (fmap getQT meAcceptingOut)
       Star {} -> do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
                     return (fmap getQT meAcceptingOut)
-      NonEmpty {} -> trace ("\n> inStar/NonEmpty"++show qIn) $
+      NonEmpty {} -> debug ("\n> inStar/NonEmpty"++show qIn) $
                      do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
                         return (fmap getQT meAcceptingOut)
       Test {} -> return Nothing -- with Or this discards ^ branch in "(^|foo|())*"
@@ -622,7 +622,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                 return (thisAll,ansAll)
           return (if mayFirstBeNull then (if clear then thisAC else ansAC)
                     else thisAC)
-      NonEmpty q -> trace ("\n> actNullableTagless/NonEmpty"++show qIn) $ do
+      NonEmpty q -> debug ("\n> actNullableTagless/NonEmpty"++show qIn) $ do
         -- We *know* that q is nullable from Pattern and CorePattern checks, but assert here anyway
         when (mustAccept q) (err $ "actNullableTagless/NonEmpty : provided with a *mustAccept* pattern: "++show (qTop,qIn))
         when (cannotAccept q) (err $ "actNullableTagless/NonEmpty : provided with a *cannotAccept* pattern: "++show (qTop,qIn))

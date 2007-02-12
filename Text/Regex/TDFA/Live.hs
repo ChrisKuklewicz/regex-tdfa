@@ -13,7 +13,7 @@ import Text.Regex.TDFA.CorePattern
 import Text.Regex.TDFA.TNFA
 import Text.Regex.TDFA.TDFA
 import Text.Regex.TDFA.Wrap
-import Text.Regex.TDFA.Run
+-- import Text.Regex.TDFA.Run
 
 -- import qualified Text.Regex.TRE as TRE
 

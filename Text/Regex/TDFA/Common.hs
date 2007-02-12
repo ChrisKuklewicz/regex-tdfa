@@ -240,7 +240,7 @@ type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the
 data Scratch = Scratch
   { scratchPos :: UArray Tag Position
   , scratchFlags :: UArray Tag Bool
-  , scratchOrbits :: IntMap {-Tag-} Orbits
+  , scratchOrbits :: Array Tag Orbits -- IntMap {-Tag-} Orbits
   } deriving (Show) --- XXX shows function
 
 data Orbits = Orbits
@@ -251,16 +251,17 @@ data Orbits = Orbits
 data Instructions = Instructions
   { newPos :: [(Tag,Bool)] -- False is preUpdate, True is postUpdate
   , newFlags :: [(Tag,Bool)]   -- apply to scratchFlags
-  , newOrbits :: OrbitInstruction
+  , newOrbits :: [(Tag,OrbitInstruction)]
   } deriving (Show)
 
-type OrbitInstruction = Position -> IntMap {-Tag-} Orbits -> IntMap {-Tag-} Orbits
+-- type OrbitInstruction = Position -> IntMap {-Tag-} Orbits -> IntMap {-Tag-} Orbits
+type OrbitInstruction = Position -> Orbits -> Orbits
 
-type CompileIntructions = State
+type CompileInstructions a = State
   ( IntMap Bool
   , IntMap Bool
   , IntMap AlterOrbit
-  )
+  ) a
 
 data AlterOrbit = AlterReset                        -- Delete Orbits
                 | AlterLeave                        -- set inOrbit to False if it exists

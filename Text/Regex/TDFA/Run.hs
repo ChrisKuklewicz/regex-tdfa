@@ -13,7 +13,7 @@ import Data.Maybe(isJust,isNothing)
 
 import Text.Regex.Base(MatchArray,RegexOptions(..))
 import Text.Regex.TDFA.Common
-import Text.Regex.TDFA.RunState(makeTagComparer,tagsToGroups,update,newScratchMap)
+import Text.Regex.TDFA.RunMutState(makeTagComparer,tagsToGroups,update,newScratchMap)
 import Text.Regex.TDFA.Wrap()
 -- import Debug.Trace
 
