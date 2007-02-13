@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS -fno-warn-orphans #-}
 -- | "Text.Regex.TDFA.Wrap" provides the instance of RegexOptions and
 -- the definition of (=~) and (=~~).  This is all re-exported by
 -- "Text.Regex.TDFA".

@@ -1,3 +1,4 @@
+{-# OPTIONS -funbox-strict-fields #-}
 -- | Common provides simple functions to the backend.  It defines most
 -- of the data types.  All modules should call error via the
 -- common_error function below.
@@ -238,20 +239,20 @@ type Orbits = Seq Position
 type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the preferred one
 
 data Scratch = Scratch
-  { scratchPos :: UArray Tag Position
-  , scratchFlags :: UArray Tag Bool
-  , scratchOrbits :: Array Tag Orbits -- IntMap {-Tag-} Orbits
+  { scratchPos :: !(UArray Tag Position)
+  , scratchFlags :: !(UArray Tag Bool)
+  , scratchOrbits :: !(Array Tag Orbits) -- IntMap {-Tag-} Orbits
   } deriving (Show) --- XXX shows function
 
 data Orbits = Orbits
-  { inOrbit :: Bool        -- True if enterOrbit, False if LeaveOrbit
-  , getOrbits :: Seq Position
+  { inOrbit :: !Bool        -- True if enterOrbit, False if LeaveOrbit
+  , getOrbits :: !(Seq Position)
   } deriving (Show)
 
 data Instructions = Instructions
-  { newPos :: [(Tag,Bool)] -- False is preUpdate, True is postUpdate
-  , newFlags :: [(Tag,Bool)]   -- apply to scratchFlags
-  , newOrbits :: [(Tag,OrbitInstruction)]
+  { newPos :: ![(Tag,Bool)] -- False is preUpdate, True is postUpdate
+  , newFlags :: ![(Tag,Bool)]   -- apply to scratchFlags
+  , newOrbits :: ![(Tag,OrbitInstruction)]
   } deriving (Show)
 
 -- type OrbitInstruction = Position -> IntMap {-Tag-} Orbits -> IntMap {-Tag-} Orbits

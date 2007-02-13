@@ -1,3 +1,4 @@
+{-# OPTIONS -fbang-patterns -funbox-strict-fields #-}
 module Text.Regex.TDFA.RunMutState where
 
 import Control.Monad(forM_,when,liftM3,guard)
@@ -74,18 +75,18 @@ duplicateABool s = do i <- unsafeFreeze s :: ST s (UArray Tag Bool)
                       traceCopy ("> duplicateABool") $ do
                       thaw i
 
-data MScratch s = MScratch { m_pos :: STArray s Index (Maybe (STUArray s Tag Position))
-                           , m_flag :: STArray s Index (Maybe (STUArray s Tag Bool))
-                           , m_orbit :: STArray s Index (Maybe (STArray s Tag Orbits))
+data MScratch s = MScratch { m_pos :: !(STArray s Index (Maybe (STUArray s Tag Position)))
+                           , m_flag :: !(STArray s Index (Maybe (STUArray s Tag Bool)))
+                           , m_orbit :: !(STArray s Index (Maybe (STArray s Tag Orbits)))
                            }
-data SScratch s= SScratch { s_1 :: MScratch s
-                          , s_2 :: MScratch s
-                          , w_blank :: WScratch s
+data SScratch s= SScratch { s_1 :: !(MScratch s)
+                          , s_2 :: !(MScratch s)
+                          , w_blank :: !(WScratch s)
                           }
 
-data WScratch s = WScratch { w_pos :: STUArray s Tag Position
-                           , w_flag :: STUArray s Tag Bool
-                           , w_orbit :: STArray s Tag Orbits
+data WScratch s = WScratch { w_pos :: !(STUArray s Tag Position)
+                           , w_flag :: !(STUArray s Tag Bool)
+                           , w_orbit :: !(STArray s Tag Orbits)
                            }
 
 freezeScratch :: WScratch s -> ST s Scratch
@@ -151,34 +152,37 @@ newMScratch b_index = do
   orbit <- newListArray b_index (replicate n Nothing)
   return (MScratch pos flag orbit)
 
-copyUpdate :: (MArray (STUArray s) e (ST s)) => STUArray s Tag e   -- source
-                                             -> [(Tag,e)]          -- updates
-                                             -> STUArray s Tag e   -- destination
-                                             -> (ST s) ()
-copyUpdate a1 changes a2 = do
+{-# INLINE copyUpdateTags #-}
+copyUpdateTags :: (MArray (STUArray s) Position (ST s))
+                  => STUArray s Tag Position   -- source
+                    -> [(Tag,Bool)]            -- updates
+                    -> Position -> Position
+                    -> STUArray s Tag Position   -- destination
+                    -> (ST s) ()
+copyUpdateTags !a1 !changes !pFalse !pTrue !a2 = do
+  (start,stop) <- getBounds a1
+  traceCopy ("> copySTU copyUpdate"++show (start,stop)) $ do
+  copySTU a1 a2
+  mapM_ (\(tag,v) -> if v then unsafeWrite a2 tag pTrue
+                          else unsafeWrite a2 tag pFalse) changes
+
+{-# INLINE copyUpdateFlags #-}
+copyUpdateFlags :: (MArray (STUArray s) Bool (ST s))
+                   => STUArray s Tag Bool   -- source
+                     -> [(Tag,Bool)]          -- updates
+                     -> STUArray s Tag Bool   -- destination
+                     -> (ST s) ()
+copyUpdateFlags !a1 !changes !a2 = do
   (start,stop) <- getBounds a1
   traceCopy ("> copySTU copyUpdate"++show (start,stop)) $ do
   copySTU a1 a2
   mapM_ (\(tag,v) -> unsafeWrite a2 tag v) changes
-{-
-copyUpdate a1 changes a2 = do
-  (start,stop) <- getBounds a1
-  traceCopy ("> copyUpdate"++show (start,stop)) $ do
-  let act a b | seq a $ seq b $ False = undefined
-      act _ x | x > stop = return ()
-      act [] x = do unsafeRead a1 x >>= unsafeWrite a2 x
-                    act [] $! succ x
-      act todo@((t,v):rest) x | t==x = do unsafeWrite a2 x v
-                                          act rest $! succ x
-                              | otherwise =  do unsafeRead a1 x >>= unsafeWrite a2 x
-                                                act todo $! succ x
-  act changes start
--}
+
 copyUpdateApplied :: STArray s Tag Orbits          -- source 
                   -> [(Tag, Orbits -> Orbits)]     -- changes
                   -> STArray s Tag Orbits          -- destination
                   -> ST s ()
-copyUpdateApplied a1 changes a2 = do
+copyUpdateApplied !a1 !changes !a2 = do
   (start,stop) <- getBounds a1
   traceCopy ("> copyUpdateApplied"++ show (start,stop,length changes)) $ do
   let act a b | seq a $ seq b $ False = undefined
@@ -195,7 +199,7 @@ updateSwap :: MScratch s -> Index        -- source
            -> Instructions -> Position   -- affects source
            -> MScratch s -> Index        -- destination
            -> ST s ()
-updateSwap s1 i1 ins preTag s2 i2 = do
+updateSwap !s1 !i1 !ins !preTag !s2 !i2 = do
   b_index <- getBounds (m_pos s1)
   b_tags <- getBounds . fromJust =<< unsafeRead (m_pos s1) i1
 --  trace ("\n> forceUpdate :"++show (b_index,b_tags,i1,ins,preTag,i2)) $ do
@@ -242,17 +246,17 @@ forceUpdateW :: MScratch s -> Index        -- source
              -> MScratch s -> Index        -- destination
              -> ST s ()
 -}
-forceUpdateW s1 i1 ins preTag pos2 flag2 orbit2 = do
-  let val x = if x then postTag else preTag where postTag = succ preTag
+forceUpdateW !s1 !i1 !ins !preTag !pos2 !flag2 !orbit2 = do
+  let orbIns = {-# "SCC orbIns" #-} map (\(a,x) -> (a,x preTag)) (newOrbits ins)
 --  trace ("\n> forceUpdateW :"++show (i1,ins,preTag)) $ do
   pos1 <- maybe (err $ "forceUpdate : m_pos s1 is Nothing" ++ show (i1,ins,preTag)) return =<< unsafeRead (m_pos s1) i1
-  copyUpdate pos1 (mapSnd val $ newPos ins) pos2
+  copyUpdateTags pos1 (newPos ins) preTag (succ preTag) pos2
 
   flag1 <- maybe (err "forceUpdate : m_flag s1 is Nothing") return =<< unsafeRead (m_flag s1) i1
-  copyUpdate flag1 (newFlags ins) flag2
+  copyUpdateFlags flag1 (newFlags ins) flag2
 
   orbit1 <- maybe (err "forceUpdate : m_orbit s1 is Nothing") return =<< unsafeRead (m_orbit s1) i1
-  copyUpdateApplied orbit1 (mapSnd ($ preTag) (newOrbits ins)) orbit2
+  copyUpdateApplied orbit1 orbIns orbit2
 
 mergeIns ins preTag = 
   let postTag = succ preTag
@@ -575,7 +579,9 @@ foreign import ccall unsafe "memcpy"
     memcpy :: MutableByteArray# RealWorld -> MutableByteArray# RealWorld -> Int# -> IO ()
 
 copySTU :: Ix i => STUArray s i e -> STUArray s i e -> ST s ()
-copySTU (STUArray _ _ msource) (STUArray _ _ mdest) = ST $ \s1# ->
+copySTU !(STUArray _ _ msource) !(STUArray _ _ mdest) = ST $ \s1# ->
     case sizeofMutableByteArray# msource        of { n# ->
     case unsafeCoerce# memcpy mdest msource n# s1# of { (# s2#, () #) ->
     (# s2#, () #) }}
+
+

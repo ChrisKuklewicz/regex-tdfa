@@ -1,3 +1,4 @@
+{-# GHC_OPTIONS -fbang-patterns #-}
 -- | "Text.Regex.TDFA.Run" is the main module for matching a DFA
 -- against a String.  Many of the associated functions are exported to
 -- other modules to help match against other types.
@@ -48,13 +49,12 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
   ans = if captureGroups (regex_execOptions regexIn)
           then runHerePure
           else let dtIn = (d_dt (regex_dfa regexIn))
-                   go off prev input = 
+                   go !off !prev !input = 
                      case runHereNoCap Nothing dtIn off prev input of
                        Nothing -> case input of
                                     [] -> []
                                     (prev':input') -> let off' = succ off
-                                                      in seq off' $
-                                                         go off' prev' input'
+                                                      in go off' prev' input'
                        Just (off',prev',input') ->
                          let ma = array (0,0) [(0,(offsetIn,len))]
                              len = off'-offsetIn
@@ -83,14 +83,14 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
   runHerePure :: [MatchArray]
   runHerePure = {-# SCC "runHerePure" #-} Lazy.runST (do
     (SScratch s1 s2 w0) <- Lazy.strictToLazyST (newScratch regexIn offsetIn)
-    let go off prev input = do
+    let go !off !prev !input = {-# SCC "runHerePure.go" #-} do
           answer <- Lazy.strictToLazyST (runHere Nothing (d_dt (regex_dfa regexIn)) s1 s2 off prev input)
           case answer of
             Nothing -> case input of
                          [] -> return []
                          (prev':input') -> let off' = succ off
-                                           in seq off' $ do () <- Lazy.strictToLazyST (resetScratch regexIn off' s1 w0)
-                                                            go off' prev' input'
+                                           in do () <- Lazy.strictToLazyST (resetScratch regexIn off' s1 w0)
+                                                 go off' prev' input'
             Just (w,(off',prev',input')) -> do
               ma <- Lazy.strictToLazyST (tagsToGroupsST (regex_groups regexIn) w)
               let len = snd (ma!0)
@@ -105,7 +105,7 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
           -> MScratch s -> MScratch s
           -> Position -> Char -> String
           -> ST s (Maybe (WScratch s,(Position,Char,String)))
-  runHere winning dt s1 s2 off prev input = {-# SCC "runHere" #-}
+  runHere !winning !dt !s1 !s2 !off !prev !input = {-# SCC "runHere" #-}
     let followTrans :: DTrans -> ST s ()
         followTrans dtrans | IMap.size dtrans /=1 = mapM_ updateDest (IMap.toList dtrans)
                            | otherwise = let (x@(destIndex,sourceIns):_) = IMap.toList dtrans
@@ -116,11 +116,11 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
 -- XXXX Change to keep track of winning source Index, then use swap if it is unique
 
         updateDest :: ({-Dest-}Index,IntMap {-Source-} (DoPa,Instructions)) -> ST s ()
-        updateDest (destIndex,sourceIns) | IMap.null sourceIns = err "matchHere.runHere.updateDest found null sourceIns"
-                                         | IMap.size sourceIns == 1 = do
+        updateDest !(!destIndex,!sourceIns) | IMap.null sourceIns = err "matchHere.runHere.updateDest found null sourceIns"
+                                            | IMap.size sourceIns == 1 = do
           let [(sourceIndex,(_,instructions))] = IMap.toList sourceIns
           forceUpdate s1 sourceIndex instructions off s2 destIndex
-                                         | otherwise = do
+                                            | otherwise = do
           let ((si0,(_,ins0)):rest) = IMap.toList sourceIns
           forceUpdate s1 si0 ins0 off s2 destIndex
           let fight (sourceIndex,(_,instructions)) = do
@@ -130,8 +130,8 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
                   _ -> return ()
           mapM_ fight rest
         updateWinner :: IntMap {-Source-} Instructions -> ST s (Maybe (WScratch s,(Position,Char,String)))
-        updateWinner sourceIns | IMap.null sourceIns = return winning
-                               | IMap.size sourceIns == 1 = do
+        updateWinner !sourceIns | IMap.null sourceIns = return winning
+                                | IMap.size sourceIns == 1 = do
           w@(WScratch p f o) <- case winning of
                                   Nothing -> newWScratch_ b
                                   Just (win,_) -> return win
@@ -171,7 +171,7 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
              then runHere winning a s1 s2 off prev input
              else runHere winning b s1 s2 off prev input
 
-  runHereNoCap winning dt off prev input =  {-# SCC "runHereNoCap" #-}
+  runHereNoCap winning !dt !off !prev !input =  {-# SCC "runHereNoCap" #-}
     case dt of
       Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
         let winning' = if IMap.null w then winning else Just (off,prev,input)
