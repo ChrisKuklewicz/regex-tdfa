@@ -1,6 +1,6 @@
 .PHONY: all configure build install setup clean
 
-CONF=--prefix=/User/chrisk/local/devel/trl --enable-library-profiling
+CONF=--prefix=/Users/chrisk/local/devel/trl --enable-library-profiling
 USER=--user
 
 all: setup clean configure build

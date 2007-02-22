@@ -432,6 +432,9 @@ qToNFA compOpt qTop = (q_id startingQNFA
                   else sequence [ getTrans q e | q <- qs ]
         let qts = map getQT eqts
         return (fromQT (foldr1 mergeAltQT qts))
+
+-- XXX add enter leaveOrbit to the e' capture path!
+
       Star mOrbit resetTheseOrbits mayFirstBeNull q ->
         let (e',clear) = -- debug ("\n>"++show e++"\n"++show q++"\n<") $
               if notNullable q then (e,True)  -- subpattern cannot be null
@@ -445,13 +448,14 @@ qToNFA compOpt qTop = (q_id startingQNFA
                         Nothing -> err ("Weird pattern in getTransTagless/Star: " ++ show (qTop,qIn))
                         Just qt -> do
                           let qt' = resetOrbitsQT resetTheseOrbits . enterOrbitQT mOrbit $ qt
-                              thisQT = mergeQT qt' . getQT . leaveOrbit mOrbit $ e -- tell child to leave via leaveOrbit/e
-                              ansE = fromQT . mergeQT qt' . getQT $ e' -- tell world to skip via e'
+                              thisQT = mergeQT qt' . getQT . leaveOrbit mOrbit $ e -- capture of subpattern or leave via next pattern (avoid null of subpattern on way out)
+                              ansE = fromQT . mergeQT qt' . getQT $ e' -- capture of subpattern or leave via null of subpattern
                           thisE <- if usesQNFA q
                                   then return . fromQNFA =<< newQNFA "getTransTagless/Star" thisQT
                                   else return . fromQT $ thisQT
                           return (thisE,ansE)
-        return (if mayFirstBeNull then (if clear then this else ans)
+        return (if mayFirstBeNull then (if clear then this  -- optimization to possibly preserve QNFA
+                                                 else ans)
                   else this)
       {- NonEmpty is like actNullable (Or [Empty,q]) without the extra tag to prefer the first Empty branch -}
       NonEmpty q -> debug ("\n> getTrans/NonEmpty"++show qIn)  $ do
@@ -476,7 +480,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
     debug (">< inStar/2 "++show qIn++" <>") $
     return . fmap (prependGroupResets resets . prependTag pre) =<< inStarNullableTagless qIn (addTag post $ eLoop)
     
-  inStarNullableTagless qIn eLoop = debug (">< inStarTagless "++show qIn++" <>") $ do
+  inStarNullableTagless qIn eLoop = debug (">< inStarNullableTagless "++show qIn++" <>") $ do
     case unQ qIn of
       Empty -> return Nothing -- with Or this discards () branch in "(^|foo|())*"
       Or [] -> return Nothing

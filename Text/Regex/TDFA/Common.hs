@@ -49,8 +49,14 @@ mapFst f = fmap (\ (a,b) -> (f a,b))
 mapSnd :: (Functor f) => (t1 -> t2) -> f (t, t1) -> f (t, t2)
 mapSnd f = fmap (\ (a,b) -> (a,f b))
 
+fst3 :: (a,b,c) -> a
+fst3 (x,_,_) = x
+
 snd3 :: (a,b,c) -> b
 snd3 (_,x,_) = x
+
+thd3 :: (a,b,c) -> c
+thd3 (_,_,x) = x
 
 flipOrder :: Ordering -> Ordering
 flipOrder GT = LT
@@ -241,7 +247,7 @@ type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the
 data Scratch = Scratch
   { scratchPos :: !(UArray Tag Position)
   , scratchFlags :: !(UArray Tag Bool)
-  , scratchOrbits :: !(Array Tag Orbits) -- IntMap {-Tag-} Orbits
+  , scratchOrbits :: !OrbitLog
   } deriving (Show) --- XXX shows function
 
 data Orbits = Orbits
@@ -252,11 +258,13 @@ data Orbits = Orbits
 data Instructions = Instructions
   { newPos :: ![(Tag,Bool)] -- False is preUpdate, True is postUpdate
   , newFlags :: ![(Tag,Bool)]   -- apply to scratchFlags
-  , newOrbits :: ![(Tag,OrbitInstruction)]
+  , newOrbits :: !(Maybe (Position -> OrbitTransformer))
   } deriving (Show)
 
 -- type OrbitInstruction = Position -> IntMap {-Tag-} Orbits -> IntMap {-Tag-} Orbits
 type OrbitInstruction = Position -> Orbits -> Orbits
+type OrbitLog = IntMap Orbits
+type OrbitTransformer = OrbitLog -> OrbitLog
 
 type CompileInstructions a = State
   ( IntMap Bool
