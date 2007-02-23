@@ -59,5 +59,5 @@ import Text.Regex.TDFA.Wrap(Regex,CompOption(..),ExecOption(..),(=~),(=~~))
 
 getVersion :: Version
 getVersion = Version { versionBranch = [0,75]
-                     , versionTags = ["b","tdfa","unstable"]
+                     , versionTags = ["c","tdfa","unstable"]
                      }

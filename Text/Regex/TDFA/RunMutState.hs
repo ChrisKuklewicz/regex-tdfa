@@ -33,13 +33,14 @@ import Text.Regex.TDFA.Common
 err :: String -> a
 err s = common_error "Text.Regex.TDFA.RunMutState"  s
 
+{-# INLINE newTagEngine #-}
 newTagEngine regexIn = do
   (which,count) <- newBoard regexIn
   let comp = makeTagComparer (regex_tags regexIn)
   let findTrans s1 off trans = {-# SCC "findTrans" #-} (mapM_ findTrans' (IMap.toList trans)) where
         findTrans' (destIndex,sources) | IMap.null sources =
           writeArray which destIndex (-1,undefined,undefined)
-                                       | otherwise = do
+                                       | otherwise =  {-# SCC "findTrans'" #-} do
           let (first:rest) = IMap.toList sources
               prep (sourceIndex,(_,instructions)) = do
                 p <- maybe (error "findtrans") return =<< unsafeRead (m_pos s1) sourceIndex
@@ -90,8 +91,8 @@ newTagEngine regexIn = do
 
   let performTrans s1 s2 off dtrans | IMap.null dtrans = return ()
                                     | otherwise = {-# SCC "performTrans" #-} do
-        mapM_ act (IMap.keys dtrans)
-          where act destIndex = do
+        mapM_ performTrans' (IMap.keys dtrans)
+          where act destIndex =  {-# SCC "performTrans'" #-} do
                   i1@(sourceIndex,_instructions,_orbit) <- unsafeRead which destIndex
                   if sourceIndex == (-1) then return () else do
                   n <- unsafeRead count sourceIndex

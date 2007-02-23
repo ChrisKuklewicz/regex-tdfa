@@ -49,7 +49,7 @@ countMatchAll regexIn stringIn = length (matchHere regex 0 '\n' stringIn) where
 
 matchHere :: Regex -> Position -> Char -> String -> [MatchArray]
 matchHere regexIn offsetIn prevIn inputIn = ans where
-  ans = if captureGroups (regex_execOptions regexIn) && (1<rangeSize (bounds (regex_groups regexIn)))
+  ans = if captureGroups (regex_execOptions regexIn) && (1<=rangeSize (bounds (regex_groups regexIn)))
           then runHerePure
           else let dtIn = (d_dt (regex_dfa regexIn))
                    go !off !prev !input = 
