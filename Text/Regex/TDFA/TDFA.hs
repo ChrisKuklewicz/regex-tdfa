@@ -3,7 +3,7 @@
 -- of Index which are used to lookup the DFA state in a lazy Trie
 -- which holds all possible subsets of QNFA states.
 module Text.Regex.TDFA.TDFA(patternToDFA,DFA(..),DT(..)
-                           ,examineDFA
+                           ,examineDFA,isDFAFrontAnchored
                            ,nfaToDFA,dfaMap) where
 
 --import Control.Arrow((***))
@@ -12,7 +12,7 @@ import Control.Monad.RWS
 import Data.Array.IArray(Array,(!),bounds)
 import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
-import qualified Data.IntSet as ISet(empty,singleton)
+import qualified Data.IntSet as ISet(empty,singleton,null)
 import Data.List(foldl')
 import Data.Map(Map)
 import qualified Data.Map as Map(elems,insert,member,empty,toAscList,fromDistinctAscList)
@@ -224,76 +224,19 @@ bestTrans aTagOP (f:fs) | null fs = canonical f
       Minimize -> (flip compare) post1 post2
       Orbit -> err $ "bestTrans.choose : Very Unexpeted Orbit in Just Just: "++show (tag,(post1,post2),aTagOP,f:fs)
 
-{-
-cleanWin :: WinTags -> WinTags
-cleanWin =  reverse . clean  . reverse
-  where isTagTask (_,PreUpdate TagTask) = True
-        isTagTask (_,PostUpdate TagTask) = True
-        isTagTask _ = False
-        clean [] = []
-        clean (x:rest) | isTagTask x =  x : clean (filter (check (fst x)) rest)
-                       | otherwise   =  x : clean rest
-          where check tag (tag',PreUpdate TagTask) = tag/=tag'
-                check tag (tag',PostUpdate TagTask) = tag/=tag'
-                -- check tag (tag',PreUpdate ResetGroupStopTask) = tag/=tag'
-                -- check tag (tag',PostUpdate ResetGroupStopTask) = tag/=tag'
-                -- XXX XXX disable optimization
-                check _ _ = True
 
-bestTrans :: (Tag -> OP) -> [TagCommand] -> TagCommand
-bestTrans _ [] = err "bestTrans There were no transition in s"
-bestTrans op (f:fs) | null fs = canonical f
-                    | otherwise = canonical . snd $ foldl' pick (prep f,f) fs where
-  canonical :: TagCommand -> TagCommand
-  canonical (dopa,tcs) = (dopa,reverse . clean  . reverse $ tcs)
-  prep :: TagCommand -> TagList
-  prep (_,tcs) = sortBy (compare `on` fst) . clean . reverse . filter isTagTask $ tcs
-  isTagTask (_,PreUpdate TagTask) = True
-  isTagTask (_,PostUpdate TagTask) = True
-  isTagTask _ = False
-  clean [] = []
-  clean (x:rest) | isTagTask x =  x : clean (filter (check (fst x)) rest)
-                 | otherwise   =  x : clean rest
-    where check tag (tag',PreUpdate TagTask) = tag/=tag'
-          check tag (tag',PostUpdate TagTask) = tag/=tag'
-          -- check tag (tag',PreUpdate ResetGroupStopTask) = tag/=tag'
-          -- check tag (tag',PostUpdate ResetGroupStopTask) = tag/=tag'
-          check _ _ = True -- XXX XXX displable this optimization
-  pick :: (TagList,TagCommand) -> TagCommand -> (TagList,TagCommand)
-  pick win@(oldP,_) new =
-    let newP = prep new
-    in case compareWith choose oldP (prep new) of
-         GT -> win
-         EQ -> win
-         LT -> (newP,new)
-  choose :: Maybe (Tag,TagUpdate) -> Maybe (Tag,TagUpdate) -> Ordering
-  choose all1@(Just (tag,task1)) all2@(Just (_,task2)) =
-    case (task1,task2) of
-      (PostUpdate TagTask,PreUpdate TagTask)  -> if op tag == Maximize then GT else LT
-      (PreUpdate TagTask ,PostUpdate TagTask) -> if op tag == Maximize then LT else GT
-      (PreUpdate TagTask ,PreUpdate TagTask)  -> EQ
-      (PostUpdate TagTask,PostUpdate TagTask) -> EQ
-      _ -> err $ "bestTrans.choose : unknown tasks Just/Just :"++show (all1,all2)
-  choose (Just (tag,PreUpdate TagTask)) Nothing = if op tag == Maximize then GT else LT
-  choose (Just (tag,PostUpdate TagTask)) Nothing = if op tag == Maximize then GT else LT
-  choose Nothing (Just (tag,PreUpdate TagTask)) = if op tag == Maximize then LT else GT
-  choose Nothing (Just (tag,PostUpdate TagTask)) = if op tag == Maximize then LT else GT
-  choose Nothing Nothing = EQ
-  choose all1 all2 = err $ "bestTrans.choose : unknown tasks :"++show (all1,all2)
+isDTLosing :: DT -> Bool
+isDTLosing (Testing' {dt_a=a,dt_b=b}) = isDTLosing a && isDTLosing b
+isDTLosing (Simple' {dt_win=w,dt_trans=t,dt_other=o}) | not (IMap.null w) = False
+                                                      | Just (dfa,_) <- o, not (ISet.null (d_id dfa)) = False
+                                                      | otherwise =
+  let destinations = map (d_id . fst) . Map.elems $ t
+  in all ISet.null destinations -- True for empty list of destinations
 
--}
+-- Assumes that Test_BOL is the smallest (and therefore always first) test
+isDTFrontAnchored :: DT -> Bool
+isDTFrontAnchored (Testing' {dt_test=wt,dt_b=b}) | wt == Test_BOL = isDTLosing b
+isDTFrontAnchored _ = False
 
-{-
-          makeUpdater :: TagList -> RunState ()
-          makeUpdater spec = sequence_ . map helper $ spec
-            where helper (tag,update) = case update of
-                                           PreUpdate TagTask -> setPreTag tag
-                                           PreUpdate ResetGroupStopTask -> resetTag tag
-                                           PreUpdate ResetOrbitTask -> resetOrbit tag
-                                           PreUpdate EnterOrbitTask -> enterOrbit tag
-                                           PreUpdate LeaveOrbitTask -> leaveOrbit tag
-                                           PostUpdate TagTask -> setPostTag tag
-                                           PostUpdate ResetGroupStopTask -> resetTag tag
-                                           _ -> err ("Weird command in makeUpdater: "++show (tag,update,spec))
-
--}
+isDFAFrontAnchored :: DFA -> Bool
+isDFAFrontAnchored = isDTFrontAnchored . d_dt
