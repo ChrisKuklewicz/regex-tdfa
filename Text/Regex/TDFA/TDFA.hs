@@ -14,8 +14,9 @@ import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
 import qualified Data.IntSet as ISet(empty,singleton,null)
 import Data.List(foldl')
-import Data.IntMap.CharMap(CharMap)
-import qualified Data.IntMap.CharMap as Map(elems,empty,toAscList,fromDistinctAscList)
+import Data.IntMap.CharMap(CharMap(..))
+import qualified Data.IntMap.CharMap as Map(empty)
+import qualified Data.IntMap as IMap(toAscList,fromDistinctAscList)
 import qualified Data.Map (Map,empty,member,insert,elems)
 import Data.Maybe(isJust)
 
@@ -110,10 +111,10 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
             where dtrans = IMap.unionWith IMap.union dt1 dt2
           -- This is very much like fuseQTrans
           fuseDTrans :: CharMap (DFA,DTrans)
-          fuseDTrans = Map.fromDistinctAscList (fuse l1 l2)
+          fuseDTrans = CharMap (IMap.fromDistinctAscList (fuse l1 l2))
             where
-              l1 = Map.toAscList t1
-              l2 = Map.toAscList t2
+              l1 = IMap.toAscList (unCharMap t1)
+              l2 = IMap.toAscList (unCharMap t2)
               merge_o1 = case o1 of Nothing -> id
                                     Just o1' -> mergeDTrans o1'
               merge_o2 = case o2 of Nothing -> id
@@ -150,7 +151,7 @@ dfaMap = seen (Data.Map.empty) where
            in foldl' seen new (flattenDT dt)
 
 flattenDT :: DT -> [DFA]
-flattenDT (Simple' {dt_trans=mt,dt_other=mo}) = map fst . maybe id (:) mo . Map.elems $ mt
+flattenDT (Simple' {dt_trans=(CharMap mt),dt_other=mo}) = map fst . maybe id (:) mo . IMap.elems $ mt
 flattenDT (Testing' {dt_a=a,dt_b=b}) = flattenDT a ++ flattenDT b
 
 examineDFA :: (DFA,Index,Array Tag OP,Array GroupIndex [GroupInfo]) -> String
@@ -227,10 +228,10 @@ bestTrans aTagOP (f:fs) | null fs = canonical f
 
 isDTLosing :: DT -> Bool
 isDTLosing (Testing' {dt_a=a,dt_b=b}) = isDTLosing a && isDTLosing b
-isDTLosing (Simple' {dt_win=w,dt_trans=t,dt_other=o}) | not (IMap.null w) = False
-                                                      | Just (dfa,_) <- o, not (ISet.null (d_id dfa)) = False
-                                                      | otherwise =
-  let destinations = map (d_id . fst) . Map.elems $ t
+isDTLosing (Simple' {dt_win=w,dt_trans=(CharMap t),dt_other=o}) | not (IMap.null w) = False
+    | Just (dfa,_) <- o, not (ISet.null (d_id dfa)) = False
+    | otherwise =
+  let destinations = map (d_id . fst) . IMap.elems $ t
   in all ISet.null destinations -- True for empty list of destinations
 
 -- Assumes that Test_BOL is the smallest (and therefore always first) test

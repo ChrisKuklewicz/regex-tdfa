@@ -33,11 +33,12 @@ module Text.Regex.TDFA.TNFA(patternToNFA
 
 import Control.Monad.State
 import Data.Array.IArray(Array,array)
-import Data.Char(toLower,toUpper,isAlpha)
-import qualified Data.IntMap as IMap(toList,null,unionWith,singleton)
+import Data.Char(toLower,toUpper,isAlpha,ord)
 import Data.List(foldl')
-import Data.IntMap.CharMap(CharMap)
-import qualified Data.IntMap.CharMap as Map(size,null,toAscList,fromList,fromDistinctAscList,singleton,map)
+import Data.IntMap.CharMap(CharMap(..))
+import qualified Data.IntMap.CharMap as Map(size,null,toAscList,singleton,map)
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IMap(size,toList,toAscList,null,unionWith,singleton,fromList,fromDistinctAscList)
 import Data.Maybe(catMaybes)
 import Data.Monoid(mempty,mappend)
 import Data.IntSet.EnumSet(EnumSet)
@@ -86,11 +87,11 @@ foo' = IMap.toList
 instance Eq QT where
   t1@(Testing {}) == t2@(Testing {}) =
     (qt_test t1) == (qt_test t2) && (qt_a t1) == (qt_a t2) && (qt_b t1) == (qt_b t2)
-  (Simple w1 t1 o1) == (Simple w2 t2 o2) =
+  (Simple w1 (CharMap t1) o1) == (Simple w2 (CharMap t2) o2) =
     w1 == w2 && eqTrans && eqQTrans o1 o2
     where eqTrans :: Bool
-          eqTrans = (Map.size t1 == Map.size t2)
-                    && and (zipWith together (Map.toAscList t1) (Map.toAscList t2))
+          eqTrans = (IMap.size t1 == IMap.size t2)
+                    && and (zipWith together (IMap.toAscList t1) (IMap.toAscList t2))
             where together (c1,qtrans1) (c2,qtrans2) = (c1 == c2) && eqQTrans qtrans1 qtrans2
           eqQTrans :: QTrans -> QTrans -> Bool
           eqQTrans = (==)
@@ -248,9 +249,9 @@ mergeQTWith mergeWins = merge where
   fuseQTrans :: (CharMap QTrans) -> QTrans
              -> (CharMap QTrans) -> QTrans
              -> CharMap QTrans
-  fuseQTrans t1 o1 t2 o2 = Map.fromDistinctAscList (fuse l1 l2) where
-    l1 = Map.toAscList t1
-    l2 = Map.toAscList t2
+  fuseQTrans (CharMap t1) o1 (CharMap t2) o2 = CharMap (IMap.fromDistinctAscList (fuse l1 l2)) where
+    l1 = IMap.toAscList t1
+    l2 = IMap.toAscList t2
     fuse [] y  = mapSnd (mergeQTrans o1) y
     fuse x  [] = mapSnd (mergeQTrans o2) x
     fuse x@((xc,xa):xs) y@((yc,ya):ys) =
@@ -662,11 +663,16 @@ qToNFA compOpt qTop = (q_id startingQNFA
   addNewline | multiline compOpt = Data.Set.insert '\n'
              | otherwise = id
 
-  toMap dest | caseSensitive compOpt = Map.fromDistinctAscList . map (\c -> (c,dest))
-             | otherwise = Map.fromList . map (\c -> (c,dest)) . ($ []) 
+ 
+  toMap :: IntMap [(DoPa,[(Tag, TagUpdate)])] -> [Char] -> CharMap (IntMap [(DoPa,[(Tag, TagUpdate)])])
+  toMap dest | caseSensitive compOpt = CharMap . IMap.fromDistinctAscList . map (\c -> (ord c,dest))
+             | otherwise = CharMap . IMap.fromList . ($ []) 
                              . foldr (\c dl -> if isAlpha c
-                                                 then (dl.(toUpper c:).(toLower c:))
-                                                 else (dl.(c:))) id 
+                                                 then (dl.((ord (toUpper c),dest):)
+                                                         .((ord (toLower c),dest):)
+                                                      )
+                                                 else (dl.((ord c,dest):))
+                                     ) id 
 
   acceptTrans :: TagList -> Pattern -> TagList -> Index -> QT
   acceptTrans pre pIn post i =
