@@ -45,12 +45,13 @@ import Data.Array.IArray(Array,array)
 import Data.Char(toLower,toUpper,isAlpha)
 import qualified Data.IntMap as IMap(toList,null,unionWith,singleton)
 import Data.List(foldl')
-import Data.Map(Map)
-import qualified Data.Map as Map
+import Data.IntMap.EnumMap(EnumMap)
+import qualified Data.IntMap.EnumMap as Map
 import Data.Maybe(catMaybes)
 import Data.Monoid(mempty,mappend)
-import Data.Set(Set)
-import qualified Data.Set as Set(singleton,toList,toAscList,insert)
+import Data.IntSet.EnumSet(EnumSet)
+import qualified Data.IntSet.EnumSet as Set(singleton,toList,toAscList,insert)
+import qualified Data.Set
 
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.CorePattern(Q(..),P(..),OP(..),WhichTest,cleanNullView,NullView
@@ -84,7 +85,7 @@ showQT (Testing test dopas a b) = "{Testing "++show test++" "++show (Set.toList 
     where indent = init . unlines . map (spaces++) . lines . showQT
           spaces = replicate 9 ' '
 
-foo :: Map Char QTrans -> [(Char,[(Index,[TagCommand])])]
+foo :: EnumMap Char QTrans -> [(Char,[(Index,[TagCommand])])]
 foo = mapSnd foo' . Map.toAscList
 
 foo' :: QTrans -> [(Index,[TagCommand])]
@@ -155,7 +156,7 @@ nullQT :: QT -> Bool
 nullQT (Simple {qt_win=w,qt_trans=t,qt_other=o}) = noWin w && Map.null t && IMap.null o
 nullQT _ = False
 
-listTestInfo :: QT -> Set WhichTest -> Set WhichTest
+listTestInfo :: QT -> EnumSet WhichTest -> EnumSet WhichTest
 listTestInfo qt s = execState (helper qt) s
   where helper (Simple {}) = return ()
         helper (Testing {qt_test = wt, qt_a = a, qt_b = b}) = do
@@ -177,7 +178,7 @@ preferNullViews [] win = win
 preferNullViews nvs win = foldl' (dominate win winTests) win (reverse $ cleanNullView nvs) where
   winTests = listTestInfo win $ mempty
 
-dominate :: QT -> Set WhichTest -> QT -> (SetTestInfo,WinTags) -> QT
+dominate :: QT -> EnumSet WhichTest -> QT -> (SetTestInfo,WinTags) -> QT
 dominate win winTests lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x) $
   let -- The winning states are reached through the SetTag
       win' = prependTags' tags win
@@ -252,7 +253,9 @@ mergeQTWith mergeWins = merge where
                     ,qt_b = merge b1 b2}
       GT -> t2 {qt_a=(merge t1 a2), qt_b=(merge t1 b2)}
 
-  fuseQTrans :: (Map Char QTrans) -> QTrans -> (Map Char QTrans) -> QTrans -> Map Char QTrans
+  fuseQTrans :: (EnumMap Char QTrans) -> QTrans
+             -> (EnumMap Char QTrans) -> QTrans
+             -> EnumMap Char QTrans
   fuseQTrans t1 o1 t2 o2 = Map.fromDistinctAscList (fuse l1 l2) where
     l1 = Map.toAscList t1
     l2 = Map.toAscList t2
@@ -664,7 +667,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
   dotTrans | multiline compOpt = Map.singleton '\n' mempty
            | otherwise = mempty
 
-  addNewline | multiline compOpt = Set.insert '\n'
+  addNewline | multiline compOpt = Data.Set.insert '\n'
              | otherwise = id
 
   toMap dest | caseSensitive compOpt = Map.fromDistinctAscList . map (\c -> (c,dest))
@@ -685,10 +688,10 @@ qToNFA compOpt qTop = (q_id startingQNFA
            in Simple { qt_win = mempty, qt_trans = trans, qt_other = mempty }
          PDot _ -> Simple { qt_win = mempty, qt_trans = dotTrans, qt_other = target }
          PAny _ ps ->
-           let trans = toMap target . Set.toAscList . decodePatternSet $ ps
+           let trans = toMap target . Data.Set.toAscList . decodePatternSet $ ps
            in Simple { qt_win = mempty, qt_trans = trans, qt_other = mempty }
          PAnyNot _ ps ->
-           let trans = toMap mempty . Set.toAscList . addNewline . decodePatternSet $ ps
+           let trans = toMap mempty . Data.Set.toAscList . addNewline . decodePatternSet $ ps
            in Simple { qt_win = mempty, qt_trans = trans, qt_other = target }
          _ -> err ("Cannot acceptTrans pattern "++show (qTop,pIn))
 

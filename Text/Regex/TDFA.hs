@@ -58,6 +58,6 @@ import Text.Regex.TDFA.Sequence()
 import Text.Regex.TDFA.Wrap(Regex,CompOption(..),ExecOption(..),(=~),(=~~))
 
 getVersion :: Version
-getVersion = Version { versionBranch = [0,75]
-                     , versionTags = ["d","tdfa","unstable"]
+getVersion = Version { versionBranch = [0,90]
+                     , versionTags = ["a","tdfa","unstable"]
                      }

@@ -7,12 +7,13 @@ module Text.Regex.TDFA.Common {- export everything -} where
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
 --import Text.Regex.Base(MatchOffset,MatchLength)
+import Data.IntMap.EnumMap (EnumMap)
+import qualified Data.IntMap.EnumMap as Map(assocs)
 import Text.Show.Functions()
 import Control.Monad.State(State)
 import Data.Array.IArray(Array)
 import Data.Array.Unboxed(UArray)
-import Data.Map as Map(Map,assocs)
-import Data.Set(Set)
+import Data.IntSet.EnumSet(EnumSet)
 import Data.IntMap as IMap (IntMap,findWithDefault,assocs)
 import Data.IntSet(IntSet)
 import Data.Sequence(Seq)
@@ -68,7 +69,7 @@ noWin = null
 
 -- | Used to track elements of the pattern that accept characters or 
 -- are anchors
-newtype DoPa = DoPa {dopaIndex :: Int} deriving (Eq,Ord)
+newtype DoPa = DoPa {dopaIndex :: Int} deriving (Eq,Ord,Enum)
 
 instance Show DoPa where
   showsPrec p (DoPa {dopaIndex=i}) = ('#':) . showsPrec p i
@@ -136,11 +137,11 @@ data QNFA = QNFA {q_id :: Index
                  ,q_qt :: QT}
 -- | Internal to QNFA type.
 data QT = Simple {qt_win :: WinTags -- ^ empty transitions to the virtual winning state
-                 ,qt_trans :: Map Char QTrans -- ^ all ways to leave this QNFA to other or the same QNFA
+                 ,qt_trans :: EnumMap Char QTrans -- ^ all ways to leave this QNFA to other or the same QNFA
                  ,qt_other :: QTrans -- ^ default ways to leave this QNFA to other or the same QNFA
                  }
         | Testing {qt_test :: WhichTest -- ^ The test to perform
-                  ,qt_dopas :: Set DoPa  -- ^ location(s) of the anchor(s) in the original regexp
+                  ,qt_dopas :: EnumSet DoPa  -- ^ location(s) of the anchor(s) in the original regexp
                   ,qt_a,qt_b :: QT -- ^ use qt_a if test is True, else use qt_b
                   }
 
@@ -149,7 +150,7 @@ data QT = Simple {qt_win :: WinTags -- ^ empty transitions to the virtual winnin
 type QTrans = IntMap {- Destination Index -} [TagCommand]
 
 -- | Known predicates, just Beginning of Line (^) and End of Line ($).
-data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord)
+data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord,Enum)
 
 -- | The things that can be done with a Tag.  TagTask and
 -- ResetGroupStopTask are for tags with Maximize or Minimize OP
@@ -176,11 +177,11 @@ type WinTags = TagList
 data DFA = DFA { d_id :: SetIndex, d_dt :: DT} deriving(Show)
 -- | Internal to the DFA node
 data DT = Simple' { dt_win :: IntMap {- Index -} Instructions -- ^ Actions to perform to win
-                  , dt_trans :: Map Char (DFA,DTrans) -- ^ Transition to accept Char
+                  , dt_trans :: EnumMap Char (DFA,DTrans) -- ^ Transition to accept Char
                   , dt_other :: Maybe (DFA,DTrans) -- ^ Optional default accepting transition
                   }
         | Testing' { dt_test :: WhichTest -- ^ The test to perform
-                   , dt_dopas :: Set DoPa -- ^ location(s) of the anchor(s) in the original regexp
+                   , dt_dopas :: EnumSet DoPa -- ^ location(s) of the anchor(s) in the original regexp
                    , dt_a,dt_b :: DT      -- ^ use dt_a if test is True else use dt_b
                    }
 
@@ -241,6 +242,7 @@ type Scratch = (IntMap (Position,Bool)     -- ^ Place for all tags, Bool is Fals
 type Orbits = Seq Position    
 -}
 
+{-
 -- | Internal type to comapre two Scratch values and pick the "biggest"
 type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the preferred one
 
@@ -249,7 +251,7 @@ data Scratch = Scratch
   , scratchFlags :: !(UArray Tag Bool)
   , scratchOrbits :: !OrbitLog
   } deriving (Show) --- XXX shows function
-
+-}
 data Orbits = Orbits
   { inOrbit :: !Bool        -- True if enterOrbit, False if LeaveOrbit
   , getOrbits :: !(Seq Position)
@@ -262,7 +264,7 @@ data Instructions = Instructions
   } deriving (Show)
 
 -- type OrbitInstruction = Position -> IntMap {-Tag-} Orbits -> IntMap {-Tag-} Orbits
-type OrbitInstruction = Position -> Orbits -> Orbits
+--type OrbitInstruction = Position -> Orbits -> Orbits
 type OrbitLog = IntMap Orbits
 type OrbitTransformer = OrbitLog -> OrbitLog
 

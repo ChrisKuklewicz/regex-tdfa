@@ -176,12 +176,13 @@ seeWS w = do
   o <- return . IMap.toList =<< readSTRef (w_orbit w)
   return $ unlines [show p, show f, show o]
 
+{-
 freezeScratch :: WScratch s -> ST s Scratch
 freezeScratch (WScratch p f o) = do -- traceCopy ("> freezeScratch") $ do
                                  liftM3 Scratch (freeze =<< readSTRef p)
                                                 (freeze =<< readSTRef f)
                                                 (readSTRef o)
-
+-}
 newWScratch :: (Tag,Tag) -> ST s (WScratch s)
 newWScratch b_tags =  liftM3 WScratch (newSTRef =<< newA b_tags (-1))
                                       (newSTRef =<< newA b_tags False)
@@ -567,7 +568,7 @@ tagsToGroupsST aGroups (WScratch {w_pos=pRef,w_flag=fRef})= do
           else unsafeWrite ma this_index (startPos,stopPos-startPos)
   forM_ (range (1,b_max)) $ (\i -> get i (aGroups!i))
   unsafeFreeze ma
-
+{-
 tagsToGroups :: Array GroupIndex [GroupInfo] -> Scratch -> MatchArray
 tagsToGroups aGroups (Scratch {scratchPos=pos,scratchFlags=flags}) = groups
   where groups = array (0,snd (bounds aGroups)) filler
@@ -586,7 +587,7 @@ tagsToGroups aGroups (Scratch {scratchPos=pos,scratchFlags=flags}) = groups
                                  startParent <= startPos &&
                                  stopPos <= startPos + lengthParent)
                           return (startPos,stopPos-startPos)
-
+-}
 foreign import ccall unsafe "memcpy"
     memcpy :: MutableByteArray# RealWorld -> MutableByteArray# RealWorld -> Int# -> IO ()
 

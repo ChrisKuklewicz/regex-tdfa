@@ -14,8 +14,9 @@ import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
 import qualified Data.IntSet as ISet(empty,singleton,null)
 import Data.List(foldl')
-import Data.Map(Map)
-import qualified Data.Map as Map(elems,insert,member,empty,toAscList,fromDistinctAscList)
+import Data.IntMap.EnumMap(EnumMap)
+import qualified Data.IntMap.EnumMap as Map(elems,insert,member,empty,toAscList,fromDistinctAscList)
+import qualified Data.Map
 import Data.Maybe(isJust)
 
 import Text.Regex.TDFA.Common
@@ -108,7 +109,7 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
           mergeDTrans (_,dt1) (_,dt2) = (indexesToDFA (IMap.keys dtrans),dtrans)
             where dtrans = IMap.unionWith IMap.union dt1 dt2
           -- This is very much like fuseQTrans
-          fuseDTrans :: Map Char (DFA,DTrans)
+          fuseDTrans :: EnumMap Char (DFA,DTrans)
           fuseDTrans = Map.fromDistinctAscList (fuse l1 l2)
             where
               l1 = Map.toAscList t1
@@ -140,21 +141,20 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
 patternToDFA :: CompOption -> (Pattern,(GroupIndex, DoPa)) -> (DFA,Index,Array Tag OP,Array GroupIndex [GroupInfo])
 patternToDFA compOpt pattern = nfaToDFA (patternToNFA compOpt pattern)
 
-dfaMap :: DFA -> Map SetIndex DFA
-dfaMap = seen (Map.empty) where
+dfaMap :: DFA -> Data.Map.Map SetIndex DFA
+dfaMap = seen (Data.Map.empty) where
   seen old d@(DFA {d_id=i,d_dt=dt}) =
-    if i `Map.member` old
+    if i `Data.Map.member` old
       then old
-      else let new = Map.insert i d old
+      else let new = Data.Map.insert i d old
            in foldl' seen new (flattenDT dt)
 
 flattenDT :: DT -> [DFA]
 flattenDT (Simple' {dt_trans=mt,dt_other=mo}) = map fst . maybe id (:) mo . Map.elems $ mt
 flattenDT (Testing' {dt_a=a,dt_b=b}) = flattenDT a ++ flattenDT b
 
-
 examineDFA :: (DFA,Index,Array Tag OP,Array GroupIndex [GroupInfo]) -> String
-examineDFA (dfa,_,_,_) = unlines $ map show $ Map.elems $ dfaMap dfa
+examineDFA (dfa,_,_,_) = unlines $ map show $ Data.Map.elems $ dfaMap dfa
 
 {-
 

@@ -31,11 +31,11 @@ module Text.Regex.TDFA.CorePattern(Q(..),P(..),WhichTest(..),Wanted(..)
 import Control.Monad.RWS {- all -}
 import Data.Array.IArray(Array,(!),accumArray,listArray)
 import Data.List(sort)
-import Data.Map(Map)
-import qualified Data.Map as Map(singleton,null,assocs,keysSet)
+import Data.IntMap.EnumMap(EnumMap)
+import qualified Data.IntMap.EnumMap as Map(singleton,null,assocs,keysSet)
 import Data.Maybe(isNothing)
-import Data.Set(Set)
-import qualified Data.Set as Set(singleton,toList,isSubsetOf)
+import Data.IntSet.EnumSet(EnumSet)
+import qualified Data.IntSet.EnumSet as Set(singleton,toList,isSubsetOf)
 import Text.Regex.TDFA.Common {- all -}
 import Text.Regex.TDFA.Pattern(Pattern(..),starTrans)
 -- import Debug.Trace
@@ -75,7 +75,7 @@ type TestInfo = (WhichTest,DoPa)
 
 -- This is newtype'd to allow control over class instances
 -- This is a set of WhichTest where each test has associated pattern location information
-newtype SetTestInfo = SetTestInfo {getTests :: Map WhichTest (Set DoPa)} deriving (Eq,Monoid)
+newtype SetTestInfo = SetTestInfo {getTests :: EnumMap WhichTest (EnumSet DoPa)} deriving (Eq,Monoid)
 
 instance Show SetTestInfo where
   show (SetTestInfo sti) = "SetTestInfo "++show (mapSnd (Set.toList) $ Map.assocs sti)
