@@ -47,46 +47,33 @@ countMatchAll :: Regex -> String -> Int
 countMatchAll regexIn stringIn = length (matchHere regex 0 '\n' stringIn) where
   regex = setExecOpts (ExecOption {captureGroups = False,testMatch = False}) regexIn
 
+{-
+There are four possible routines use by matchHere, depending on
+whether it needs to collect submatch data and whether the pattern is
+only permitted to start matching at offsetIn==0.
+-}
 matchHere :: Regex -> Position -> Char -> String -> [MatchArray]
 matchHere regexIn offsetIn prevIn inputIn = ans where
-  ans = if captureGroups (regex_execOptions regexIn) && (1<=rangeSize (bounds (regex_groups regexIn)))
-          then runHerePure
-          else let dtIn = (d_dt (regex_dfa regexIn))
-                   go !off !prev !input = 
-                     case runHereNoCap Nothing dtIn off prev input of
-                       Nothing -> case input of
-                                    [] -> []
-                                    (prev':input') -> let off' = succ off
-                                                      in go off' prev' input'
-                       Just (off',prev',input') ->
-                         let len = off'-off
-                             ma = array (0,0) [(0,(off,len))]
-                             rest = if len == 0 || null input then []
-                                      else go off' prev' input'
-                         in (ma:rest)
-               in go offsetIn prevIn inputIn
--- XXX add frontAnchored support
--- XXX Check for no capture groups
+  ans = if subCapture then runHerePure else noCap
+    where subCapture = captureGroups (regex_execOptions regexIn)
+                    && (1<=rangeSize (bounds (regex_groups regexIn)))
 
   frontAnchored = (not (multiline (regex_compOptions regexIn)))
                && isDFAFrontAnchored (regex_dfa regexIn)
 
-  test_multiline wt _ prev input =
-    case wt of Test_BOL -> prev == '\n'
-               Test_EOL -> case input of
-                             [] -> True
-                             (next:_) -> next == '\n'
-
-  test_singleline wt off _ input =
-    case wt of Test_BOL -> off == 0
-               Test_EOL -> null input
-
-  test = if multiline (regex_compOptions regexIn) then test_multiline else test_singleline
-  comp = makeTagComparer (regex_tags regexIn)
+  -- Select which style of ^ $ tests are performed.
+  test | multiline (regex_compOptions regexIn) = test_multiline
+       | otherwise = test_singleline
+    where test_multiline Test_BOL _ prev input = prev == '\n'
+          test_multiline Test_EOL _ prev input = case input of
+                                                   [] -> True
+                                                   (next:_) -> next == '\n'
+          test_singleline Test_BOL off _ input = off == 0
+          test_singleline Test_EOL off _ input = null input
   
   runHerePure :: [MatchArray]
-  runHerePure = {-# SCC "runHerePure" #-} Lazy.runST (do
-    (findTrans,updateWinner,performTrans) <- lazy (newTagEngine regexIn)
+  runHerePure = Lazy.runST (do
+    (!findTrans,!updateWinner,!performTrans) <- lazy (newTagEngine regexIn)
     let -- runHere :: Maybe (WScratch s,(Position,Char,String)) -> DT
         --         -> MScratch s -> MScratch s
         --         -> Position -> Char -> String
@@ -109,7 +96,6 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
                       performTrans s1 s2 off trans
                       runHere winning' (d_dt dfa) s2 s1 (succ off) c input'
         -- end of runHere
-
     -- body of runHerePure continues
     (SScratch s1 s2 w0) <- lazy (newScratch regexIn offsetIn)
     let go !off !prev !input = {-# SCC "runHerePure.go" #-} do
@@ -127,8 +113,41 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
                         else do () <- lazy (resetScratch regexIn off' s1 w0)
                                 go off' prev' input'
               return (ma:rest)
-    go offsetIn prevIn inputIn ) -- end Lazy.runST
+    if frontAnchored
+      then if offsetIn/=0 then return [] 
+             else do
+               answer <- lazy (runHere Nothing (d_dt (regex_dfa regexIn)) s1 s2 offsetIn prevIn inputIn)
+               case answer of
+                 Nothing -> return []
+                 Just (w,x@(off',prev',input')) -> do
+                   ma <- lazy (tagsToGroupsST (regex_groups regexIn) w)
+                   return (ma:[])
+      else go offsetIn prevIn inputIn ) -- end Lazy.runST
   -- end of runHerePure
+
+  noCap = {-# SCC "noCap" #-}
+    let dtIn = (d_dt (regex_dfa regexIn))
+        go !off !prev !input = 
+          case runHereNoCap Nothing dtIn off prev input of
+            Nothing -> case input of
+                         [] -> []
+                         (prev':input') -> let off' = succ off
+                                           in go off' prev' input'
+            Just (off',prev',input') ->
+              let len = off'-off
+                  ma = array (0,0) [(0,(off,len))]
+                  rest = if len == 0 || null input then []
+                           else go off' prev' input'
+              in (ma:rest)
+    in if frontAnchored
+         then if offsetIn /= 0 then []
+                else case runHereNoCap Nothing dtIn offsetIn prevIn inputIn of
+                       Nothing -> []
+                       Just (off',prev',input') ->
+                         let len = off'-offsetIn
+                             ma = array (0,0) [(0,(offsetIn,len))]
+                         in (ma:[])
+         else go offsetIn prevIn inputIn
 
   runHereNoCap winning !dt !off !prev !input =  {-# SCC "runHereNoCap" #-}
     case dt of

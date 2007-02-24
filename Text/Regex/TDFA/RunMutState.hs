@@ -42,12 +42,13 @@ newTagEngine regexIn = do
           writeArray which destIndex (-1,undefined,undefined)
                                        | otherwise =  {-# SCC "findTrans'" #-} do
           let (first:rest) = IMap.toList sources
-              prep (sourceIndex,(_,instructions)) = do
+              {-# INLINE prep #-}
+              prep (sourceIndex,(_,instructions)) = {-# SCC "prep" #-} do
                 p <- maybe (error "findtrans") return =<< unsafeRead (m_pos s1) sourceIndex
                 o <- readArray (m_orbit s1) sourceIndex
                 let o' = maybe o (\x -> x off o) (newOrbits instructions)
                 return ((sourceIndex,instructions),p,o')
-              challenge x1@(_,_,o1) y1 = do
+              challenge x1@(_,_,o1) y1 = {-# SCC "challenge" #-} do
                 x2@(_,_,o2) <- prep y1
                 check <- comp off x1 (newPos . snd . fst3 $ x1) x2 (newPos . snd . fst3 $ x2)
         {-
@@ -63,9 +64,11 @@ newTagEngine regexIn = do
           unsafeWrite which destIndex (sourceIndex',instructions',orbit')
           unsafeRead count sourceIndex' >>= (unsafeWrite count sourceIndex') . succ
 
-  let updateWinner s1 (off,prev,input) winning sources | IMap.null sources = return winning
+  let {-# INLINE updateWinner #-}
+      updateWinner s1 (off,prev,input) winning sources | IMap.null sources = return winning
                                                        | otherwise = {-# SCC "updateWinner" #-} do
         let (first:rest) = IMap.toList sources
+            {-# INLINE prep #-}
             prep x@(sourceIndex,instructions) = do
               p <- maybe (error "updateWinner") return =<< unsafeRead (m_pos s1) sourceIndex
               o <- readArray (m_orbit s1) sourceIndex
@@ -92,7 +95,7 @@ newTagEngine regexIn = do
   let performTrans s1 s2 off dtrans | IMap.null dtrans = return ()
                                     | otherwise = {-# SCC "performTrans" #-} do
         mapM_ performTrans' (IMap.keys dtrans)
-          where act destIndex =  {-# SCC "performTrans'" #-} do
+          where performTrans' destIndex =  {-# SCC "performTrans'" #-} do
                   i1@(sourceIndex,_instructions,_orbit) <- unsafeRead which destIndex
                   if sourceIndex == (-1) then return () else do
                   n <- unsafeRead count sourceIndex
@@ -587,11 +590,12 @@ tagsToGroups aGroups (Scratch {scratchPos=pos,scratchFlags=flags}) = groups
 foreign import ccall unsafe "memcpy"
     memcpy :: MutableByteArray# RealWorld -> MutableByteArray# RealWorld -> Int# -> IO ()
 
+{-# INLINE copySTU #-}
 copySTU :: (Show i,Ix i,MArray (STUArray s) e (ST s)) => STUArray s i e -> STUArray s i e -> ST s ()
-copySTU !s1@(STUArray _ _ msource) !s2@(STUArray _ _ mdest) = do
-  b1 <- getBounds s1
-  b2 <- getBounds s2
-  when (b1/=b2) (error ("\n\nWTF copySTU: "++show (b1,b2)))
+copySTU !s1@(STUArray _ _ msource) !s2@(STUArray _ _ mdest) =
+-- do b1 <- getBounds s1
+--  b2 <- getBounds s2
+--  when (b1/=b2) (error ("\n\nWTF copySTU: "++show (b1,b2)))
   ST $ \s1# ->
     case sizeofMutableByteArray# msource        of { n# ->
     case unsafeCoerce# memcpy mdest msource n# s1# of { (# s2#, () #) ->
