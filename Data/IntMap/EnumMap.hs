@@ -28,6 +28,7 @@ member k (EnumMap m) = M.member (fromEnum k) m
 notMember :: (Enum key) => key -> EnumMap key a -> Bool
 notMember k (EnumMap m) = M.notMember (fromEnum k) m
 
+{-# INLINE lookup #-}
 lookup :: (Enum key,Monad m) => key -> EnumMap key a -> m a
 lookup k (EnumMap m) = M.lookup (fromEnum k) m
 
@@ -75,7 +76,7 @@ updateWithKey f k (EnumMap m) = EnumMap (M.updateWithKey f' (fromEnum k) m)
 updateLookupWithKey :: (Enum key) => (key -> a -> Maybe a) -> key -> EnumMap key a -> (Maybe a, EnumMap key a)
 updateLookupWithKey f k (EnumMap m) = (a,EnumMap m')
   where (a,m') = M.updateLookupWithKey f' (fromEnum k) m
-        f' b a = f (toEnum b) a
+        f' b a1 = f (toEnum b) a1
 
 union :: (Enum key) => EnumMap key a -> EnumMap key a -> EnumMap key a
 union (EnumMap m1) (EnumMap m2) = EnumMap (M.union m1 m2)
@@ -85,7 +86,7 @@ unionWith f (EnumMap m1) (EnumMap m2) = EnumMap (M.unionWith f m1 m2)
 
 unionWithKey :: (Enum key) => (key -> a -> a -> a) -> EnumMap key a -> EnumMap key a -> EnumMap key a
 unionWithKey f (EnumMap m1) (EnumMap m2) = EnumMap (M.unionWithKey f' m1 m2)
-  where f' b a1 a2 = f (toEnum b) a2 a2
+  where f' b a1 a2 = f (toEnum b) a1 a2
 
 unions :: (Enum key) => [EnumMap key a] -> EnumMap key a
 unions cs = EnumMap (M.unions (L.map unEnumMap cs))

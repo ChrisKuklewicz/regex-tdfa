@@ -568,26 +568,7 @@ tagsToGroupsST aGroups (WScratch {w_pos=pRef,w_flag=fRef})= do
           else unsafeWrite ma this_index (startPos,stopPos-startPos)
   forM_ (range (1,b_max)) $ (\i -> get i (aGroups!i))
   unsafeFreeze ma
-{-
-tagsToGroups :: Array GroupIndex [GroupInfo] -> Scratch -> MatchArray
-tagsToGroups aGroups (Scratch {scratchPos=pos,scratchFlags=flags}) = groups
-  where groups = array (0,snd (bounds aGroups)) filler
-        filler = wholeMatch : map checkAll (assocs aGroups)
-        wholeMatch = (0,(startPos,stopPos-startPos)) -- will not fail to return good positions
-          where startPos = pos!0
-                stopPos = pos!1
-        checkAll (this_index,these_groups) = (this_index,if null good then (-1,0) else head good)
-          where good = do (GroupInfo _ parent start stop) <- these_groups -- Monad []
-                          guard (flags!stop)
-                          let startPos = pos!start
-                              stopPos = pos!stop
-                          let (startParent,lengthParent) = groups!parent
-                          guard (0 <= startParent &&
-                                 0 <= lengthParent &&
-                                 startParent <= startPos &&
-                                 stopPos <= startPos + lengthParent)
-                          return (startPos,stopPos-startPos)
--}
+
 foreign import ccall unsafe "memcpy"
     memcpy :: MutableByteArray# RealWorld -> MutableByteArray# RealWorld -> Int# -> IO ()
 
@@ -601,22 +582,6 @@ copySTU !s1@(STUArray _ _ msource) !s2@(STUArray _ _ mdest) =
     case sizeofMutableByteArray# msource        of { n# ->
     case unsafeCoerce# memcpy mdest msource n# s1# of { (# s2#, () #) ->
     (# s2#, () #) }}
-
-{-  Copied this block from GHC sources
-
-data STUArray s i a = STUArray !i !i (GHC.Prim.MutableByteArray# s)
-
-thawSTUArray :: Ix i => UArray i e -> ST s (STUArray s i e)
-thawSTUArray (UArray l u arr#) = ST $ \s1# ->
-    case sizeofByteArray# arr#          of { n# ->
-    case newByteArray# n# s1#           of { (# s2#, marr# #) ->
-    case unsafeCoerce# memcpy marr# arr# n# s2# of { (# s3#, () #) ->
-    (# s3#, STUArray l u marr# #) }}}
-
-foreign import ccall unsafe "memcpy"
-    memcpy :: MutableByteArray# RealWorld -> ByteArray# -> Int# -> IO ()
--}
-
 
 {-  Commented out -- more useful to non-GHC compilers
 

@@ -7,15 +7,13 @@ module Text.Regex.TDFA.Common {- export everything -} where
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
 --import Text.Regex.Base(MatchOffset,MatchLength)
-import Data.IntMap.EnumMap (EnumMap)
-import qualified Data.IntMap.EnumMap as Map(assocs)
 import Text.Show.Functions()
 import Control.Monad.State(State)
 import Data.Array.IArray(Array)
-import Data.Array.Unboxed(UArray)
 import Data.IntSet.EnumSet(EnumSet)
 import Data.IntMap as IMap (IntMap,findWithDefault,assocs)
 import Data.IntSet(IntSet)
+import Data.IntMap.CharMap as Map (CharMap,assocs)
 import Data.Sequence(Seq)
 --import Debug.Trace
 
@@ -88,25 +86,6 @@ data ExecOption = ExecOption { captureGroups :: Bool    -- ^ True by default.  S
                              , testMatch :: Bool        -- ^ False by default. Set to True to quickly return shortest match (w/o groups).
                              } deriving (Read,Show)
 
-{-
--- | 'MatchedStrings' is an IntMap where the keys are GroupIndex
--- numbers and the values are completed substring captures.
---
--- This has now been augmented to also remember the offset and length
--- of the matched string.
-type MatchedStrings = IntMap (String,(MatchOffset,MatchLength))
-
-type BoolMultiline = Bool
-type BoolCaseSensitive = Bool
-type StringInput = String
-type StringBeforeMatch = String
-type StringOfMatch = String
-type StringAfterMatch = String
-type StringSubgroups = String
-type StringSubPattern = String
-type AboutMatch = (StringBeforeMatch,StringOfMatch,StringAfterMatch,[StringSubgroups])
--}
-
 -- | Used by implementation to name certain Postions during matching
 type Tag = Int           -- ^ identity of Position tag to set during a transition
 -- | Internal use to indicate type of tag and preference for larger or smaller Positions
@@ -137,7 +116,7 @@ data QNFA = QNFA {q_id :: Index
                  ,q_qt :: QT}
 -- | Internal to QNFA type.
 data QT = Simple {qt_win :: WinTags -- ^ empty transitions to the virtual winning state
-                 ,qt_trans :: EnumMap Char QTrans -- ^ all ways to leave this QNFA to other or the same QNFA
+                 ,qt_trans :: CharMap QTrans -- ^ all ways to leave this QNFA to other or the same QNFA
                  ,qt_other :: QTrans -- ^ default ways to leave this QNFA to other or the same QNFA
                  }
         | Testing {qt_test :: WhichTest -- ^ The test to perform
@@ -177,7 +156,7 @@ type WinTags = TagList
 data DFA = DFA { d_id :: SetIndex, d_dt :: DT} deriving(Show)
 -- | Internal to the DFA node
 data DT = Simple' { dt_win :: IntMap {- Index -} Instructions -- ^ Actions to perform to win
-                  , dt_trans :: EnumMap Char (DFA,DTrans) -- ^ Transition to accept Char
+                  , dt_trans :: CharMap (DFA,DTrans) -- ^ Transition to accept Char
                   , dt_other :: Maybe (DFA,DTrans) -- ^ Optional default accepting transition
                   }
         | Testing' { dt_test :: WhichTest -- ^ The test to perform
@@ -206,16 +185,6 @@ seeDTrans :: DTrans -> String
 seeDTrans x = concatMap (\(dest,y) -> unlines . map (\(source,ins) -> show (dest,source,ins) ) . IMap.assocs $ y) (IMap.assocs x)
 
 
-{-
-data DT = Simple' { dt_win :: IntMap {- Index -} (RunState ()) -- ^ Actions to perform to win
-                  , dt_trans :: Map Char (DFA,DTrans) -- ^ Transition to accept Char
-                  , dt_other :: Maybe (DFA,DTrans) -- ^ Optional default accepting transition
-                  }
-        | Testing' { dt_test :: WhichTest -- ^ The test to perform
-                   , dt_dopas :: Set DoPa -- ^ location(s) of the anchor(s) in the original regexp
-                   , dt_a,dt_b :: DT      -- ^ use dt_a if test is True else use dt_b
-                   }
--}
 -- | Internal type to repesent the commands for the tagged transition.
 -- The outer IntMap is for the destination Index and the inner IntMap
 -- is for the Source Index.  This is convenient since all runtime data
@@ -225,33 +194,9 @@ type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (D
 -- | Internal convenience type for the text display code
 type DTrans' = [(Index, [(Index, (DoPa, ([(Tag, (Position,Bool))],[String])))])]
 
-
-{-
--- | Internal type.  This is the Monad in which tag commands are
--- executed to modify the runtime data.
-type RunState = RWS (Position,Position) [String] Scratch
--- | Internal type.  This is type of runtime data assoicated with a
--- particular Index.  It is updated on a transition from that Index
--- and comapred against all data with the same destination Index to
--- pick the best.
-type Scratch = (IntMap (Position,Bool)     -- ^ Place for all tags, Bool is False iff it was Reset
-               ,IntMap {- Tag -} Orbits)   -- ^ Place for record for each tag with OP of Orbit
 -- | Positions for which a * was re-started while looping.  Need to
 -- append locations but compare starting with front, so use Seq as a
 -- Queue.
-type Orbits = Seq Position    
--}
-
-{-
--- | Internal type to comapre two Scratch values and pick the "biggest"
-type TagComparer = Scratch -> Scratch -> Ordering -- GT if first argument is the preferred one
-
-data Scratch = Scratch
-  { scratchPos :: !(UArray Tag Position)
-  , scratchFlags :: !(UArray Tag Bool)
-  , scratchOrbits :: !OrbitLog
-  } deriving (Show) --- XXX shows function
--}
 data Orbits = Orbits
   { inOrbit :: !Bool        -- True if enterOrbit, False if LeaveOrbit
   , getOrbits :: !(Seq Position)
@@ -263,8 +208,6 @@ data Instructions = Instructions
   , newOrbits :: !(Maybe (Position -> OrbitTransformer))
   } deriving (Show)
 
--- type OrbitInstruction = Position -> IntMap {-Tag-} Orbits -> IntMap {-Tag-} Orbits
---type OrbitInstruction = Position -> Orbits -> Orbits
 type OrbitLog = IntMap Orbits
 type OrbitTransformer = OrbitLog -> OrbitLog
 

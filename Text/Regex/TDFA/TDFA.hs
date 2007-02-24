@@ -15,7 +15,9 @@ import qualified Data.IntMap as IMap
 import qualified Data.IntSet as ISet(empty,singleton,null)
 import Data.List(foldl')
 import Data.IntMap.EnumMap(EnumMap)
-import qualified Data.IntMap.EnumMap as Map(elems,insert,member,empty,toAscList,fromDistinctAscList)
+import qualified Data.IntMap.EnumMap as EMap(elems,insert,member,empty,toAscList,fromDistinctAscList)
+import Data.IntMap.CharMap(CharMap)
+import qualified Data.IntMap.CharMap as Map(elems,insert,member,empty,toAscList,fromDistinctAscList)
 import qualified Data.Map
 import Data.Maybe(isJust)
 
@@ -109,7 +111,7 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
           mergeDTrans (_,dt1) (_,dt2) = (indexesToDFA (IMap.keys dtrans),dtrans)
             where dtrans = IMap.unionWith IMap.union dt1 dt2
           -- This is very much like fuseQTrans
-          fuseDTrans :: EnumMap Char (DFA,DTrans)
+          fuseDTrans :: CharMap (DFA,DTrans)
           fuseDTrans = Map.fromDistinctAscList (fuse l1 l2)
             where
               l1 = Map.toAscList t1

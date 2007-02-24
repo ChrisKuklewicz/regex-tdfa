@@ -10,7 +10,7 @@ import Data.Array.Base(unsafeRead,unsafeWrite)
 import Data.Array.IArray((!),array,bounds)
 import Data.Array.MArray -- ((!),array,bounds)
 import Data.List(maximumBy)
-import qualified Data.IntMap.EnumMap as Map(lookup,null)
+import qualified Data.IntMap.CharMap as Map(lookup,null)
 import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
 import Data.Maybe(isJust,isNothing)

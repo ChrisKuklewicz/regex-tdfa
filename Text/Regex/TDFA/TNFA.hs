@@ -2,15 +2,6 @@
 -- XXX design uncertainty:  should preResets be inserted into nullView?
 -- if not, why not?
 
---  ""
--- "(A).|()((.|((()))|^){3}){0,3}"
--- ("",array (0,7) [(0,("",(0,0))),(1,("",(-1,0))),(2,("",(0,0))),(3,("",(0,0))),(4,("",(0,0))),(5,("",(0,0))),(6,("",(0,0))),(7,("",(0,0)))],""),"same")
--- *** Exception: Text/Regex/TDFA/TNFA.hs:447:40-57: Non-exhaustive patterns in record update
-
--- full "((.|^){2}){2,4}"
--- *** Exception: Text/Regex/TDFA/TNFA.hs:453:40-57: Non-exhaustive patterns in record update
--- Erasing PNonEmpty solves the problem, so the NonEmpty code below is the issue:
-
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- | "Text.Regex.TDFA.TNFA" converts the CorePattern Q/P data (and its
 -- Pattern leafs) to a QNFA tagged non-deterministic finite automata.
@@ -45,12 +36,13 @@ import Data.Array.IArray(Array,array)
 import Data.Char(toLower,toUpper,isAlpha)
 import qualified Data.IntMap as IMap(toList,null,unionWith,singleton)
 import Data.List(foldl')
-import Data.IntMap.EnumMap(EnumMap)
-import qualified Data.IntMap.EnumMap as Map
+import Data.IntMap.CharMap(CharMap)
+import qualified Data.IntMap.CharMap as Map
 import Data.Maybe(catMaybes)
 import Data.Monoid(mempty,mappend)
 import Data.IntSet.EnumSet(EnumSet)
-import qualified Data.IntSet.EnumSet as Set(singleton,toList,toAscList,insert)
+import qualified Data.IntSet.EnumSet as Set(singleton,toList,insert)
+import qualified Data.IntMap.EnumMap as EMap
 import qualified Data.Set
 
 import Text.Regex.TDFA.Common
@@ -85,7 +77,7 @@ showQT (Testing test dopas a b) = "{Testing "++show test++" "++show (Set.toList 
     where indent = init . unlines . map (spaces++) . lines . showQT
           spaces = replicate 9 ' '
 
-foo :: EnumMap Char QTrans -> [(Char,[(Index,[TagCommand])])]
+foo :: CharMap QTrans -> [(Char,[(Index,[TagCommand])])]
 foo = mapSnd foo' . Map.toAscList
 
 foo' :: QTrans -> [(Index,[TagCommand])]
@@ -144,7 +136,7 @@ notNullable = null . nullQ
 
 -- This asks if the preferred (i.e. first) NullView has no tests.
 maybeOnlyEmpty :: Q -> Maybe WinTags
-maybeOnlyEmpty (Q {nullQ = ((SetTestInfo sti,tags):_)}) = if Map.null sti then Just tags else Nothing
+maybeOnlyEmpty (Q {nullQ = ((SetTestInfo sti,tags):_)}) = if EMap.null sti then Just tags else Nothing
 maybeOnlyEmpty _ = Nothing
 
 usesQNFA :: Q -> Bool
@@ -183,7 +175,7 @@ dominate win winTests lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x
   let -- The winning states are reached through the SetTag
       win' = prependTags' tags win
       -- get the SetTestInfo 
-      allTests = (listTestInfo lose $ Map.keysSet sti) `mappend` winTests
+      allTests = (listTestInfo lose $ EMap.keysSet sti) `mappend` winTests
       useTest _ [] w _ = w -- no more dominating tests to fail to choose lose, so just choose win
       useTest (aTest:tests) allD@((dTest,dopas):ds) w l =
         let (wA,wB,wD) = branches w
@@ -200,7 +192,7 @@ dominate win winTests lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x
                           ,qt_a = useTest tests allD wA lA
                           ,qt_b = useTest tests allD wB lB}
       useTest [] _ _  _ = err "This case in applyNullViews.useText cannot happen"
-  in useTest (Set.toList allTests) (Map.assocs sti) win' lose
+  in useTest (Set.toList allTests) (EMap.assocs sti) win' lose
 
 applyTest :: TestInfo -> QT -> QT
 applyTest (wt,dopa) qt | nullQT qt = qt
@@ -253,9 +245,9 @@ mergeQTWith mergeWins = merge where
                     ,qt_b = merge b1 b2}
       GT -> t2 {qt_a=(merge t1 a2), qt_b=(merge t1 b2)}
 
-  fuseQTrans :: (EnumMap Char QTrans) -> QTrans
-             -> (EnumMap Char QTrans) -> QTrans
-             -> EnumMap Char QTrans
+  fuseQTrans :: (CharMap QTrans) -> QTrans
+             -> (CharMap QTrans) -> QTrans
+             -> CharMap QTrans
   fuseQTrans t1 o1 t2 o2 = Map.fromDistinctAscList (fuse l1 l2) where
     l1 = Map.toAscList t1
     l2 = Map.toAscList t2

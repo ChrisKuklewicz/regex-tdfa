@@ -35,6 +35,8 @@ Exposed-Modules:        Text.Regex.TDFA.Common
 --                        Text.Regex.TDFA.ByteString.Lazy
                         Text.Regex.TDFA.Wrap
                         Text.Regex.TDFA
+                        Data.IntSet.EnumSet
+                        Data.IntMap.EnumMap
 Buildable:              True
 -- Other-Modules:
 -- HS-Source-Dirs:         "."
