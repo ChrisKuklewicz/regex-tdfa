@@ -41,7 +41,7 @@ Buildable:              True
 -- Other-Modules:
 -- HS-Source-Dirs:         "."
 Extensions:             MultiParamTypeClasses, FunctionalDependencies
-GHC-Options:            -Wall -O2  -fbang-patterns -funbox-strict-fields
+GHC-Options:            -Wall -Werror -O2 -fbang-patterns -funbox-strict-fields
 -- GHC-Options:            -Wall -Werror -O2
 -- GHC-Options:            -Wall -ddump-minimal-imports
 GHC-Prof-Options:       -auto-all

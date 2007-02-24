@@ -14,11 +14,9 @@ import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap
 import qualified Data.IntSet as ISet(empty,singleton,null)
 import Data.List(foldl')
-import Data.IntMap.EnumMap(EnumMap)
-import qualified Data.IntMap.EnumMap as EMap(elems,insert,member,empty,toAscList,fromDistinctAscList)
 import Data.IntMap.CharMap(CharMap)
-import qualified Data.IntMap.CharMap as Map(elems,insert,member,empty,toAscList,fromDistinctAscList)
-import qualified Data.Map
+import qualified Data.IntMap.CharMap as Map(elems,empty,toAscList,fromDistinctAscList)
+import qualified Data.Map (Map,empty,member,insert,elems)
 import Data.Maybe(isJust)
 
 import Text.Regex.TDFA.Common

@@ -6,7 +6,6 @@ module Text.Regex.TDFA.Common {- export everything -} where
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
---import Text.Regex.Base(MatchOffset,MatchLength)
 import Text.Show.Functions()
 import Control.Monad.State(State)
 import Data.Array.IArray(Array)

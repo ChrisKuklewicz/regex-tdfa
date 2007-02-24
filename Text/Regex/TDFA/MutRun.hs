@@ -3,23 +3,19 @@
 -- other modules to help match against other types.
 module Text.Regex.TDFA.MutRun (findMatch,findMatchAll,countMatchAll) where
 
-import Control.Monad(MonadPlus(..),forM,foldM,when)
-import Control.Monad.ST(ST,runST)
+import Control.Monad(MonadPlus(..))
+import Control.Monad.ST(ST)
 import qualified Control.Monad.ST.Lazy as Lazy(ST,runST,strictToLazyST)
-import Data.Array.Base(unsafeRead,unsafeWrite)
 import Data.Array.IArray((!),array,bounds)
-import Data.Array.MArray -- ((!),array,bounds)
-import Data.List(maximumBy)
+import Data.Array.MArray(rangeSize)
 import qualified Data.IntMap.CharMap as Map(lookup,null)
-import Data.IntMap(IntMap)
-import qualified Data.IntMap as IMap
-import Data.Maybe(isJust,isNothing)
-import Data.STRef
+import qualified Data.IntMap as IMap(null)
+import Data.Maybe(isNothing)
 
 import Text.Regex.Base(MatchArray,RegexOptions(..))
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.TDFA(isDFAFrontAnchored)
-import Text.Regex.TDFA.RunMutState -- (makeTagComparer,tagsToGroups,update,newScratchMap)
+import Text.Regex.TDFA.RunMutState(newTagEngine,tagsToGroupsST,newScratch,resetScratch,SScratch(..))
 import Text.Regex.TDFA.Wrap()
 -- import Debug.Trace
 
@@ -29,8 +25,8 @@ import Text.Regex.TDFA.Wrap()
 lazy :: ST s a -> Lazy.ST s a
 lazy = Lazy.strictToLazyST
 
-err :: String -> a
-err = common_error "Text.Regex.TDFA.MutRun"
+-- err :: String -> a
+-- err = common_error "Text.Regex.TDFA.MutRun"
 
 {-# INLINE findMatch #-}
 findMatch :: Regex -> String -> Maybe MatchArray
@@ -64,12 +60,12 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
   -- Select which style of ^ $ tests are performed.
   test | multiline (regex_compOptions regexIn) = test_multiline
        | otherwise = test_singleline
-    where test_multiline Test_BOL _ prev input = prev == '\n'
-          test_multiline Test_EOL _ prev input = case input of
-                                                   [] -> True
-                                                   (next:_) -> next == '\n'
-          test_singleline Test_BOL off _ input = off == 0
-          test_singleline Test_EOL off _ input = null input
+    where test_multiline Test_BOL _off prev _input = prev == '\n'
+          test_multiline Test_EOL _off _prev input = case input of
+                                                       [] -> True
+                                                       (next:_) -> next == '\n'
+          test_singleline Test_BOL off _prev _input = off == 0
+          test_singleline Test_EOL _off _prev input = null input
   
   runHerePure :: [MatchArray]
   runHerePure = Lazy.runST (do
@@ -106,7 +102,7 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
                          (prev':input') -> let off' = succ off
                                            in do () <- lazy (resetScratch regexIn off' s1 w0)
                                                  go off' prev' input'
-            Just (w,x@(off',prev',input')) -> do
+            Just (w,(off',prev',input')) -> do
               ma <- lazy (tagsToGroupsST (regex_groups regexIn) w)
               let len = snd (ma!0)
               rest <- if len==0 || null input' then return []
@@ -119,7 +115,7 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
                answer <- lazy (runHere Nothing (d_dt (regex_dfa regexIn)) s1 s2 offsetIn prevIn inputIn)
                case answer of
                  Nothing -> return []
-                 Just (w,x@(off',prev',input')) -> do
+                 Just (w,_) -> do
                    ma <- lazy (tagsToGroupsST (regex_groups regexIn) w)
                    return (ma:[])
       else go offsetIn prevIn inputIn ) -- end Lazy.runST
@@ -143,7 +139,7 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
          then if offsetIn /= 0 then []
                 else case runHereNoCap Nothing dtIn offsetIn prevIn inputIn of
                        Nothing -> []
-                       Just (off',prev',input') ->
+                       Just (off',_prev',_input') ->
                          let len = off'-offsetIn
                              ma = array (0,0) [(0,(offsetIn,len))]
                          in (ma:[])
@@ -169,13 +165,3 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
         if test wt off prev input
           then runHereNoCap winning a off prev input
           else runHereNoCap winning b off prev input
-
-{-
--- | Used by some debug/tracing
-showArr :: (MArray a (b) m,Ix i,Show i,Show b) => a i (b) -> m String
-showArr a = do
-  ss <- getAssocs a
-  return (show ss)
--}
-
- 

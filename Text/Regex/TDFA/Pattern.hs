@@ -20,7 +20,7 @@ module Text.Regex.TDFA.Pattern
 
 import Data.List(intersperse,partition)
 import qualified Data.Set as Set(toAscList,toList)
-import Data.Set(Set)
+import Data.Set(Set) -- XXX EnumSet
 import Text.Regex.TDFA.Common(DoPa(..),GroupIndex,common_error)
 
 err :: String -> a

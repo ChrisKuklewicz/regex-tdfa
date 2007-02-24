@@ -1,8 +1,10 @@
-module Text.Regex.TDFA.RunMutState where
+module Text.Regex.TDFA.RunMutState(newTagEngine,newScratch,tagsToGroupsST
+                                  ,toInstructions,compareWith,resetScratch
+                                  ,SScratch(..),MScratch,WScratch) where
 
-import Control.Monad(forM_,when,liftM,liftM2,liftM3,guard,foldM)
-import Control.Monad.ST.Strict as S (ST)
-import qualified Control.Monad.ST.Lazy as L (ST)
+import Control.Monad(forM_,liftM,liftM2,liftM3,foldM)
+--import Control.Monad.ST.Strict as S (ST)
+--import qualified Control.Monad.ST.Lazy as L (ST)
 import Control.Monad.State(MonadState(..),execState)
 
 import Data.Array.Base(unsafeRead,unsafeWrite,STUArray(..))
@@ -10,18 +12,15 @@ import GHC.Arr(STArray(..))
 import GHC.ST(ST(..))
 import GHC.Prim(MutableByteArray#,RealWorld,Int#,sizeofMutableByteArray#,unsafeCoerce#)
 
-import Data.Array.MArray(MArray(..),readArray,writeArray,newListArray,thaw,freeze,unsafeFreeze,getAssocs)
---import Data.Array.ST() -- (ST(..),STArray,STUArray)
-import Data.Array.Unboxed(UArray)
-import Data.Array.IArray(Array,(!),array,bounds,assocs) -- ,accumArray,(//))
+import Data.Array.MArray(MArray(..),readArray,writeArray,newListArray,unsafeFreeze)
+import Data.Array.IArray(Array,(!),bounds,assocs)
 
 import Data.IntMap(IntMap)
-import qualified Data.IntMap as IMap -- (insert,toList,insertWith)
+import qualified Data.IntMap as IMap(null,toList,insert,insertWith,insertWithKey,delete,lookup,keys)
 import Data.Ix(Ix(..))
-import Data.Maybe(fromJust)
 import Data.Monoid(Monoid(..))
-import Data.Sequence as S((|>),viewl,ViewL(..),singleton) -- empty XXX  XXX
-import Data.STRef
+import Data.Sequence as S((|>),viewl,ViewL(..))
+import Data.STRef(newSTRef,readSTRef,writeSTRef,STRef)
 
 import Text.Regex.Base(MatchArray,MatchOffset,MatchLength)
 import Text.Regex.TDFA.Common
@@ -34,6 +33,10 @@ err :: String -> a
 err s = common_error "Text.Regex.TDFA.RunMutState"  s
 
 {-# INLINE newTagEngine #-}
+newTagEngine :: Regex -> ST s (MScratch s -> Position -> IntMap (IntMap (t,Instructions)) -> ST s ()
+                              ,MScratch s -> (Position,Char,String) -> Maybe (WScratch s,(Position,Char,String)) -> IntMap Instructions -> ST s (Maybe (WScratch s,(Position,Char,String)))
+                              ,MScratch s -> MScratch s -> Position -> IntMap (IntMap (DoPa,Instructions)) -> ST s ()
+                              )
 newTagEngine regexIn = do
   (which,count) <- newBoard regexIn
   let comp = makeTagComparer (regex_tags regexIn)
@@ -48,8 +51,8 @@ newTagEngine regexIn = do
                 o <- readArray (m_orbit s1) sourceIndex
                 let o' = maybe o (\x -> x off o) (newOrbits instructions)
                 return ((sourceIndex,instructions),p,o')
-              challenge x1@(_,_,o1) y1 = {-# SCC "challenge" #-} do
-                x2@(_,_,o2) <- prep y1
+              challenge x1 y1 = {-# SCC "challenge" #-} do
+                x2 <- prep y1
                 check <- comp off x1 (newPos . snd . fst3 $ x1) x2 (newPos . snd . fst3 $ x2)
         {-
                 debug1 <- getAssocs (snd3 x1)
@@ -72,7 +75,7 @@ newTagEngine regexIn = do
             prep x@(sourceIndex,instructions) = do
               p <- maybe (error "updateWinner") return =<< unsafeRead (m_pos s1) sourceIndex
               o <- readArray (m_orbit s1) sourceIndex
-              let o' = maybe o (\x -> x off o) (newOrbits instructions)
+              let o' = maybe o (\f -> f off o) (newOrbits instructions)
               return (x,p,o')
             challenge x1 y1 = do
               x2 <- prep y1
@@ -116,6 +119,7 @@ newBoard regexIn = do
   liftM2 (,) (newListArray bWhich [(-1,error ("ins "++show i),error ("orbitlog"++show i)) | i <- range bWhich])
              (newArray bCount 0)
 
+{-
 newA' :: (MArray (STArray s) e (ST s)) => (Tag,Tag) -> e -> ST s (STArray s Tag e)
 newA' b_tags initial = -- traceNew ("> newA' "++show b_tags) $
                        newArray b_tags initial
@@ -123,6 +127,7 @@ newA' b_tags initial = -- traceNew ("> newA' "++show b_tags) $
 newA'_ :: (MArray (STArray s) e (ST s)) => (Tag,Tag) -> ST s (STArray s Tag e)
 newA'_ b_tags = -- traceNew ("> newA'_ "++show b_tags) $
                 newArray_ b_tags
+-}
 
 newA :: (MArray (STUArray s) e (ST s)) => (Tag,Tag) -> e -> ST s (STUArray s Tag e)
 newA b_tags initial = -- traceNew ("> newA "++show b_tags) $
@@ -132,36 +137,12 @@ newA_ :: (MArray (STUArray s) e (ST s)) => (Tag,Tag) -> ST s (STUArray s Tag e)
 newA_ b_tags = -- traceNew ("> newA_ "++show b_tags) $
                newArray_ b_tags
 
--- need forall
-duplicateAInt :: forall s. (MArray (STUArray s) Int (ST s)) =>  STUArray s Tag Int -> ST s (STUArray s Tag Int)
-duplicateAInt s = do i <- unsafeFreeze s :: ST s (UArray Tag Int)
---                     traceCopy ("> duplicateAInt") $ do
-                     thaw i
-
--- need forall
-duplicateABool :: forall s. (MArray (STUArray s) Bool (ST s)) =>  STUArray s Tag Bool -> ST s (STUArray s Tag Bool)
-duplicateABool s = do i <- unsafeFreeze s :: ST s (UArray Tag Bool)
---                    traceCopy ("> duplicateABool") $ do
-                      thaw i
-
-showArr :: (MArray a (b) m,Ix i,Show i,Show b) => a i (b) -> m String
-showArr a = do
-  ss <- getAssocs a
-  return (show ss)
-
-seeMS :: MScratch s -> ST s String
-seeMS s = do
-  p <- getAssocs (m_pos s) >>= mapM (\(t,ma)-> (maybe (return []) getAssocs ma >>= return . ((,) t)))
-  f <- getAssocs (m_flag s) >>= mapM (\(t,ma)-> (maybe (return []) getAssocs ma >>= return . ((,) t)))
-  o <- getAssocs (m_orbit s) >>= mapM (\(t,o)-> return (IMap.toList o) >>= return . ((,) t))
-  return $ unlines [show p,show f,show o]
-
 data MScratch s = MScratch { m_pos :: !(STArray s Index (Maybe (STUArray s Tag Position)))
                            , m_flag :: !(STArray s Index (Maybe (STUArray s Tag Bool)))
                            , m_orbit :: !(STArray s Index OrbitLog) -- Fixed!
                            }
 data SScratch s= SScratch { s_1 :: !(MScratch s)
-                          , s_2 :: !(MScratch s)
+                          , s_2 :: !(MScratch s) -- XXX
                           , w_blank :: !(WScratch s)
                           }
 data WScratch s = WScratch { w_pos :: !(STRef s (STUArray s Tag Position))
@@ -169,20 +150,6 @@ data WScratch s = WScratch { w_pos :: !(STRef s (STUArray s Tag Position))
                            , w_orbit :: !(STRef s OrbitLog)
                            }
 
-seeWS :: WScratch s -> ST s String
-seeWS w = do
-  p <- getAssocs =<< readSTRef (w_pos w)
-  f <- getAssocs =<< readSTRef (w_flag w)
-  o <- return . IMap.toList =<< readSTRef (w_orbit w)
-  return $ unlines [show p, show f, show o]
-
-{-
-freezeScratch :: WScratch s -> ST s Scratch
-freezeScratch (WScratch p f o) = do -- traceCopy ("> freezeScratch") $ do
-                                 liftM3 Scratch (freeze =<< readSTRef p)
-                                                (freeze =<< readSTRef f)
-                                                (readSTRef o)
--}
 newWScratch :: (Tag,Tag) -> ST s (WScratch s)
 newWScratch b_tags =  liftM3 WScratch (newSTRef =<< newA b_tags (-1))
                                       (newSTRef =<< newA b_tags False)
@@ -192,12 +159,6 @@ newWScratch_ :: (Tag,Tag) -> ST s (WScratch s)
 newWScratch_ b_tags = liftM3 WScratch (newSTRef =<< newA_ b_tags)
                                       (newSTRef =<< newA_ b_tags)
                                       (newSTRef mempty)
-
-fillArray :: STArray s Int Orbits -> Orbits -> ST s (STArray s Int Orbits)
-fillArray m v = do
-  x@(0,b) <- getBounds m
-  forM_ (range x) (\i -> unsafeWrite m i v)
-  return m
 
 resetScratch :: Regex -> Position -> MScratch s -> WScratch s -> ST s ()
 resetScratch regexIn startPos s1 w0 = do
@@ -235,12 +196,14 @@ newScratch regexIn startPos = do
   resetScratch regexIn startPos s1 w0
   return s
 
+newSScratch :: (Index, Index) -> (Tag, Tag) -> ST s (SScratch s)
 newSScratch b_index b_tags = do
   s1 <- newMScratch b_index
   s2 <- newMScratch b_index
   w0 <- newWScratch b_tags
   return (SScratch s1 s2 w0)
 
+newMScratch :: (Index,Index) -> ST s (MScratch s)
 newMScratch b_index = do
   let n = rangeSize b_index
   pos <- newListArray b_index (replicate n Nothing)
@@ -256,7 +219,6 @@ copyUpdateTags :: (MArray (STUArray s) Position (ST s))
                     -> STUArray s Tag Position   -- destination
                     -> (ST s) ()
 copyUpdateTags !a1 !changes !pFalse !pTrue !a2 = do
-  (start,stop) <- getBounds a1
 --  traceCopy ("> copySTU copyUpdate"++show (start,stop)) $ do
   copySTU a1 a2
   mapM_ (\(tag,v) -> if v then unsafeWrite a2 tag pTrue
@@ -269,27 +231,9 @@ copyUpdateFlags :: (MArray (STUArray s) Bool (ST s))
                      -> STUArray s Tag Bool   -- destination
                      -> (ST s) ()
 copyUpdateFlags !a1 !changes !a2 = do
-  (start,stop) <- getBounds a1
 --  traceCopy ("> copySTU copyUpdate"++show (start,stop)) $ do
   copySTU a1 a2
   mapM_ (\(tag,v) -> unsafeWrite a2 tag v) changes
-
-copyUpdateApplied :: STArray s Tag Orbits          -- source 
-                  -> [(Tag, Orbits -> Orbits)]     -- changes
-                  -> STArray s Tag Orbits          -- destination
-                  -> ST s ()
-copyUpdateApplied !a1 !changes !a2 = do
-  (start,stop) <- getBounds a1
---  traceCopy ("> copyUpdateApplied"++ show (start,stop,length changes)) $ do
-  let act a b | seq a $ seq b $ False = undefined
-      act _ x | x > stop = return ()
-      act [] x = do unsafeRead a1 x >>= unsafeWrite a2 x
-                    act [] $! succ x
-      act todo@((t,v):rest) x | t==x = do unsafeRead a1 x >>= return . v >>= unsafeWrite a2 x
-                                          act rest $! succ x
-                              | otherwise =  do unsafeRead a1 x >>= unsafeWrite a2 x
-                                                act todo $! succ x
-  act changes start
 
 updateWinning :: MScratch s         -- source 
   -> ({-Source -} Index,Instructions,OrbitLog)
@@ -377,58 +321,58 @@ makeTagComparer aTagOP = foldr ($) end (map chooseBranch
         chooseBranch (tag,Orbit) = challenge_Orb tag
         end _ _ _ _ _ = return EQ
 
-challenge_Orb tag next preTag x1@(_state1,pos1,orbit1') np1 x2@(_state2,pos2,orbit2') np2 = 
-  let s1 = IMap.lookup tag orbit1'
-      s2 = IMap.lookup tag orbit2'
-  in case (s1,s2) of
-       (Nothing,Nothing) -> next preTag x1 np1 x2 np2
-       (Just o1,Just o2) | inOrbit o1 == inOrbit o2 ->
-          case comparePos (viewl (getOrbits o1)) (viewl (getOrbits o2)) of
-            EQ -> next preTag x1 np1 x2 np2
-            answer -> return answer
-       _ -> err $ "challenge_Orb is too stupid to handle mismatched orbit data :"
-                  ++ show(tag,preTag,np1,np2)
-  where comparePos :: (ViewL Position) -> (ViewL Position) -> Ordering
-        comparePos EmptyL EmptyL = EQ
-        comparePos EmptyL _      = GT
-        comparePos _      EmptyL = LT
-        comparePos (p1 :< ps1) (p2 :< ps2) = 
-          compare p1 p2 `mappend` comparePos (viewl ps1) (viewl ps2)
- 
+        challenge_Orb tag next preTag x1@(_state1,_,orbit1') np1 x2@(_state2,_,orbit2') np2 = 
+          let s1 = IMap.lookup tag orbit1'
+              s2 = IMap.lookup tag orbit2'
+          in case (s1,s2) of
+               (Nothing,Nothing) -> next preTag x1 np1 x2 np2
+               (Just o1,Just o2) | inOrbit o1 == inOrbit o2 ->
+                  case comparePos (viewl (getOrbits o1)) (viewl (getOrbits o2)) of
+                    EQ -> next preTag x1 np1 x2 np2
+                    answer -> return answer
+               _ -> err $ "challenge_Orb is too stupid to handle mismatched orbit data :"
+                          ++ show(tag,preTag,np1,np2)
+          where comparePos :: (ViewL Position) -> (ViewL Position) -> Ordering
+                comparePos EmptyL EmptyL = EQ
+                comparePos EmptyL _      = GT
+                comparePos _      EmptyL = LT
+                comparePos (p1 :< ps1) (p2 :< ps2) = 
+                  compare p1 p2 `mappend` comparePos (viewl ps1) (viewl ps2)
+         
 
--- challenge_pos takes the current winner and a challenger, each with instructions.
--- But the orbits are already modified.
-challenge_Max tag next preTag x1@(_state1,pos1,orbit1') np1 x2@(_state2,pos2,orbit2') np2 = do
-  (np1',p1) <- case np1 of
-                 ((t,p):rest) | t==tag -> return (rest,if p then succ preTag else preTag)
-                 _ -> liftM ((,) np1) (unsafeRead pos1 tag)
-  (np2',p2) <- case np2 of
-                 ((t,p):rest) | t==tag -> return (rest,if p then succ preTag else preTag)
-                 _ -> liftM ((,) np2) (unsafeRead pos2 tag)
-  case (p1,p2) of
-    (-1,-1) -> next preTag x1 np1' x2 np2'
-    (_ ,-1) -> return GT
-    (-1, _) -> return LT
-    _ -> let answer = compare p1 p2
-         in if answer == EQ then next preTag x1 np1' x2 np2'
-                            else return answer
+        -- challenge_pos takes the current winner and a challenger, each with instructions.
+        -- But the orbits are already modified.
+        challenge_Max tag next preTag x1@(_state1,pos1,_) np1 x2@(_state2,pos2,_) np2 = do
+          (np1',p1) <- case np1 of
+                         ((t,p):rest) | t==tag -> return (rest,if p then succ preTag else preTag)
+                         _ -> liftM ((,) np1) (unsafeRead pos1 tag)
+          (np2',p2) <- case np2 of
+                         ((t,p):rest) | t==tag -> return (rest,if p then succ preTag else preTag)
+                         _ -> liftM ((,) np2) (unsafeRead pos2 tag)
+          case (p1,p2) of
+            (-1,-1) -> next preTag x1 np1' x2 np2'
+            (_ ,-1) -> return GT
+            (-1, _) -> return LT
+            _ -> let answer = compare p1 p2
+                 in if answer == EQ then next preTag x1 np1' x2 np2'
+                                    else return answer
 
--- challenge_pos takes the current winner and a challenger, each with instructions.
--- But the orbits are already modified.
-challenge_Min tag next preTag x1@(_state1,pos1,orbit1') np1 x2@(_state2,pos2,orbit2') np2 = do
-  (np1',p1) <- case np1 of
-                 ((t,p):rest) | t==tag -> return (rest,if p then succ preTag else preTag)
-                 _ -> liftM ((,) np1) (unsafeRead pos1 tag)
-  (np2',p2) <- case np2 of
-                 ((t,p):rest) | t==tag -> return (rest,if p then succ preTag else preTag)
-                 _ -> liftM ((,) np2) (unsafeRead pos2 tag)
-  case (p1,p2) of
-    (-1,-1) -> next preTag x1 np1' x2 np2'
-    (_ ,-1) -> return LT
-    (-1, _) -> return GT
-    _ -> let answer = compare p2 p1
-         in if answer == EQ then next preTag x1 np1' x2 np2'
-                            else return answer
+        -- challenge_pos takes the current winner and a challenger, each with instructions.
+        -- But the orbits are already modified.
+        challenge_Min tag next preTag x1@(_state1,pos1,_) np1 x2@(_state2,pos2,_) np2 = do
+          (np1',p1) <- case np1 of
+                         ((t,p):rest) | t==tag -> return (rest,if p then succ preTag else preTag)
+                         _ -> liftM ((,) np1) (unsafeRead pos1 tag)
+          (np2',p2) <- case np2 of
+                         ((t,p):rest) | t==tag -> return (rest,if p then succ preTag else preTag)
+                         _ -> liftM ((,) np2) (unsafeRead pos2 tag)
+          case (p1,p2) of
+            (-1,-1) -> next preTag x1 np1' x2 np2'
+            (_ ,-1) -> return LT
+            (-1, _) -> return GT
+            _ -> let answer = compare p2 p1
+                 in if answer == EQ then next preTag x1 np1' x2 np2'
+                                    else return answer
 
 compareWith :: (Ord x,Monoid a) => (Maybe (x,b) -> Maybe (x,c) -> a) -> [(x,b)] -> [(x,c)] -> a
 compareWith comp = cw where
@@ -552,10 +496,10 @@ tagsToGroupsST aGroups (WScratch {w_pos=pRef,w_flag=fRef})= do
   startPos0 <- unsafeRead p 0
   stopPos0 <- unsafeRead p 1
   unsafeWrite ma 0 (startPos0,stopPos0-startPos0)
-  let get this_index [] = return ()
-      get this_index ((GroupInfo _ parent start stop):gs) = do
-        f <- unsafeRead f stop
-        if not f then get this_index gs
+  let act _this_index [] = return ()
+      act this_index ((GroupInfo _ parent start stop):gs) = do
+        flagVal <- unsafeRead f stop
+        if not flagVal then act this_index gs
           else do
         startPos <- unsafeRead p start
         stopPos <- unsafeRead p stop
@@ -564,9 +508,9 @@ tagsToGroupsST aGroups (WScratch {w_pos=pRef,w_flag=fRef})= do
                   0 <= lengthParent &&
                   startParent <= startPos &&
                   stopPos <= startPos + lengthParent)
-        if not ok then get this_index gs
+        if not ok then act this_index gs
           else unsafeWrite ma this_index (startPos,stopPos-startPos)
-  forM_ (range (1,b_max)) $ (\i -> get i (aGroups!i))
+  forM_ (range (1,b_max)) $ (\i -> act i (aGroups!i))
   unsafeFreeze ma
 
 foreign import ccall unsafe "memcpy"
@@ -574,7 +518,7 @@ foreign import ccall unsafe "memcpy"
 
 {-# INLINE copySTU #-}
 copySTU :: (Show i,Ix i,MArray (STUArray s) e (ST s)) => STUArray s i e -> STUArray s i e -> ST s ()
-copySTU !s1@(STUArray _ _ msource) !s2@(STUArray _ _ mdest) =
+copySTU !(STUArray _ _ msource) !(STUArray _ _ mdest) =
 -- do b1 <- getBounds s1
 --  b2 <- getBounds s2
 --  when (b1/=b2) (error ("\n\nWTF copySTU: "++show (b1,b2)))
