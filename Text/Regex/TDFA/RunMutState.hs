@@ -12,7 +12,7 @@ import GHC.Arr(STArray(..))
 import GHC.ST(ST(..))
 import GHC.Prim(MutableByteArray#,RealWorld,Int#,sizeofMutableByteArray#,unsafeCoerce#)
 
-import Data.Array.MArray(MArray(..),readArray,writeArray,newListArray,unsafeFreeze)
+import Data.Array.MArray(MArray(..),newListArray,unsafeFreeze)
 import Data.Array.IArray(Array,(!),bounds,assocs)
 
 import Data.IntMap(IntMap)
@@ -42,13 +42,13 @@ newTagEngine regexIn = do
   let comp = makeTagComparer (regex_tags regexIn)
   let findTrans s1 off trans = {-# SCC "findTrans" #-} (mapM_ findTrans' (IMap.toList trans)) where
         findTrans' (destIndex,sources) | IMap.null sources =
-          writeArray which destIndex ((-1,undefined),undefined,undefined)
+          unsafeWrite which destIndex ((-1,undefined),undefined,undefined)
                                        | otherwise =  {-# SCC "findTrans'" #-} do
           let (first:rest) = IMap.toList sources
               {-# INLINE prep #-}
               prep (sourceIndex,(_,instructions)) = {-# SCC "prep" #-} do
                 p <- maybe (error "findtrans") return =<< unsafeRead (m_pos s1) sourceIndex
-                o <- readArray (m_orbit s1) sourceIndex
+                o <- unsafeRead (m_orbit s1) sourceIndex
                 let o' = maybe o (\x -> x off o) (newOrbits instructions)
                 return ((sourceIndex,instructions),p,o')
               challenge x1 y1 = {-# SCC "challenge" #-} do
@@ -74,7 +74,7 @@ newTagEngine regexIn = do
             {-# INLINE prep #-}
             prep x@(sourceIndex,instructions) = do
               p <- maybe (error "updateWinner") return =<< unsafeRead (m_pos s1) sourceIndex
-              o <- readArray (m_orbit s1) sourceIndex
+              o <- unsafeRead (m_orbit s1) sourceIndex
               let o' = maybe o (\f -> f off o) (newOrbits instructions)
               return (x,p,o')
             challenge x1 y1 = do
@@ -184,7 +184,7 @@ resetScratch regexIn startPos s1 w0 = do
   unsafeWrite initFlags 0 True
   unsafeWrite (m_flag s1) i (Just initFlags)
 
-  writeArray (m_orbit s1) i mempty
+  unsafeWrite (m_orbit s1) i mempty
 
 newScratch :: Regex -> Position -> ST s (SScratch s)
 newScratch regexIn startPos = do
@@ -274,7 +274,7 @@ updateSwap :: MScratch s         -- source
            -> Position
            -> MScratch s -> Index        -- destination
            -> ST s ()
-updateSwap !s1  ((i1,ins),_,o) preTag s2 i2 = do
+updateSwap s1 ((i1,ins),_,o) preTag s2 i2 = do
   -- obtain source
   pos1'@(Just pos1) <- unsafeRead (m_pos s1) i1
   flag1'@(Just flag1) <- unsafeRead (m_flag s1) i1
@@ -284,7 +284,7 @@ updateSwap !s1  ((i1,ins),_,o) preTag s2 i2 = do
   -- put source in destination
   unsafeWrite (m_pos s2) i2 pos1'
   unsafeWrite (m_flag s2) i2 flag1'
-  writeArray (m_orbit s2) i2 o           --- XXX ???
+  unsafeWrite (m_orbit s2) i2 o           --- XXX ???
   let val x = if x then postTag else preTag where postTag = succ preTag
   mapM_ (\(tag,v) -> unsafeWrite pos1 tag (val v)) (newPos ins)
   mapM_ (\(tag,f) -> unsafeWrite flag1 tag (f)) (newFlags ins)
@@ -307,7 +307,7 @@ updateCopy s1 ((i1,ins),_,o) preTag s2 i2 = do
                      return a) return =<< unsafeRead (m_flag s2) i2
   copyUpdateTags pos1 (newPos ins) preTag (succ preTag) pos2
   copyUpdateFlags flag1 (newFlags ins) flag2
-  writeArray (m_orbit s2) i2 o
+  unsafeWrite (m_orbit s2) i2 o
 
 makeTagComparer :: Array Tag OP
                 -> Position
