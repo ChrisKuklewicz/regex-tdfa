@@ -42,7 +42,7 @@ newTagEngine regexIn = do
   let comp = makeTagComparer (regex_tags regexIn)
   let findTrans s1 off trans = {-# SCC "findTrans" #-} (mapM_ findTrans' (IMap.toList trans)) where
         findTrans' (destIndex,sources) | IMap.null sources =
-          writeArray which destIndex (-1,undefined,undefined)
+          writeArray which destIndex ((-1,undefined),undefined,undefined)
                                        | otherwise =  {-# SCC "findTrans'" #-} do
           let (first:rest) = IMap.toList sources
               {-# INLINE prep #-}
@@ -63,8 +63,8 @@ newTagEngine regexIn = do
         -}
                 if check==LT then return x2 else return x1
           x1 <- prep first
-          ((sourceIndex',instructions'),_,orbit') <- foldM challenge x1 rest
-          unsafeWrite which destIndex (sourceIndex',instructions',orbit')
+          x@((sourceIndex',_instructions'),_,_orbit') <- foldM challenge x1 rest
+          unsafeWrite which destIndex x -- (sourceIndex',instructions',orbit')
           unsafeRead count sourceIndex' >>= (unsafeWrite count sourceIndex') . succ
 
   let {-# INLINE updateWinner #-}
@@ -99,7 +99,7 @@ newTagEngine regexIn = do
                                     | otherwise = {-# SCC "performTrans" #-} do
         mapM_ performTrans' (IMap.keys dtrans)
           where performTrans' destIndex =  {-# SCC "performTrans'" #-} do
-                  i1@(sourceIndex,_instructions,_orbit) <- unsafeRead which destIndex
+                  i1@((sourceIndex,_instructions),_,_orbit) <- unsafeRead which destIndex
                   if sourceIndex == (-1) then return () else do
                   n <- unsafeRead count sourceIndex
                   unsafeWrite count sourceIndex (pred n)
@@ -111,12 +111,12 @@ newTagEngine regexIn = do
   return (findTrans,updateWinner,performTrans)
 
 -- XXX change first element type to store winning orbit' and such?
-newBoard :: Regex -> ST s (STArray s Index (Index,Instructions,OrbitLog)
+newBoard :: Regex -> ST s (STArray s Index ((Index,Instructions),a,OrbitLog)
                           ,STUArray s Index Int)
 newBoard regexIn = do
   let bWhich = (0,regex_init regexIn) -- (-1) index is winning state
       bCount = (0,regex_init regexIn)
-  liftM2 (,) (newListArray bWhich [(-1,error ("ins "++show i),error ("orbitlog"++show i)) | i <- range bWhich])
+  liftM2 (,) (newListArray bWhich (replicate (rangeSize bWhich) ((-1,undefined),undefined,undefined)))
              (newArray bCount 0)
 
 {-
@@ -235,6 +235,7 @@ copyUpdateFlags !a1 !changes !a2 = do
   copySTU a1 a2
   mapM_ (\(tag,v) -> unsafeWrite a2 tag v) changes
 
+{-# INLINE updateWinning #-}
 updateWinning :: MScratch s         -- source 
   -> ({-Source -} Index,Instructions,OrbitLog)
   -> Position
@@ -267,12 +268,13 @@ updateWinning !s1 (i1,ins,o) preTag n mw = do
       writeSTRef (w_orbit w) o
       return w
 
+{-# INLINE updateSwap #-}
 updateSwap :: MScratch s         -- source 
-           -> ({-Source -} Index,Instructions,OrbitLog)
+           -> (({-Source -} Index,Instructions),STUArray s Tag Position,OrbitLog)
            -> Position
            -> MScratch s -> Index        -- destination
            -> ST s ()
-updateSwap !s1  (i1,ins,o) preTag s2 i2 = do
+updateSwap !s1  ((i1,ins),_,o) preTag s2 i2 = do
   -- obtain source
   pos1'@(Just pos1) <- unsafeRead (m_pos s1) i1
   flag1'@(Just flag1) <- unsafeRead (m_flag s1) i1
@@ -287,12 +289,13 @@ updateSwap !s1  (i1,ins,o) preTag s2 i2 = do
   mapM_ (\(tag,v) -> unsafeWrite pos1 tag (val v)) (newPos ins)
   mapM_ (\(tag,f) -> unsafeWrite flag1 tag (f)) (newFlags ins)
 
+{-# INLINE updateCopy #-}
 updateCopy :: MScratch s         -- source 
-           -> ({-Source -} Index,Instructions,OrbitLog)
+           -> (({-Source -} Index,Instructions),STUArray s Tag Position,OrbitLog)
            -> Position
            -> MScratch s -> Index        -- destination
            -> ST s ()
-updateCopy s1 (i1,ins,o) preTag s2 i2 = do
+updateCopy s1 ((i1,ins),_,o) preTag s2 i2 = do
   pos1 <- maybe (err $ "forceUpdate : m_pos s1 is Nothing" ++ show (i1,ins,preTag)) return =<< unsafeRead (m_pos s1) i1
   flag1 <- maybe (err $ "forceUpdate : m_flag s1 is Nothing" ++ show (i1,ins,preTag)) return =<< unsafeRead (m_flag s1) i1
   b_tags <- getBounds pos1

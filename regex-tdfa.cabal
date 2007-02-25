@@ -37,6 +37,7 @@ Exposed-Modules:        Text.Regex.TDFA.Common
                         Text.Regex.TDFA
                         Data.IntSet.EnumSet
                         Data.IntMap.EnumMap
+                        Data.IntMap.CharMap
 Buildable:              True
 -- Other-Modules:
 -- HS-Source-Dirs:         "."

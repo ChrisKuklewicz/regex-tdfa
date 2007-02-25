@@ -11,12 +11,12 @@ import Control.Monad.Instances()
 import Control.Monad.RWS
 import Data.Array.IArray(Array,(!),bounds)
 import Data.IntMap(IntMap)
-import qualified Data.IntMap as IMap
 import qualified Data.IntSet as ISet(empty,singleton,null)
 import Data.List(foldl')
 import Data.IntMap.CharMap(CharMap(..))
 import qualified Data.IntMap.CharMap as Map(empty)
-import qualified Data.IntMap as IMap(toAscList,fromDistinctAscList)
+import qualified Data.IntMap as IMap(empty,null,singleton,keys,union
+                                    ,unionWith,elems,toList,toAscList,fromDistinctAscList)
 import qualified Data.Map (Map,empty,member,insert,elems)
 import Data.Maybe(isJust)
 
