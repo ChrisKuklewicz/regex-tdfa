@@ -34,7 +34,7 @@ err s = common_error "Text.Regex.TDFA.RunMutState"  s
 
 {-# INLINE newTagEngine #-}
 newTagEngine :: Regex -> ST s (MScratch s -> Position -> IntMap (IntMap (t,Instructions)) -> ST s ()
-                              ,MScratch s -> (Position,Char,String) -> Maybe (WScratch s,(Position,Char,String)) -> IntMap Instructions -> ST s (Maybe (WScratch s,(Position,Char,String)))
+                              ,MScratch s -> (Position,Char,xxx) -> Maybe (WScratch s,(Position,Char,xxx)) -> IntMap Instructions -> ST s (Maybe (WScratch s,(Position,Char,xxx)))
                               ,MScratch s -> MScratch s -> Position -> IntMap (IntMap (DoPa,Instructions)) -> ST s ()
                               )
 newTagEngine regexIn = do

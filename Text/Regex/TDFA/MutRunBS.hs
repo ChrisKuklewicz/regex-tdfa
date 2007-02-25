@@ -11,9 +11,7 @@ import Data.Array.MArray(rangeSize)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base as B(unsafeIndex)
 import Data.IntMap.CharMap(CharMap(..))
-import qualified Data.IntMap.CharMap as Map(null)
 import qualified Data.IntMap as IMap(null,lookup)
-import Data.Maybe(isNothing)
 
 import Text.Regex.Base(MatchArray,RegexOptions(..))
 import Text.Regex.TDFA.Common
@@ -66,7 +64,6 @@ matchHere regexIn offsetIn inputIn = ans where
 
   final = B.length inputIn
 
-  
   test | multiline (regex_compOptions regexIn) = test_multiline
        | otherwise = test_singleline
     where test_multiline Test_BOL off = off == 0 || newline == index inputIn (pred off)

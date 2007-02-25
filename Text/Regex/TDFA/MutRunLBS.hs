@@ -1,175 +1,159 @@
--- | This is an adaptation of RunBS/Run for Data.ByteString.Lazy.Char8.
--- There is an issue that Lazy streams are indexed by Int64 instead of Int.
-module Text.Regex.TDFA.MutRunLBS(findMatch,findMatchAll,countMatchAll) where
+-- | "Text.Regex.TDFA.Run" is the main module for matching a DFA
+-- against a String.  Many of the associated functions are exported to
+-- other modules to help match against other types.
+module Text.Regex.TDFA.MutRunLBS (findMatch,findMatchAll,countMatchAll) where
 
 import Control.Monad(MonadPlus(..))
-import Control.Monad.ST
+import Control.Monad.ST(ST)
+import qualified Control.Monad.ST.Lazy as Lazy(ST,runST,strictToLazyST)
 import Data.Array.IArray((!),array,bounds)
-import Data.Array.MArray
+import Data.Array.MArray(rangeSize)
 import qualified Data.ByteString.Lazy.Char8 as B
-import Data.Int(Int64)
-import Data.IntMap(IntMap)
-import Data.IntMap(IntMap)
-import qualified Data.IntMap as IMap
-import qualified Data.Map as Map
-import Data.Maybe(isJust)
-import Data.List(maximumBy)
+import Data.IntMap.CharMap(CharMap(..))
+import qualified Data.IntMap as IMap(null,lookup)
 
-import Text.Regex.Base(MatchArray)
+import Text.Regex.Base(MatchArray,RegexOptions(..))
 import Text.Regex.TDFA.Common
-import Text.Regex.TDFA.RunMutState -- (makeTagComparer,tagsToGroups,update,newScratchMap)
+import Text.Regex.TDFA.TDFA(isDFAFrontAnchored)
+import Text.Regex.TDFA.RunMutState(newTagEngine2,tagsToGroupsST,newScratch,resetScratch,SScratch(..))
+import Text.Regex.TDFA.Wrap()
 -- import Debug.Trace
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
+{-# INLINE lazy #-}
+lazy :: ST s a -> Lazy.ST s a
+lazy = Lazy.strictToLazyST
+
+{-# INLINE index #-}
+index :: B.ByteString -> Int -> Int
+index input off = fromEnum (B.index input (toEnum off))
+
+-- err :: String -> a
+-- err = common_error "Text.Regex.TDFA.MutRun"
+
 {-# INLINE findMatch #-}
 findMatch :: Regex -> B.ByteString -> Maybe MatchArray
-findMatch regexIn input = loop 0 where
-  final = B.length input
-  loop offset =
-    let result = matchHere regexIn offset input
-    in if isJust result then result
-         else if offset == final then Nothing
-                else let offset' = succ offset
-                     in seq offset' $ loop offset'
+findMatch regexIn inputIn = case matchHere regexIn 0 inputIn of
+                               [] -> Nothing
+                               (ma:_) -> Just ma
 
 {-# INLINE findMatchAll #-}
 findMatchAll :: Regex -> B.ByteString -> [MatchArray]
-findMatchAll regexIn input = loop 0 where
-  final = B.length input
-  loop offset =
-    case matchHere regexIn offset input of
-      Nothing -> if offset == final then []
-                   else let offset' = succ offset
-                        in seq offset' $ loop offset'
-      Just ma -> ma : let (start,len) = ma!0
-                      in if offset==final || len==0 then []
-                           else let offset' = toEnum $ start + len
-                                in seq offset' $ loop offset'
+findMatchAll regexIn inputIn = matchHere regexIn 0 inputIn
 
 {-# INLINE countMatchAll #-}
 countMatchAll :: Regex -> B.ByteString -> Int
-countMatchAll regexIn input = loop 0 $! 0 where
-  final = B.length input
-  loop offset count =
-    case matchHere regexIn offset input of
-      Nothing -> if offset == final then count
-                   else let offset' = succ offset
-                        in seq offset' $ loop offset' $! count
-      Just ma -> let (start,len) = ma!0
-                 in if offset==final || len==0 then count
-                      else let offset' = toEnum $ start + len
-                           in seq offset' $ loop offset' $! succ count
+countMatchAll regexIn inputIn = length (matchHere regex 0 inputIn) where
+  regex = setExecOpts (ExecOption {captureGroups = False,testMatch = False}) regexIn
 
-{-# INLINE matchHere #-}
-matchHere :: Regex -> Int64 -> B.ByteString -> Maybe MatchArray
-matchHere regexIn offsetIn input = ans where
-  ans = if captureGroups (regex_execOptions regexIn)
-          then runHerePure
-          else let winOff = runHereNoCap Nothing (d_dt (regex_dfa regexIn)) offsetIn
-               in case winOff of
-                    Nothing -> Nothing
-                    Just offsetEnd -> Just (array (0,0) [(0,(fromEnum offsetIn,fromEnum $ offsetEnd-offsetIn))])
+{-
+There are four possible routines use by matchHere, depending on
+whether it needs to collect submatch data and whether the pattern is
+only permitted to start matching at offsetIn==0.
+-}
+matchHere :: Regex -> Position -> B.ByteString -> [MatchArray]
+matchHere regexIn offsetIn inputIn = ans where
+  ans = if subCapture then runHerePure else noCap
+    where subCapture = captureGroups (regex_execOptions regexIn)
+                    && (1<=rangeSize (bounds (regex_groups regexIn)))
 
-  aTagOP = regex_tags regexIn
-  b = bounds aTagOP
-  final :: Int64
-  final = B.length input
+  frontAnchored = (not (multiline (regex_compOptions regexIn)))
+               && isDFAFrontAnchored (regex_dfa regexIn)
 
-  test = if multiline (regex_compOptions regexIn)
-           then test_multiline
-           else test_singleline
-  test_multiline wt off =
-    case wt of Test_BOL -> off == 0 || '\n' == B.index input (pred off)
-               Test_EOL -> off == final || '\n' == B.index input off
-  test_singleline wt off =
-    case wt of Test_BOL -> off == 0
-               Test_EOL -> off == final
-  
-  runHerePure :: Maybe MatchArray
-  runHerePure = {-# SCC "runHerePure" #-}
-    runST (do (SScratch s1 s2 w0) <- newScratch regexIn (fromEnum offsetIn)
-              answer <- runHere Nothing (d_dt (regex_dfa regexIn)) s1 s2 offsetIn
-              case answer of
-                Nothing -> return Nothing
-                Just w -> do s <- freezeScratch w
-                             let g = tagsToGroups (regex_groups regexIn) s
-                             return (Just g)
-          )
+  final = fromEnum (B.length inputIn)
 
-  runHere :: forall s. Maybe (WScratch s) -> DT
-          -> MScratch s -> MScratch s
-          -> Int64
-          -> ST s (Maybe (WScratch s))
-  runHere winning dt s1 s2 off =
-    let followTrans :: DTrans -> ST s ()
-        followTrans dtrans = mapM_ updateDest (IMap.toList dtrans)
-        updateDest :: ({-Dest-}Index,IntMap {-Source-} (DoPa,Instructions)) -> ST s ()
-        updateDest (destIndex,sourceIns) | IMap.null sourceIns = err "matchHere.runHere.updateDest found null sourceIns"
-                                         | IMap.size sourceIns == 1 = do
-          let [(sourceIndex,(_,instructions))] = IMap.toList sourceIns
-          forceUpdate s1 sourceIndex instructions (fromEnum off) s2 destIndex
-                                         | otherwise = do
-          let ((si0,(_,ins0)):rest) = IMap.toList sourceIns
-          forceUpdate s1 si0 ins0 (fromEnum off) s2 destIndex
-          let fight (sourceIndex,(_,instructions)) = do
-                result <- challenge aTagOP s2 destIndex instructions (fromEnum off) s1 sourceIndex
-                case result of
-                  LT -> forceUpdate s1 sourceIndex instructions (fromEnum off) s2 destIndex
-                  _ -> return ()
-          mapM_ fight rest
-        updateWinner :: IntMap {-Source-} Instructions -> ST s (Maybe (WScratch s))
-        updateWinner sourceIns | IMap.null sourceIns = return winning
-                               | IMap.size sourceIns == 1 = do
-          w@(WScratch p f o) <- case winning of
-                                  Nothing -> newWScratch_ b
-                                  Just win -> return win
-          let [(sourceIndex,instructions)] = IMap.toList sourceIns
-          forceUpdateW s1 sourceIndex instructions (fromEnum off) p f o
-          return (Just w)
-                               | otherwise = do
-          let ((si0,ins0):rest) = IMap.toList sourceIns
-          w@(WScratch p f o) <- case winning of 
-                                  Nothing -> newWScratch_ b
-                                  Just win -> return win
-          forceUpdateW s1 si0 ins0 (fromEnum off) p f o
-          let fight (sourceIndex,instructions) = do
-                result <- challengeW aTagOP p f o instructions (fromEnum off) s1 sourceIndex
-                case result of
-                  LT -> forceUpdateW s1 sourceIndex instructions (fromEnum off) p f o
-                  _ -> return ()
-          mapM_ fight rest
-          return (Just w)
+  test | multiline (regex_compOptions regexIn) = test_multiline
+       | otherwise = test_singleline
+    where test_multiline Test_BOL off = off == 0 || newline == index inputIn (pred off)
+          test_multiline Test_EOL off = off == final || newline == index inputIn off
+          test_singleline Test_BOL off = off == 0
+          test_singleline Test_EOL off = off == final
+          newline = fromEnum '\n'
 
-    in case dt of
-         Simple' {dt_win=w, dt_trans=t, dt_other=o} -> do
-           winning' <- updateWinner w
-           if off==final then return winning' else
-             let c = B.index input off
-             in case Map.lookup c t `mplus` o of
-                  Nothing -> return winning'
-                  Just (dfa,trans) -> let dt' = d_dt dfa
-                                          off' = succ off
-                                      in seq off' $ do 
-                                         mapM_ updateDest (IMap.toList trans)
-                                         runHere winning' dt' s2 s1 off'
-         Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
-           if test wt off
-             then runHere winning a s1 s2 off
-             else runHere winning b s1 s2 off
+  runHerePure :: [MatchArray]
+  runHerePure = Lazy.runST (do
+    (!findTrans,!updateWinner,!performTrans) <- lazy (newTagEngine2 regexIn)
+    let -- runHere :: Maybe (WScratch s,(Position,Char,String)) -> DT
+        --         -> MScratch s -> MScratch s
+        --         -> Position
+        --         -> ST s (Maybe (WScratch s,(Position,Char,String)))
+        runHere winning !dt !s1 !s2 !off = {-# SCC "runHere" #-}
+          case dt of
+            Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
+              if test wt off
+                then runHere winning a s1 s2 off
+                else runHere winning b s1 s2 off
+            Simple' {dt_win=w, dt_trans=(CharMap t), dt_other=o} -> do
+              if off==final then updateWinner s1 off winning w else do
+                case IMap.lookup (index inputIn off) t `mplus` o of
+                  Nothing -> updateWinner s1 off winning w
+                  Just (dfa,trans) -> do
+                    findTrans s1 off trans
+                    winning' <- updateWinner s1 off winning w
+                    performTrans s1 s2 off trans
+                    runHere winning' (d_dt dfa) s2 s1 (succ off)
+        -- end of runHere
+    -- body of runHerePure continues
+    (SScratch s1 s2 w0) <- lazy (newScratch regexIn offsetIn)
+    let go !off = {-# SCC "runHerePure.go" #-} do
+          answer <- lazy (runHere Nothing (d_dt (regex_dfa regexIn)) s1 s2 off)
+          case answer of
+            Nothing -> if off==final
+                         then return []
+                         else do let off' = succ off
+                                 () <- lazy (resetScratch regexIn off' s1 w0)
+                                 go off'
+            Just (w,off') -> do
+              ma <- lazy (tagsToGroupsST (regex_groups regexIn) w)
+              let len = snd (ma!0)
+              rest <- if len==0 || off'==final then return []
+                        else do () <- lazy (resetScratch regexIn off' s1 w0)
+                                go off'
+              return (ma:rest)
+    if frontAnchored
+      then if offsetIn/=0 then return [] 
+             else do
+               answer <- lazy (runHere Nothing (d_dt (regex_dfa regexIn)) s1 s2 offsetIn)
+               case answer of
+                 Nothing -> return []
+                 Just (w,_) -> do
+                   ma <- lazy (tagsToGroupsST (regex_groups regexIn) w)
+                   return (ma:[])
+      else go offsetIn ) -- end Lazy.runST
+  -- end of runHerePure
 
-  runHereNoCap winning dt off =
+  noCap = {-# SCC "noCap" #-}
+    let dtIn = (d_dt (regex_dfa regexIn))
+        go !off = 
+          case runHereNoCap Nothing dtIn off of
+            Nothing -> if off==final then [] else go (succ off)
+            Just off' ->
+              let len = off'-off
+                  ma = array (0,0) [(0,(off,len))]
+                  rest = if len == 0 || off'==final then []
+                           else go off'
+              in (ma:rest)
+    in if frontAnchored
+         then if offsetIn /= 0 then []
+                else case runHereNoCap Nothing dtIn offsetIn of
+                       Nothing -> []
+                       Just off' ->
+                         let len = off'-offsetIn
+                             ma = array (0,0) [(0,(offsetIn,len))]
+                         in (ma:[])
+         else go offsetIn
+
+  runHereNoCap winning !dt !off =  {-# SCC "runHereNoCap" #-}
     case dt of
-      Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
+      Simple' {dt_win=w, dt_trans=(CharMap t), dt_other=o} ->
         let winning' = if IMap.null w then winning else Just off
         in seq winning' $
-           if off==final then winning' else
-             let c = B.index input off
-             in case Map.lookup c t `mplus` o of
-                  Nothing -> winning'
-                  Just (dfa,_) -> let dt' = d_dt dfa
-                                      off' = succ off
-                                  in seq off' $ runHereNoCap winning' dt' off'
+           if off==final then winning'
+             else case IMap.lookup (index inputIn off) t `mplus` o of
+                    Nothing -> winning'
+                    Just (DFA {d_dt=dt'},_) ->
+                      runHereNoCap winning' dt' (succ off)
       Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
         if test wt off
           then runHereNoCap winning a off

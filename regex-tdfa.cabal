@@ -29,10 +29,10 @@ Exposed-Modules:        Text.Regex.TDFA.Common
                         Text.Regex.TDFA.MutRun
                         Text.Regex.TDFA.MutRunBS
                         Text.Regex.TDFA.ByteString
---                        Text.Regex.TDFA.MutRunSeq
---                        Text.Regex.TDFA.Sequence
---                        Text.Regex.TDFA.MutRunLBS
---                        Text.Regex.TDFA.ByteString.Lazy
+                        Text.Regex.TDFA.MutRunLBS
+                        Text.Regex.TDFA.ByteString.Lazy
+                        Text.Regex.TDFA.MutRunSeq
+                        Text.Regex.TDFA.Sequence
                         Text.Regex.TDFA.Wrap
                         Text.Regex.TDFA
                         Data.IntSet.EnumSet
