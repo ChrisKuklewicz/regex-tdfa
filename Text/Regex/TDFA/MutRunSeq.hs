@@ -28,7 +28,7 @@ lazy :: ST s a -> Lazy.ST s a
 lazy = Lazy.strictToLazyST
 
 -- err :: String -> a
--- err = common_error "Text.Regex.TDFA.MutRun"
+-- err = common_error "Text.Regex.TDFA.MutRunSeq"
 
 {-# INLINE findMatch #-}
 findMatch :: Regex -> Seq Char -> Maybe MatchArray

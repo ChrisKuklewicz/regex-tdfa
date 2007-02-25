@@ -1,6 +1,6 @@
-
--- XXX design uncertainty:  should preResets be inserted into nullView?
--- if not, why not?
+-- XXX design uncertainty: should preResets be inserted into nullView?
+-- if not, why not?  They exist partly as an efficiency, but for
+-- consistency I think I should add them to the null view
 
 -- | The CorePattern module deconstructs the Pattern tree created by
 -- ReadRegex.parseRegex and returns a simpler Q/P tree with
@@ -371,14 +371,14 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
          PConcat ps -> combineConcat ps m1 m2
          PStar mayFirstBeNull p -> mdo
            let accepts    = canAccept q
-               needsOrbit = varies q && childGroups q  -- otherwise it cannot matter/be observed which path is taken
-               needsTags  = needsOrbit || accepts      -- important tha needsOrbit implies needsTags
+               needsOrbit = varies q && childGroups q  -- otherwise it cannot matter or be observed which path is taken
+               needsTags  = needsOrbit || accepts      -- important that needsOrbit implies needsTags
            a <- if noTag m1 && needsTags then uniq Minimize else return m1
            b <- if noTag m2 && needsTags then uniq Maximize else return m2
            c <- if needsOrbit then makeOrbit else return Nothing -- any Orbit tag is created after the pre and post tags
            (q,resetTags) <- withOrbit (go p NoTag NoTag)
            let nullView = emptyNull (winTags (apply a) (apply b)) -- chosen to represent skipping sub-pattern
-           return $ Q nullView
+           return $ Q nullView -- XXX add resetTags to nullView??
                       (0,if accepts then Nothing else (Just 0))
                       [] (apply a) (apply b)
                       needsTags (childGroups q) WantsQT

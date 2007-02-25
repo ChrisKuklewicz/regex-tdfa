@@ -31,7 +31,7 @@ index :: B.ByteString -> Int -> Int
 index input off = fromEnum (B.unsafeIndex input off)
 
 -- err :: String -> a
--- err = common_error "Text.Regex.TDFA.MutRun"
+-- err = common_error "Text.Regex.TDFA.MutRunBS"
 
 {-# INLINE findMatch #-}
 findMatch :: Regex -> B.ByteString -> Maybe MatchArray
