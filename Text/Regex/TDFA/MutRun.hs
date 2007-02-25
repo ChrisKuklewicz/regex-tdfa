@@ -74,7 +74,7 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
         --         -> MScratch s -> MScratch s
         --         -> Position -> Char -> String
         --         -> ST s (Maybe (WScratch s,(Position,Char,String)))
-        runHere winning !dt !s1 !s2 !off !prev input = {-# SCC "runHere" #-}
+        runHere winning !dt !s1 !s2 !off !prev !input = {-# SCC "runHere" #-}
           case dt of
             Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
               if test wt off prev input
@@ -149,7 +149,7 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
     case dt of
       Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
         let winning' = if IMap.null w then winning else Just (off,prev,input)
-        in -- seq winning' $
+        in seq winning' $
            if Map.null t && isNothing o then winning' else
              case input of
                [] -> winning'

@@ -1,4 +1,4 @@
-module Text.Regex.TDFA.RunMutState(newTagEngine,newScratch,tagsToGroupsST
+module Text.Regex.TDFA.RunMutState(newTagEngine,newTagEngine2,newScratch,tagsToGroupsST
                                   ,toInstructions,compareWith,resetScratch
                                   ,SScratch(..),MScratch,WScratch) where
 
@@ -94,6 +94,84 @@ newTagEngine regexIn = do
         n <- unsafeRead count sourceIndex'
         w <- updateWinning s1 (sourceIndex',instructions',o') off n (fmap fst winning)
         return (Just (w,(off,prev,input)))
+
+  let performTrans s1 s2 off dtrans | IMap.null dtrans = return ()
+                                    | otherwise = {-# SCC "performTrans" #-} do
+        mapM_ performTrans' (IMap.keys dtrans)
+          where performTrans' destIndex =  {-# SCC "performTrans'" #-} do
+                  i1@((sourceIndex,_instructions),_,_orbit) <- unsafeRead which destIndex
+                  if sourceIndex == (-1) then return () else do
+                  n <- unsafeRead count sourceIndex
+                  unsafeWrite count sourceIndex (pred n)
+                  if n==1 then updateSwap s1 i1 off s2 destIndex
+                          else updateCopy s1 i1 off s2 destIndex
+-- findTrans :: forall s. ({-Dest-}Index,IntMap {-Source-} (DoPa,Instructions)) -> ST s ()
+-- updateWinner :: IntMap {- Source -} Instructions -> ST s (Maybe (WScratch s,(Position,Char,String)))
+-- performTrans :: IntMap {-Dest-} (IntMap {-Source-} (DoPa,Instructions)) -> ST s ()
+  return (findTrans,updateWinner,performTrans)
+
+{-# INLINE newTagEngine2 #-}
+newTagEngine2 :: Regex -> ST s (MScratch s -> Position -> IntMap (IntMap (t,Instructions)) -> ST s ()
+                               ,MScratch s -> Position -> Maybe (WScratch s,Position) -> IntMap Instructions -> ST s (Maybe (WScratch s,Position))
+                               ,MScratch s -> MScratch s -> Position -> IntMap (IntMap (DoPa,Instructions)) -> ST s ()
+                               )
+newTagEngine2 regexIn = do
+  (which,count) <- newBoard regexIn
+  let comp = makeTagComparer (regex_tags regexIn)
+  let findTrans s1 off trans = {-# SCC "findTrans" #-} (mapM_ findTrans' (IMap.toList trans)) where
+        findTrans' (destIndex,sources) | IMap.null sources =
+          unsafeWrite which destIndex ((-1,undefined),undefined,undefined)
+                                       | otherwise =  {-# SCC "findTrans'" #-} do
+          let (first:rest) = IMap.toList sources
+              {-# INLINE prep #-}
+              prep (sourceIndex,(_,instructions)) = {-# SCC "prep" #-} do
+                p <- maybe (error "findtrans") return =<< unsafeRead (m_pos s1) sourceIndex
+                o <- unsafeRead (m_orbit s1) sourceIndex
+                let o' = maybe o (\x -> x off o) (newOrbits instructions)
+                return ((sourceIndex,instructions),p,o')
+              challenge x1 y1 = {-# SCC "challenge" #-} do
+                x2 <- prep y1
+                check <- comp off x1 (newPos . snd . fst3 $ x1) x2 (newPos . snd . fst3 $ x2)
+        {-
+                debug1 <- getAssocs (snd3 x1)
+                debug2 <- getAssocs (snd3 x2)
+                () <- trace ("findTrans comp, pos="++show off'++", check="++show check
+                             ++"\n"++show (debug1,fst3 x1,o1)
+                             ++ "\n"++show (debug2,fst3 x2,o2)) (return ())
+        -}
+                if check==LT then return x2 else return x1
+          x1 <- prep first
+          x@((sourceIndex',_instructions'),_,_orbit') <- foldM challenge x1 rest
+          unsafeWrite which destIndex x -- (sourceIndex',instructions',orbit')
+          unsafeRead count sourceIndex' >>= (unsafeWrite count sourceIndex') . succ
+
+  let {-# INLINE updateWinner #-}
+      updateWinner s1 off winning sources | IMap.null sources = return winning
+                                          | otherwise = {-# SCC "updateWinner" #-} do
+        let (first:rest) = IMap.toList sources
+            {-# INLINE prep #-}
+            prep x@(sourceIndex,instructions) = do
+              p <- maybe (error "updateWinner") return =<< unsafeRead (m_pos s1) sourceIndex
+              o <- unsafeRead (m_orbit s1) sourceIndex
+              let o' = maybe o (\f -> f off o) (newOrbits instructions)
+              return (x,p,o')
+            challenge x1 y1 = do
+              x2 <- prep y1
+              check <- comp off x1 (dropWhile ((1>=).fst) . newPos . snd . fst3 $ x1)
+                                x2 (dropWhile ((1>=).fst) . newPos . snd . fst3 $ x2)
+      {-
+                     debug1 <- getAssocs (snd3 x1)
+                     debug2 <- getAssocs (snd3 x2)
+                     () <- trace ("updateWinner comp, pos="++show off++", check="++show check
+                                  ++"\n"++show (debug1,fst3 x1,thd3 x1)
+                                  ++ "\n"++show (debug2,fst3 x2,thd3 x2)) (return ())
+      -}
+              if check==LT then return x2 else return x1
+        x1 <- prep first
+        ((sourceIndex',instructions'),_,o') <- foldM challenge x1 rest
+        n <- unsafeRead count sourceIndex'
+        w <- updateWinning s1 (sourceIndex',instructions',o') off n (fmap fst winning)
+        return (Just (w,off))
 
   let performTrans s1 s2 off dtrans | IMap.null dtrans = return ()
                                     | otherwise = {-# SCC "performTrans" #-} do
@@ -218,8 +296,7 @@ copyUpdateTags :: (MArray (STUArray s) Position (ST s))
                     -> Position -> Position
                     -> STUArray s Tag Position   -- destination
                     -> (ST s) ()
-copyUpdateTags !a1 !changes !pFalse !pTrue !a2 = do
---  traceCopy ("> copySTU copyUpdate"++show (start,stop)) $ do
+copyUpdateTags a1 changes pFalse pTrue a2 = do
   copySTU a1 a2
   mapM_ (\(tag,v) -> if v then unsafeWrite a2 tag pTrue
                           else unsafeWrite a2 tag pFalse) changes
@@ -230,8 +307,7 @@ copyUpdateFlags :: (MArray (STUArray s) Bool (ST s))
                      -> [(Tag,Bool)]          -- updates
                      -> STUArray s Tag Bool   -- destination
                      -> (ST s) ()
-copyUpdateFlags !a1 !changes !a2 = do
---  traceCopy ("> copySTU copyUpdate"++show (start,stop)) $ do
+copyUpdateFlags a1 changes a2 = do
   copySTU a1 a2
   mapM_ (\(tag,v) -> unsafeWrite a2 tag v) changes
 
@@ -242,7 +318,7 @@ updateWinning :: MScratch s         -- source
   -> Int
   -> Maybe (WScratch s)              -- destination
   -> ST s (WScratch s)
-updateWinning !s1 (i1,ins,o) preTag n mw = do
+updateWinning s1 (i1,ins,o) preTag n mw = do
   (Just pos1) <- unsafeRead (m_pos s1) i1
   (Just flag1) <- unsafeRead (m_flag s1) i1
   let val x = if x then postTag else preTag
@@ -521,7 +597,7 @@ foreign import ccall unsafe "memcpy"
 
 {-# INLINE copySTU #-}
 copySTU :: (Show i,Ix i,MArray (STUArray s) e (ST s)) => STUArray s i e -> STUArray s i e -> ST s ()
-copySTU !(STUArray _ _ msource) !(STUArray _ _ mdest) =
+copySTU (STUArray _ _ msource) (STUArray _ _ mdest) =
 -- do b1 <- getBounds s1
 --  b2 <- getBounds s2
 --  when (b1/=b2) (error ("\n\nWTF copySTU: "++show (b1,b2)))
