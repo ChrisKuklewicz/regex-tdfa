@@ -37,14 +37,12 @@ Beyond posix:
   leftmost branch instead of leftmost/longest (open/close group instead of tagging)
 -}
 
-module Text.Regex.TDFA(getVersion
+module Text.Regex.TDFA(getVersion_Text_Regex_TDFA
                       ,module Text.Regex.TDFA.Wrap
                       ,module Text.Regex.TDFA.String
                       ,module Text.Regex.TDFA.ByteString
                       ,module Text.Regex.TDFA.ByteString.Lazy
-{-
                       ,module Text.Regex.TDFA.Sequence
--}
                       ,module Text.Regex.Base) where
 
 import Data.Version(Version(..))
@@ -52,12 +50,11 @@ import Text.Regex.Base
 import Text.Regex.TDFA.String()
 import Text.Regex.TDFA.ByteString()
 import Text.Regex.TDFA.ByteString.Lazy()
-{-
 import Text.Regex.TDFA.Sequence()
--}
 import Text.Regex.TDFA.Wrap(Regex,CompOption(..),ExecOption(..),(=~),(=~~))
 
-getVersion :: Version
-getVersion = Version { versionBranch = [0,91]
-                     , versionTags = ["c","tdfa","unstable"]
-                     }
+getVersion_Text_Regex_TDFA :: Version
+getVersion_Text_Regex_TDFA =
+  Version { versionBranch = [0,92]
+          , versionTags = ["tdfa","unstable"]
+          }

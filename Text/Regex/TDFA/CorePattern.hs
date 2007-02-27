@@ -1,7 +1,3 @@
--- XXX design uncertainty: should preResets be inserted into nullView?
--- if not, why not?  They exist partly as an efficiency, but for
--- consistency I think I should add them to the null view
-
 -- | The CorePattern module deconstructs the Pattern tree created by
 -- ReadRegex.parseRegex and returns a simpler Q/P tree with
 -- annotations at each Q node.  This will be converted by the TNFA
@@ -53,7 +49,7 @@ data P = Empty
        | Or [Q]
        | Seq Q Q
        | Star { getOrbit :: Maybe Tag  -- tag to prioritize the need to keep track of length of each pass though q
-              , resetOrbits :: [Tag]   -- child star's orbits to reset
+              , resetOrbits :: [Tag]   -- child star's orbits to reset (ResetOrbitTask)
               , firstNull :: Bool      -- Usually True meaning the first pass may match 0 characters
               , unStar :: Q}
        | Test TestInfo                 -- Require the test to be true
@@ -64,8 +60,8 @@ data P = Empty
 -- The diagnostics about the pattern
 data Q = Q {nullQ :: NullView         -- Ordered list of nullable views
            ,takes :: (Position,Maybe Position)  -- Range of number of accepted characters
-           ,preReset :: [Tag]         -- Tags to "reset" (XXX only used by Star and PStar/PGroup)
-           ,preTag,postTag :: Maybe Tag -- Tags assigned around this pattern
+           ,preReset :: [Tag]         -- Tags to "reset" (ResetGroupStopTask) (Only immediate children)
+           ,preTag,postTag :: Maybe Tag -- Tags assigned around this pattern (TagTask)
            ,tagged :: Bool            -- Whether this node should be tagged -- patternToQ use only
            ,childGroups :: Bool       -- Whether unQ has any PGroups -- patternToQ use only
            ,wants :: Wanted           -- What kind of continuation is used by this pattern
@@ -144,12 +140,17 @@ mergeNullViews s1 s2 = cleanNullView $ do
   return (mappend test1 test2,mappend tag1 tag2)
 -- mergeNullViews = cleanNullView $ liftM2 (mappend *** mappend)
 
--- Add (preupdated) tags to all nullviews
+-- Prepend tags to nullView
 addTagsToNullView :: WinTags -> NullView -> NullView
 addTagsToNullView [] nv = nv
 addTagsToNullView tags nv= do
   (test,tags') <- nv
   return (test,tags `mappend` tags')
+
+-- For PGroup, need to prepend reset tasks before others in nullView
+addResetsToNullView :: [Tag]-> NullView -> NullView
+addResetsToNullView resetTags nv = [ (test, prepend tags) | (test,tags) <- nv ]
+  where prepend = foldr (\h t -> (h:).t) id . map (\tag->(tag,PreUpdate ResetGroupStopTask)) $ resetTags
 
 -- Concatenated two ranges of number of accepted characters
 seqTake :: (Int, Maybe Int) -> (Int, Maybe Int) -> (Int, Maybe Int)
@@ -295,7 +296,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
 
   -- Partial function: Must not pass in an empty list
   -- Policy choices:
-  --  * pass tags to apply to children and have no preTag or postTag here
+  --  * pass tags to apply to children and have no preTag or postTag here (so none addded to nullQ)
   --  * middle 'mid' tag: give to left/front child as postTag so a Group there might claims as stopTag
   --  * if parent is Group then preReset will become non-empty
   combineConcat :: [Pattern] -> HHQ
@@ -322,7 +323,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
   go :: Pattern -> HHQ
   go pIn m1 m2 =
     let die = error $ "patternToQ cannot handle "++show pIn
-        nil = return $ Q {nullQ=emptyNull (apply m1 `winTags` apply m2)
+        nil = return $ Q {nullQ=emptyNull (winTags (apply m1) (apply m2))
                          ,takes=(0,Just 0)
                          ,preReset=[],preTag=apply m1,postTag=apply m2
                          ,tagged=False,childGroups=False,wants=WantsEither
@@ -332,7 +333,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                          ,preReset=[],preTag=apply m1,postTag=apply m2
                          ,tagged=False,childGroups=False,wants=WantsQNFA
                          ,unQ = OneChar pIn}
-        test myTest = return $ Q {nullQ=testNull myTest (apply m1 `winTags` apply m2)
+        test myTest = return $ Q {nullQ=testNull myTest (winTags (apply m1) (apply m2))
                                  ,takes=(0,Just 0)
                                  ,preReset=[],preTag=apply m1,postTag=apply m2
                                  ,tagged=False,childGroups=False,wants=WantsQT
@@ -361,6 +362,11 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                                  (False,True) -> WantsQT
                                  (False,False) -> WantsEither
                nullView = addTagsToNullView (winTags (apply a) (apply b)) . cleanNullView . concatMap nullQ $ qs
+               -- The nullView computed above takes the nullQ of the
+               -- branches and combines them.  This assumes that the
+               -- pre/post tags of the children are also part of the
+               -- nullQ values.  So for consistency, POr must then add
+               -- its own pre/post tags to its nullQ value.
            let ans = Q nullView
                        (orTakes . map takes $ qs)
                        [] (apply a) (apply b)
@@ -378,7 +384,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
            c <- if needsOrbit then makeOrbit else return Nothing -- any Orbit tag is created after the pre and post tags
            (q,resetTags) <- withOrbit (go p NoTag NoTag)
            let nullView = emptyNull (winTags (apply a) (apply b)) -- chosen to represent skipping sub-pattern
-           return $ Q nullView -- XXX add resetTags to nullView??
+           return $ Q nullView
                       (0,if accepts then Nothing else (Just 0))
                       [] (apply a) (apply b)
                       needsTags (childGroups q) WantsQT
@@ -408,38 +414,34 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                b <- if isNothing (apply m2) then uniq Maximize else return m2
                (q,resetTags) <- withParent this (go p a b)
                makeGroup (GroupInfo this parent (fromHandleTag a) (fromHandleTag b))
-               return $ q { -- XXX add resetTags to nullQ XXX TODO
-                            tagged = True
+               return $ q { nullQ = addResetsToNullView resetTags (nullQ q)
+                          , tagged = True
                           , childGroups = True
-                          , preReset = resetTags ++ (preReset q) }
+                          , preReset = resetTags `mappend` (preReset q) }
 
          -- A PNonCapture node in the Pattern tree does not become a
          -- node in the Q/P tree.  It sets the parent to Nothing while
          -- processing the sub-tree.
          PNonCapture p -> nonCapture (go p m1 m2)
 
-
-         -- The NonEmpty node this creates triggers stack overflow
-         -- when processing while converting from Q/P to QNFA/QT in
-         -- the TDFA module. But seemingly only with NonEmpty ($|.)
-         -- under a Star.  Star + NonEmpty + 
-
--- version to ignore PNonEmpty for debugging comparison
---         PNonEmpty p -> go p m1 m2
-
+         -- PNonEmpty means the child pattern p can be skipped by
+         -- bypassing the pattern.  This is only used in the case p
+         -- can accept 0 and can accept more than zero characters
+         -- (thus the assertions, enforcted by CorePattern.starTrans).  The important thing about this case
+         -- is intercept the "accept 0" possibility and replace with
+         -- "skip".
          PNonEmpty p -> mdo
            let needsTags = canAccept q
            a <- if noTag m1 && needsTags then uniq Minimize else return m1
            b <- if noTag m2 && needsTags then uniq Maximize else return m2
            q <- go p (toAdvice a) (toAdvice b)
+           when (not needsTags) (err $ "PNonEmpty could not accept characters: "++show (p,pOrig))
            when (mustAccept q) (err $ "patternToQ : PNonEmpty provided with a *mustAccept* pattern: "++show (p,pOrig))
            return $ Q (emptyNull (winTags (apply a) (apply b)))   -- The magic of NonEmpty
                       (0,snd (takes q))                           -- like Or
                       [] (apply a) (apply b)                      -- own the closing tag so it will not end a PGroup
                       needsTags (childGroups q) (wants q)         -- the test case is "x" =~ "(.|$){1,3}"
-                      (NonEmpty q)                                -- .|() overflows, ()|. hangs
---                    (NonEmpty (q {nullView = emptyNull []}))    -- .|() overflows, ()|. hangs
---                    (NonEmpty (q {nullView = notNull}))         -- .|() hangs,     ()|. overflows
+                      (NonEmpty q)
 
          -- these are here for completeness of the case branches, currently starTrans replaces them all
          PPlus {} -> die

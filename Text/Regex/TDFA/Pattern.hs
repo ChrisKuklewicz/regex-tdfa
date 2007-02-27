@@ -196,7 +196,11 @@ starTrans' pIn =
    the first p is overwritten.
 
    We need a new operation "p!" that means "p?" unless "p" match 0
-   characters, in which case skip p as if it failed in "p?"
+   characters, in which case skip p as if it failed in "p?".  Thus
+   when p cannot accept 0 characters p! and p? are equivalent.  And
+   when p can only match 0 characters p! is PEmpty.  So for
+   simplicity, only use ! when p can match 0 characters but not only 0
+   characters.
 
    Call this (PNonEmpty p) in the Pattern type.  Note that if p cannot
    match 0 characters then p! is equivalent to p?
@@ -211,7 +215,16 @@ starTrans' pIn =
    p match 0 and the second p match non-zero. This showed up for (.|$){1,3}
    since ($.!)! should not be a valid path but altered the qt_win commands.
 
-   Thus only p'p'pp!p!p! has the right semantics.
+   Thus only p'p'pp!p!p! has the right semantics.  For completeness:
+
+   if p can only match only 0 characters then the cases are
+   p{0,0} is (), p{0,_} = p?, p{_,_} is p
+
+   if p can match 0 or non-zero characters then cases are
+   p{0,0} is (), p{0,1} is (p)?, p{0,2} is (pp!)?, p{0,3} is (pp!p!)?
+   p{1,1} is p, p{1,2} is pp!, p{1,3} is pp!p!, p{1,4} is pp!p!p!
+   p{2,2} is p'p, p{2,3} is p'pp!, p{2,4} is p'pp!p!, p{2,5} is p'pp!p!p!
+   p{3,3} is p'p'p, p{3,4} is p'p'pp!, p{3,5} is p'p'pp!p!
 
    And by this logic, the PStar False is really p*!  So p{0,} is p*
    and p{1,} is pp*! and p{2,} is p'pp*! and p{3,} is p'p'pp*!

@@ -35,7 +35,7 @@ instance RegexContext Regex (S.Seq Char) (S.Seq Char) where
   matchM = polymatchM
 
 instance RegexMaker Regex CompOption ExecOption (S.Seq Char) where
-  makeRegexOptsM c e source = makeRegexOptsM c e (toList source)
+  makeRegexOptsM c e source = either fail return $ compile c e source
 
 instance RegexLike Regex (S.Seq Char) where
   matchOnce = findMatch
