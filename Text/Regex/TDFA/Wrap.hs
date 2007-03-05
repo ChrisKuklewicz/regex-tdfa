@@ -37,6 +37,5 @@ instance RegexOptions Regex CompOption ExecOption where
 -- then 'fail' will be called.
 (=~~) :: (RegexMaker Regex CompOption ExecOption source,RegexContext Regex source1 target,Monad m)
       => source1 -> source -> m target
-(=~~) x r = let q :: Regex
-                q = makeRegex r
-            in matchM q x
+(=~~) x r = do (q :: Regex) <- q = makeRegexM r
+               matchM q x
