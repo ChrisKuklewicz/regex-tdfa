@@ -8,7 +8,7 @@ Author:                 Christopher Kuklewicz
 Maintainer:             TextRegexLazy@personal.mightyreason.com
 Stability:              Seems to work, but not POSIX yet
 Homepage:               http://sourceforge.net/projects/lazy-regex
-Package-URL:            http://darcs.haskell.org/packages/
+Package-URL:            http://darcs.haskell.org/packages/regex-unstable/regex-tdfa/
 Synopsis:               Replaces/Enhances Text.Regex
 Description:            A new all Haskell "tagged" DFA regex engine, inspired by libtre
 Category:               Text
@@ -41,11 +41,11 @@ Exposed-Modules:        Text.Regex.TDFA.Common
 Buildable:              True
 -- Other-Modules:
 -- HS-Source-Dirs:         "."
-Extensions:             MultiParamTypeClasses, FunctionalDependencies
-GHC-Options:            -Wall -Werror -O2 -fbang-patterns -funbox-strict-fields
+Extensions:             MultiParamTypeClasses, FunctionalDependencies, BangPatterns
+GHC-Options:            -Wall -Werror -O2 -funbox-strict-fields
 -- GHC-Options:            -Wall -Werror -O2
 -- GHC-Options:            -Wall -ddump-minimal-imports
-GHC-Prof-Options:       -auto-all
+-- GHC-Prof-Options:       -auto-all
 -- Hugs-Options:
 -- NHC-Options:
 -- Includes:
