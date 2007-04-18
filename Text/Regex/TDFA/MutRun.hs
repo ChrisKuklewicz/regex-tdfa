@@ -15,7 +15,7 @@ import Data.Maybe(isNothing)
 import Text.Regex.Base(MatchArray,RegexOptions(..))
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.TDFA(isDFAFrontAnchored)
-import Text.Regex.TDFA.RunMutState(newTagEngine,tagsToGroupsST,newScratch,resetScratch,SScratch(..))
+import Text.Regex.TDFA.RunMutState(TagEngine(..),newTagEngine,tagsToGroupsST,newScratch,resetScratch,SScratch(..))
 import Text.Regex.TDFA.Wrap()
 -- import Debug.Trace
 
@@ -69,12 +69,13 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
   
   runHerePure :: [MatchArray]
   runHerePure = Lazy.runST (do
-    (!findTrans,!updateWinner,!performTrans) <- lazy (newTagEngine regexIn)
+    TagEngine findTrans updateWinner performTrans <- lazy (newTagEngine regexIn)
     let -- runHere :: Maybe (WScratch s,(Position,Char,String)) -> DT
         --         -> MScratch s -> MScratch s
         --         -> Position -> Char -> String
         --         -> ST s (Maybe (WScratch s,(Position,Char,String)))
-        runHere winning !dt !s1 !s2 !off !prev !input = {-# SCC "runHere" #-}
+        runHere winning dt s1 s2 off prev input = {-# SCC "runHere" #-}
+          s1 `seq` s2 `seq` off `seq` prev `seq` input `seq`
           case dt of
             Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
               if test wt off prev input
@@ -94,7 +95,8 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
         -- end of runHere
     -- body of runHerePure continues
     (SScratch s1 s2 w0) <- lazy (newScratch regexIn offsetIn)
-    let go !off !prev !input = {-# SCC "runHerePure.go" #-} do
+    let go off prev input = {-# SCC "runHerePure.go" #-}
+         off `seq` prev `seq` input `seq` do
           answer <- lazy (runHere Nothing (d_dt (regex_dfa regexIn)) s1 s2 off prev input)
           case answer of
             Nothing -> case input of
@@ -123,7 +125,7 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
 
   noCap = {-# SCC "noCap" #-}
     let dtIn = (d_dt (regex_dfa regexIn))
-        go !off !prev !input = 
+        go off prev input = off `seq` prev `seq` input `seq`
           case runHereNoCap Nothing dtIn off prev input of
             Nothing -> case input of
                          [] -> []
@@ -145,7 +147,8 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
                          in (ma:[])
          else go offsetIn prevIn inputIn
 
-  runHereNoCap winning !dt !off !prev !input =  {-# SCC "runHereNoCap" #-}
+  runHereNoCap winning dt off prev input =  {-# SCC "runHereNoCap" #-}
+    off `seq` prev `seq` input `seq`
     case dt of
       Simple' {dt_win=w, dt_trans=t, dt_other=o} ->
         let winning' = if IMap.null w then winning else Just (off,prev,input)

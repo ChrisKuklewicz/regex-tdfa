@@ -71,7 +71,11 @@ type TestInfo = (WhichTest,DoPa)
 
 -- This is newtype'd to allow control over class instances
 -- This is a set of WhichTest where each test has associated pattern location information
-newtype SetTestInfo = SetTestInfo {getTests :: EnumMap WhichTest (EnumSet DoPa)} deriving (Eq,Monoid)
+newtype SetTestInfo = SetTestInfo {getTests :: EnumMap WhichTest (EnumSet DoPa)} deriving (Eq)
+
+instance Monoid SetTestInfo where
+  mempty = SetTestInfo mempty
+  SetTestInfo x `mappend` SetTestInfo y = SetTestInfo (x `mappend` y)
 
 instance Show SetTestInfo where
   show (SetTestInfo sti) = "SetTestInfo "++show (mapSnd (Set.toList) $ Map.assocs sti)

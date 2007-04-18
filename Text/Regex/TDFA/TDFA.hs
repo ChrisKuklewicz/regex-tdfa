@@ -228,9 +228,11 @@ bestTrans aTagOP (f:fs) | null fs = canonical f
 
 isDTLosing :: DT -> Bool
 isDTLosing (Testing' {dt_a=a,dt_b=b}) = isDTLosing a && isDTLosing b
-isDTLosing (Simple' {dt_win=w,dt_trans=(CharMap t),dt_other=o}) | not (IMap.null w) = False
-    | Just (dfa,_) <- o, not (ISet.null (d_id dfa)) = False
-    | otherwise =
+isDTLosing (Simple' {dt_win=w})
+    | not (IMap.null w) = False
+isDTLosing (Simple' {dt_other=Just (dfa,_)})
+    | not (ISet.null (d_id dfa)) = False
+isDTLosing (Simple' {dt_trans=CharMap t}) =
   let destinations = map (d_id . fst) . IMap.elems $ t
   in all ISet.null destinations -- True for empty list of destinations
 

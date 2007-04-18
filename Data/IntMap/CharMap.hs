@@ -1,13 +1,29 @@
+{-# LANGUAGE CPP #-}
 module Data.IntMap.CharMap where
 
+#ifdef __GLASGOW_HASKELL__
 import GHC.Base(unsafeChr)
-import Data.Char as C(ord)
+#else
+import Data.Char (chr)
+#endif
+import Data.Char as C(ord, chr)
 import Data.List as L (map)
 import qualified Data.IntMap as M
 import qualified Data.IntSet as S(IntSet)
-import Data.Monoid(Monoid)
+import Data.Monoid(Monoid(..))
 
-newtype CharMap a = CharMap {unCharMap :: M.IntMap a} deriving (Monoid,Eq,Read,Show,Ord,Functor)
+#ifndef __GLASGOW_HASKELL__
+unsafeChr = chr
+#endif
+
+newtype CharMap a = CharMap {unCharMap :: M.IntMap a} deriving (Eq,Ord,Read,Show)
+
+instance Monoid (CharMap a) where
+  mempty = CharMap mempty
+  CharMap x `mappend` CharMap y = CharMap (x `mappend` y)
+
+instance Functor CharMap where
+  fmap f (CharMap m) = CharMap (fmap f m)
 
 type Key = Char
 

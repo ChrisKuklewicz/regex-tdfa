@@ -16,7 +16,7 @@ import qualified Data.IntMap as IMap(null,lookup)
 import Text.Regex.Base(MatchArray,RegexOptions(..))
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.TDFA(isDFAFrontAnchored)
-import Text.Regex.TDFA.RunMutState(newTagEngine2,tagsToGroupsST,newScratch,resetScratch,SScratch(..))
+import Text.Regex.TDFA.RunMutState(TagEngine(..),newTagEngine2,tagsToGroupsST,newScratch,resetScratch,SScratch(..))
 import Text.Regex.TDFA.Wrap()
 -- import Debug.Trace
 
@@ -74,12 +74,13 @@ matchHere regexIn offsetIn inputIn = ans where
 
   runHerePure :: [MatchArray]
   runHerePure = Lazy.runST (do
-    (!findTrans,!updateWinner,!performTrans) <- lazy (newTagEngine2 regexIn)
+    TagEngine findTrans updateWinner performTrans <- lazy (newTagEngine2 regexIn)
     let -- runHere :: Maybe (WScratch s,(Position,Char,String)) -> DT
         --         -> MScratch s -> MScratch s
         --         -> Position
         --         -> ST s (Maybe (WScratch s,(Position,Char,String)))
-        runHere winning !dt !s1 !s2 !off = {-# SCC "runHere" #-}
+        runHere winning dt s1 s2 off = {-# SCC "runHere" #-}
+          s1 `seq` s2 `seq` off `seq`
           case dt of
             Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
               if test wt off
@@ -97,7 +98,7 @@ matchHere regexIn offsetIn inputIn = ans where
         -- end of runHere
     -- body of runHerePure continues
     (SScratch s1 s2 w0) <- lazy (newScratch regexIn offsetIn)
-    let go !off = {-# SCC "runHerePure.go" #-} do
+    let go off = {-# SCC "runHerePure.go" #-} off `seq` do
           answer <- lazy (runHere Nothing (d_dt (regex_dfa regexIn)) s1 s2 off)
           case answer of
             Nothing -> if off==final
@@ -126,7 +127,7 @@ matchHere regexIn offsetIn inputIn = ans where
 
   noCap = {-# SCC "noCap" #-}
     let dtIn = (d_dt (regex_dfa regexIn))
-        go !off = 
+        go off =
           case runHereNoCap Nothing dtIn off of
             Nothing -> if off==final then [] else go (succ off)
             Just off' ->
@@ -145,7 +146,8 @@ matchHere regexIn offsetIn inputIn = ans where
                          in (ma:[])
          else go offsetIn
 
-  runHereNoCap winning !dt !off =  {-# SCC "runHereNoCap" #-}
+  runHereNoCap winning dt off =  {-# SCC "runHereNoCap" #-}
+    off `seq`
     case dt of
       Simple' {dt_win=w, dt_trans=(CharMap t), dt_other=o} ->
         let winning' = if IMap.null w then winning else Just off

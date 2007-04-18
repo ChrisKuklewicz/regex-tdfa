@@ -29,13 +29,15 @@ instance RegexOptions Regex CompOption ExecOption where
 -- there is an error in processing, then 'error' will be called.
 (=~) :: (RegexMaker Regex CompOption ExecOption source,RegexContext Regex source1 target)
      => source1 -> source -> target
-(=~) x r = let q :: Regex
-               q = makeRegex r
-           in match q x
+(=~) x r = let make :: RegexMaker Regex CompOption ExecOption a => a -> Regex
+               make = makeRegex
+           in match (make r) x
 
 -- | This is the monadic matching operator.  If a single match fails,
 -- then 'fail' will be called.
 (=~~) :: (RegexMaker Regex CompOption ExecOption source,RegexContext Regex source1 target,Monad m)
       => source1 -> source -> m target
-(=~~) x r = do (q :: Regex) <- makeRegexM r
+(=~~) x r = do let make :: (RegexMaker Regex CompOption ExecOption a, Monad m) => a -> m Regex
+                   make = makeRegexM
+               q <- make r
                matchM q x

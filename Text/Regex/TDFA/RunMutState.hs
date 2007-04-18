@@ -1,4 +1,6 @@
-module Text.Regex.TDFA.RunMutState(newTagEngine,newTagEngine2,newScratch,tagsToGroupsST
+{-# LANGUAGE CPP #-}
+module Text.Regex.TDFA.RunMutState(TagEngine(..),newTagEngine,newTagEngine2
+                                  ,newScratch,tagsToGroupsST
                                   ,toInstructions,compareWith,resetScratch
                                   ,SScratch(..),MScratch,WScratch) where
 
@@ -8,9 +10,15 @@ import Control.Monad(forM_,liftM,liftM2,liftM3,foldM)
 import Control.Monad.State(MonadState(..),execState)
 
 import Data.Array.Base(unsafeRead,unsafeWrite,STUArray(..))
+#ifdef __GLASGOW_HASKELL__
 import GHC.Arr(STArray(..))
 import GHC.ST(ST(..))
 import GHC.Prim(MutableByteArray#,RealWorld,Int#,sizeofMutableByteArray#,unsafeCoerce#)
+#else
+import Control.Monad(when)
+import Control.Monad.ST(ST)
+import Data.Array.ST(STArray)
+#endif
 
 import Data.Array.MArray(MArray(..),newListArray,unsafeFreeze)
 import Data.Array.IArray(Array,(!),bounds,assocs)
@@ -32,11 +40,13 @@ import Text.Regex.TDFA.Common
 err :: String -> a
 err s = common_error "Text.Regex.TDFA.RunMutState"  s
 
+data TagEngine s t p = TagEngine
+  !(MScratch s -> Position -> IntMap (IntMap (t,Instructions)) -> ST s ())
+  !(MScratch s -> p -> Maybe (WScratch s,p) -> IntMap Instructions -> ST s (Maybe (WScratch s,p)))
+  !(MScratch s -> MScratch s -> Position -> IntMap (IntMap (DoPa,Instructions)) -> ST s ())
+
 {-# INLINE newTagEngine #-}
-newTagEngine :: Regex -> ST s (MScratch s -> Position -> IntMap (IntMap (t,Instructions)) -> ST s ()
-                              ,MScratch s -> (Position,Char,xxx) -> Maybe (WScratch s,(Position,Char,xxx)) -> IntMap Instructions -> ST s (Maybe (WScratch s,(Position,Char,xxx)))
-                              ,MScratch s -> MScratch s -> Position -> IntMap (IntMap (DoPa,Instructions)) -> ST s ()
-                              )
+newTagEngine :: Regex -> ST s (TagEngine s t (Position,Char,xxx))
 newTagEngine regexIn = do
   (which,count) <- newBoard regexIn
   let comp = makeTagComparer (regex_tags regexIn)
@@ -108,13 +118,10 @@ newTagEngine regexIn = do
 -- findTrans :: forall s. ({-Dest-}Index,IntMap {-Source-} (DoPa,Instructions)) -> ST s ()
 -- updateWinner :: IntMap {- Source -} Instructions -> ST s (Maybe (WScratch s,(Position,Char,String)))
 -- performTrans :: IntMap {-Dest-} (IntMap {-Source-} (DoPa,Instructions)) -> ST s ()
-  return (findTrans,updateWinner,performTrans)
+  return (TagEngine findTrans updateWinner performTrans)
 
 {-# INLINE newTagEngine2 #-}
-newTagEngine2 :: Regex -> ST s (MScratch s -> Position -> IntMap (IntMap (t,Instructions)) -> ST s ()
-                               ,MScratch s -> Position -> Maybe (WScratch s,Position) -> IntMap Instructions -> ST s (Maybe (WScratch s,Position))
-                               ,MScratch s -> MScratch s -> Position -> IntMap (IntMap (DoPa,Instructions)) -> ST s ()
-                               )
+newTagEngine2 :: Regex -> ST s (TagEngine s t Position)
 newTagEngine2 regexIn = do
   (which,count) <- newBoard regexIn
   let comp = makeTagComparer (regex_tags regexIn)
@@ -186,7 +193,7 @@ newTagEngine2 regexIn = do
 -- findTrans :: forall s. ({-Dest-}Index,IntMap {-Source-} (DoPa,Instructions)) -> ST s ()
 -- updateWinner :: IntMap {- Source -} Instructions -> ST s (Maybe (WScratch s,(Position,Char,String)))
 -- performTrans :: IntMap {-Dest-} (IntMap {-Source-} (DoPa,Instructions)) -> ST s ()
-  return (findTrans,updateWinner,performTrans)
+  return (TagEngine findTrans updateWinner performTrans)
 
 -- XXX change first element type to store winning orbit' and such?
 newBoard :: Regex -> ST s (STArray s Index ((Index,Instructions),a,OrbitLog)
@@ -592,6 +599,7 @@ tagsToGroupsST aGroups (WScratch {w_pos=pRef,w_flag=fRef})= do
   forM_ (range (1,b_max)) $ (\i -> act i (aGroups!i))
   unsafeFreeze ma
 
+#ifdef __GLASGOW_HASKELL__
 foreign import ccall unsafe "memcpy"
     memcpy :: MutableByteArray# RealWorld -> MutableByteArray# RealWorld -> Int# -> IO ()
 
@@ -606,14 +614,14 @@ copySTU (STUArray _ _ msource) (STUArray _ _ mdest) =
     case unsafeCoerce# memcpy mdest msource n# s1# of { (# s2#, () #) ->
     (# s2#, () #) }}
 
-{-  Commented out -- more useful to non-GHC compilers
+#else /* !__GLASGOW_HASKELL__ */
 
-copySTArray :: (MArray (STUArray s) e (ST s))=> STUArray s Tag e -> STUArray s Tag e -> ST s ()
-copySTArray source destination = do
+copySTU :: (MArray (STUArray s) e (ST s))=> STUArray s Tag e -> STUArray s Tag e -> ST s ()
+copySTU source destination = do
   b@(start,stop) <- getBounds source
   b' <- getBounds destination
-  traceCopy ("> copySTArray "++show b) $ do
+  -- traceCopy ("> copySTArray "++show b) $ do
   when (b/=b') (fail $ "Text.Regex.TDFA.RunMutState copySTUArray bounds mismatch"++show (b,b'))
   forM_ (range b) $ \index ->
     unsafeRead source index >>= unsafeWrite destination index
--}
+#endif /* !__GLASGOW_HASKELL__ */

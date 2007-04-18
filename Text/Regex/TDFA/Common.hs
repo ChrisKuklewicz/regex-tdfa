@@ -66,7 +66,11 @@ noWin = null
 
 -- | Used to track elements of the pattern that accept characters or 
 -- are anchors
-newtype DoPa = DoPa {dopaIndex :: Int} deriving (Eq,Ord,Enum)
+newtype DoPa = DoPa {dopaIndex :: Int} deriving (Eq,Ord)
+
+instance Enum DoPa where
+  toEnum = DoPa
+  fromEnum = dopaIndex
 
 instance Show DoPa where
   showsPrec p (DoPa {dopaIndex=i}) = ('#':) . showsPrec p i

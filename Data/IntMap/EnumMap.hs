@@ -1,14 +1,24 @@
 module Data.IntMap.EnumMap where
 
-import Data.Foldable(Foldable)
+import Data.Foldable(Foldable(..))
 import qualified Data.IntMap as M
 import qualified Data.IntSet.EnumSet as S (EnumSet(..))
-import Data.Monoid(Monoid)
+import Data.Monoid(Monoid(..))
 import Prelude
 import qualified Prelude as L (map)
 
 newtype EnumMap k a = EnumMap {unEnumMap :: M.IntMap a}
-  deriving (Eq,Read,Show,Ord,Monoid,Foldable,Functor)
+  deriving (Eq,Ord,Read,Show)
+
+instance Ord k => Monoid (EnumMap k a) where
+  mempty = EnumMap mempty
+  EnumMap x `mappend` EnumMap y = EnumMap (x `mappend` y)
+
+instance Ord k => Functor (EnumMap k) where
+  fmap f (EnumMap m) = EnumMap (fmap f m)
+
+instance Ord k => Foldable (EnumMap k) where
+  foldMap f (EnumMap m) = foldMap f m
 
 (!) :: (Enum key) => EnumMap key a -> key -> a
 (!) (EnumMap m) k = (M.!) m (fromEnum k)

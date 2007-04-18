@@ -40,6 +40,7 @@ p_piece = (p_anchor <|> p_atom) >>= p_post_atom -- correct specification
 
 p_atom =  p_group <|> p_bracket <|> p_char <?> "an atom"
 
+group_index :: CharParser (GroupIndex,Int) (Maybe GroupIndex)
 group_index = do
   (gi,ci) <- getState
   let index = succ gi
