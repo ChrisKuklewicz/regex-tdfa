@@ -39,10 +39,6 @@ Beyond posix:
 
 module Text.Regex.TDFA(getVersion_Text_Regex_TDFA
                       ,module Text.Regex.TDFA.Wrap
-                      ,module Text.Regex.TDFA.String
-                      ,module Text.Regex.TDFA.ByteString
-                      ,module Text.Regex.TDFA.ByteString.Lazy
-                      ,module Text.Regex.TDFA.Sequence
                       ,module Text.Regex.Base) where
 
 import Data.Version(Version(..))
@@ -55,6 +51,6 @@ import Text.Regex.TDFA.Wrap(Regex,CompOption(..),ExecOption(..),(=~),(=~~))
 
 getVersion_Text_Regex_TDFA :: Version
 getVersion_Text_Regex_TDFA =
-  Version { versionBranch = [0,93]
+  Version { versionBranch = [0,94]
           , versionTags = ["tdfa","unstable"]
           }

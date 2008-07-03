@@ -9,7 +9,7 @@ import qualified Control.Monad.ST.Lazy as Lazy(ST,runST,strictToLazyST)
 import Data.Array.IArray((!),array,bounds)
 import Data.Array.MArray(rangeSize)
 import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Base as B(unsafeIndex)
+import qualified Data.ByteString.Unsafe as B(unsafeIndex)
 import Data.IntMap.CharMap(CharMap(..))
 import qualified Data.IntMap as IMap(null,lookup)
 

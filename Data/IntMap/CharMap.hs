@@ -6,7 +6,7 @@ import GHC.Base(unsafeChr)
 #else
 import Data.Char (chr)
 #endif
-import Data.Char as C(ord, chr)
+import Data.Char as C(ord)
 import Data.List as L (map)
 import qualified Data.IntMap as M
 import qualified Data.IntSet as S(IntSet)

@@ -603,9 +603,10 @@ tagsToGroupsST aGroups (WScratch {w_pos=pRef,w_flag=fRef})= do
 foreign import ccall unsafe "memcpy"
     memcpy :: MutableByteArray# RealWorld -> MutableByteArray# RealWorld -> Int# -> IO ()
 
+-- This has been updated for ghc 6.8.3
 {-# INLINE copySTU #-}
 copySTU :: (Show i,Ix i,MArray (STUArray s) e (ST s)) => STUArray s i e -> STUArray s i e -> ST s ()
-copySTU (STUArray _ _ msource) (STUArray _ _ mdest) =
+copySTU (STUArray _ _ _ msource) (STUArray _ _ _ mdest) =
 -- do b1 <- getBounds s1
 --  b2 <- getBounds s2
 --  when (b1/=b2) (error ("\n\nWTF copySTU: "++show (b1,b2)))

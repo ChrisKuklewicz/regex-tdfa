@@ -1,5 +1,5 @@
 Name:                   regex-tdfa
-Version:                0.93
+Version:                0.94
 -- Cabal-Version:       >=1.1.6
 License:                BSD3
 License-File:           LICENSE
@@ -13,7 +13,8 @@ Synopsis:               Replaces/Enhances Text.Regex
 Description:            A new all Haskell "tagged" DFA regex engine, inspired by libtre
 Category:               Text
 Tested-With:            GHC
-Build-Depends:          regex-base >= 0.80, base >= 2.0, parsec, mtl
+Build-Depends:          regex-base >= 0.80, base >= 2.0, parsec, mtl, containers, array, bytestring
+Build-Type:             Simple
 -- Data-Files:
 -- Extra-Source-Files:
 -- Extra-Tmp-Files:
@@ -41,9 +42,9 @@ Exposed-Modules:        Text.Regex.TDFA.Common
 Buildable:              True
 -- Other-Modules:
 -- HS-Source-Dirs:         "."
-Extensions:             MultiParamTypeClasses, FunctionalDependencies, BangPatterns
-GHC-Options:            -Wall -Werror -O2 -funbox-strict-fields
--- GHC-Options:            -Wall -Werror -O2
+Extensions:             MultiParamTypeClasses, FunctionalDependencies, BangPatterns, MagicHash, RecursiveDo, NoMonoPatBinds, ForeignFunctionInterface, UnboxedTuples, TypeOperators, FlexibleContexts, ExistentialQuantification, UnliftedFFITypes, TypeSynonymInstances
+GHC-Options:            -Wall -O2 -funbox-strict-fields
+-- GHC-Options:            -Wall -O2
 -- GHC-Options:            -Wall -ddump-minimal-imports
 -- GHC-Prof-Options:       -auto-all
 -- Hugs-Options:
