@@ -45,7 +45,7 @@ member k (CharMap m) = M.member (C.ord k) m
 notMember :: Key -> CharMap a -> Bool
 notMember k (CharMap m) = M.notMember (C.ord k) m
 
-lookup :: Monad m => Key -> CharMap a -> m a
+lookup :: Key -> CharMap a -> Maybe a
 lookup k (CharMap m) = M.lookup (C.ord k) m
 
 findWithDefault :: a -> Key -> CharMap a -> a
