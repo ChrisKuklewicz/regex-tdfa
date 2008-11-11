@@ -40,7 +40,7 @@ notMember k (EnumMap m) = M.notMember (fromEnum k) m
 
 {-# INLINE lookup #-}
 lookup :: (Enum key,Monad m) => key -> EnumMap key a -> m a
-lookup k (EnumMap m) = M.lookup (fromEnum k) m
+lookup k (EnumMap m) = maybe (fail "EnumMap.lookup failed") return $ M.lookup (fromEnum k) m
 
 findWithDefault :: (Enum key) => a -> key -> EnumMap key a -> a
 findWithDefault a k (EnumMap m) = M.findWithDefault a (fromEnum k) m
