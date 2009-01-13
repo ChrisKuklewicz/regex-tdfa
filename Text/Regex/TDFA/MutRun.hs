@@ -1,6 +1,10 @@
 -- | "Text.Regex.TDFA.Run" is the main module for matching a DFA
 -- against a String.  Many of the associated functions are exported to
 -- other modules to help match against other types.
+--
+-- 2009-January: logic changes to capturing in matchHere (need to change noCap XXX TODO):
+-- The logic below has been changed to recognize an empty match at the end of the string.
+-- The logic below has been changed to proceed after the first empty match.
 module Text.Regex.TDFA.MutRun (findMatch,findMatchAll,countMatchAll) where
 
 import Control.Monad(MonadPlus(..))
@@ -107,7 +111,12 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
             Just (w,(off',prev',input')) -> do
               ma <- lazy (tagsToGroupsST (regex_groups regexIn) w)
               let len = snd (ma!0)
-              rest <- if len==0 || null input' then return []
+              rest <- if len==0
+                        then case input' of
+                               [] -> return []
+                               (prev'':input'') -> do let off'' = succ off'
+                                                     () <- lazy (resetScratch regexIn off'' s1 w0)
+                                                     go off'' prev'' input''
                         else do () <- lazy (resetScratch regexIn off' s1 w0)
                                 go off' prev' input'
               return (ma:rest)
