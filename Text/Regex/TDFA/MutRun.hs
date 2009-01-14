@@ -114,11 +114,13 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
               rest <- if len==0
                         then case input' of
                                [] -> return []
-                               (prev'':input'') -> do let off'' = succ off'
-                                                     () <- lazy (resetScratch regexIn off'' s1 w0)
-                                                     go off'' prev'' input''
-                        else do () <- lazy (resetScratch regexIn off' s1 w0)
-                                go off' prev' input'
+                               (prev'':input'') -> do
+                                 let off'' = succ off'
+                                 () <- lazy (resetScratch regexIn off'' s1 w0)
+                                 go off'' prev'' input''
+                        else do
+                          () <- lazy (resetScratch regexIn off' s1 w0)
+                          go off' prev' input'
               return (ma:rest)
     if frontAnchored
       then if offsetIn/=0 then return [] 
@@ -143,8 +145,17 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
             Just (off',prev',input') ->
               let len = off'-off
                   ma = array (0,0) [(0,(off,len))]
+                  rest = if len == 0
+                           then case input' of
+                                  [] -> []
+                                  (prev'':input'') ->
+                                    let off'' = succ off'
+                                    in go off'' prev'' input''
+                           else go off' prev' input'
+{-
                   rest = if len == 0 || null input then []
                            else go off' prev' input'
+-}
               in (ma:rest)
     in if frontAnchored
          then if offsetIn /= 0 then []

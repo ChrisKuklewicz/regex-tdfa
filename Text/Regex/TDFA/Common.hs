@@ -86,7 +86,7 @@ data CompOption = CompOption { caseSensitive :: Bool    -- ^ True by default
                                                         -- if you plan to set the captureGroups execoption to False.
                              } deriving (Read,Show)
 data ExecOption = ExecOption { captureGroups :: Bool    -- ^ True by default.  Set to False to improve speed (and space).
-                             , testMatch :: Bool        -- ^ False by default. Set to True to quickly return shortest match (w/o groups).
+                             , testMatch :: Bool        -- ^ False by default. Set to True to quickly return shortest match (w/o groups). [ UNUSED ]
                              } deriving (Read,Show)
 
 -- | Used by implementation to name certain Postions during matching
