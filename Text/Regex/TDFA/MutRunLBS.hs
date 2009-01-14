@@ -108,7 +108,11 @@ matchHere regexIn offsetIn inputIn = ans where
             Just (w,off') -> do
               ma <- lazy (tagsToGroupsST (regex_groups regexIn) w)
               let len = snd (ma!0)
-              rest <- if len==0 || off'==final then return []
+              rest <- if len==0
+                        then if off'==final then return []
+                               else do let off'' = succ off'
+                                       () <- lazy (resetScratch regexIn off'' s1 w0)
+                                       go off''
                         else do () <- lazy (resetScratch regexIn off' s1 w0)
                                 go off'
               return (ma:rest)
@@ -132,7 +136,9 @@ matchHere regexIn offsetIn inputIn = ans where
             Just off' ->
               let len = off'-off
                   ma = array (0,0) [(0,(off,len))]
-                  rest = if len == 0 || off'==final then []
+                  rest = if len==0
+                           then if off'==final then []
+                                  else go (succ off')
                            else go off'
               in (ma:rest)
     in if frontAnchored

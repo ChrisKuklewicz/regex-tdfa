@@ -110,9 +110,15 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
             Just (w,(off',prev',input')) -> do
               ma <- lazy (tagsToGroupsST (regex_groups regexIn) w)
               let len = snd (ma!0)
-              rest <- if len==0 || S.null input' then return []
-                        else do () <- lazy (resetScratch regexIn off' s1 w0)
-                                go off' prev' input'
+              rest <- if len==0
+                       then case S.viewl input of
+                              EmptyL -> return []
+                              (prev'' :< input'') -> do
+                                let off'' = succ off'
+                                () <- lazy (resetScratch regexIn off'' s1 w0)
+                                go off'' prev'' input''
+                       else do () <- lazy (resetScratch regexIn off' s1 w0)
+                               go off' prev' input'
               return (ma:rest)
     if frontAnchored
       then if offsetIn/=0 then return [] 
@@ -133,12 +139,17 @@ matchHere regexIn offsetIn prevIn inputIn = ans where
             Nothing -> case S.viewl input of
                          EmptyL -> []
                          (prev' :< input') -> let off' = succ off
-                                              in go off' prev' input'
+                                             in go off' prev' input'
             Just (off',prev',input') ->
               let len = off'-off
                   ma = array (0,0) [(0,(off,len))]
-                  rest = if len == 0 || S.null input then []
-                           else go off' prev' input'
+                  rest = if len==0
+                          then case S.viewl input' of
+                                 EmptyL -> []
+                                 (prev'' :< input'') ->
+                                   let off'' = succ off'
+                                   in go off'' prev'' input''
+                          else go off' prev' input'
               in (ma:rest)
     in if frontAnchored
          then if offsetIn /= 0 then []
