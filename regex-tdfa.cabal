@@ -1,52 +1,54 @@
 Name:                   regex-tdfa
-Version:                0.96.0
+Version:                0.97.1
+-- 0.97.1: Bug Fix: Use PGroup Nothing when expanding PBound
 Cabal-Version:          >=1.2
 License:                BSD3
 License-File:           LICENSE
-Copyright:              Copyright (c) 2007, Christopher Kuklewicz
+Copyright:              Copyright (c) 2007-2009, Christopher Kuklewicz
 Author:                 Christopher Kuklewicz
 Maintainer:             TextRegexLazy@personal.mightyreason.com
 Stability:              Seems to work, but not POSIX yet
 Homepage:               http://sourceforge.net/projects/lazy-regex
 Package-URL:            http://darcs.haskell.org/packages/regex-unstable/regex-tdfa/
-Synopsis:               Replaces/Enhances Text.Regex
+Synopsis:               Accurate POSIX extended regular expression library
 Description:            A new all Haskell "tagged" DFA regex engine, inspired by libtre
 Category:               Text
 Tested-With:            GHC
 Build-Type:             Simple
 
-  
 flag base4
 
 library 
+  Build-Depends:        regex-base >= 0.80, parsec, mtl, containers, array, bytestring
   if flag(base4)
-    Build-Depends:          regex-base >= 0.80, base >= 4.0, parsec, mtl, containers, array, bytestring, ghc-prim
+    Build-Depends:      base >= 4.0, ghc-prim
   else
-    Build-Depends:          regex-base >= 0.80, base < 4.0, parsec, mtl, containers, array, bytestring
-  Exposed-Modules:        Text.Regex.TDFA.Common
-                          Text.Regex.TDFA.IntArrTrieSet
-                          Text.Regex.TDFA.TNFA
-                          Text.Regex.TDFA.TDFA
-                          Text.Regex.TDFA.Pattern
-                          Text.Regex.TDFA.ReadRegex
-                          Text.Regex.TDFA.CorePattern
-                          Text.Regex.TDFA.RunMutState
-                          Text.Regex.TDFA.String
-                          Text.Regex.TDFA.MutRun
-                          Text.Regex.TDFA.ByteString
-                          Text.Regex.TDFA.MutRunBS
-                          Text.Regex.TDFA.ByteString.Lazy
-                          Text.Regex.TDFA.MutRunLBS
-                          Text.Regex.TDFA.Sequence
-                          Text.Regex.TDFA.MutRunSeq
-                          Text.Regex.TDFA.Wrap
-                          Text.Regex.TDFA
-                          Data.IntSet.EnumSet
-                          Data.IntMap.EnumMap
-                          Data.IntMap.CharMap
-  Buildable:              True
-  Extensions:             MultiParamTypeClasses, FunctionalDependencies, BangPatterns, MagicHash, RecursiveDo, NoMonoPatBinds, ForeignFunctionInterface, UnboxedTuples, TypeOperators, FlexibleContexts, ExistentialQuantification, UnliftedFFITypes, TypeSynonymInstances
-  GHC-Options:            -Wall -O2 -funbox-strict-fields
+    Build-Depends:      base < 4.0
+  other-modules:        Paths_regex_tdfa
+  Exposed-Modules:      Text.Regex.TDFA.Common
+                        Text.Regex.TDFA.IntArrTrieSet
+                        Text.Regex.TDFA.TNFA
+                        Text.Regex.TDFA.TDFA
+                        Text.Regex.TDFA.Pattern
+                        Text.Regex.TDFA.ReadRegex
+                        Text.Regex.TDFA.CorePattern
+                        Text.Regex.TDFA.RunMutState
+                        Text.Regex.TDFA.String
+                        Text.Regex.TDFA.MutRun
+                        Text.Regex.TDFA.ByteString
+                        Text.Regex.TDFA.MutRunBS
+                        Text.Regex.TDFA.ByteString.Lazy
+                        Text.Regex.TDFA.MutRunLBS
+                        Text.Regex.TDFA.Sequence
+                        Text.Regex.TDFA.MutRunSeq
+                        Text.Regex.TDFA.Wrap
+                        Text.Regex.TDFA
+                        Data.IntSet.EnumSet
+                        Data.IntMap.EnumMap
+                        Data.IntMap.CharMap
+  Buildable:            True
+  Extensions:           MultiParamTypeClasses, FunctionalDependencies, BangPatterns, MagicHash, RecursiveDo, NoMonoPatBinds, ForeignFunctionInterface, UnboxedTuples, TypeOperators, FlexibleContexts, ExistentialQuantification, UnliftedFFITypes, TypeSynonymInstances
+  GHC-Options:          -Wall -O2 -funbox-strict-fields
   -- GHC-Options:            -Wall -O2
   -- GHC-Options:            -Wall -ddump-minimal-imports
   -- GHC-Prof-Options:       -auto-all

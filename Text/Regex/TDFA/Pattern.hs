@@ -184,7 +184,7 @@ starTrans' pIn =
 {- The iterations before the last required one cannot determine the
    group capture so change the PGroups to False or wrap in PNonCapture.
 -}
-    PBound i Nothing  p -> PConcat $ apply (p':) (pred i) [p,simplify' $ PStar False p]
+    PBound i Nothing  p -> asGroup . PConcat $ apply (p':) (pred i) [p,simplify' $ PStar False p]
       where p' = nonCapture' p -- XXX cleanup
 
 {- p{0,2} is (pp?)? is p?p? and p{0,3} is (p(pp?)?)? is p?p?p?
@@ -228,16 +228,61 @@ starTrans' pIn =
 
    And by this logic, the PStar False is really p*!  So p{0,} is p*
    and p{1,} is pp*! and p{2,} is p'pp*! and p{3,} is p'p'pp*!
+
+WTF BUG: but which is right? The last capture is "" if the (){,} is
+itself put in parenthesis.  So the simple solution is to wrap the
+expanded PBound in a (PGroup Nothing).
+
+/Test-str "ababcd" "(a|ab|c|bcd){0,10}(d*)"
+TDFA ("","ababcd","",["bcd",""])
+/Test-str "ababcd" "(a|ab|c|bcd){1,10}(d*)"
+TDFA ("","ababcd","",["bcd",""])
+/Test-str "ababcd" "(a|ab|c|bcd){2,10}(d*)"
+TDFA ("","ababcd","",["c","d"])
+/Test-str "ababcd" "(a|ab|c|bcd){3,10}(d*)"
+TDFA ("","ababcd","",["c","d"])
+./Test-str "ababcd" "(a|ab|c|bcd){4,10}(d*)"
+TDFA ("ababcd","","",[])
+
+./Test-str "ababcd" "(a|ab|c|bcd){0,}(d*)"
+TDFA ("","ababcd","",["bcd",""])
+./Test-str "ababcd" "(a|ab|c|bcd){1,}(d*)"
+TDFA ("","ababcd","",["bcd",""])
+./Test-str "ababcd" "(a|ab|c|bcd){2,}(d*)"
+TDFA ("","ababcd","",["c","d"])
+./Test-str "ababcd" "(a|ab|c|bcd){3,}(d*)"
+TDFA ("","ababcd","",["c","d"])
+./Test-str "ababcd" "(a|ab|c|bcd){4,}(d*)"
+TDFA ("ababcd","","",[])
+
+The two parsing are, explicity in my notation:
+
+./Test-str "ababcd" "(a|ab|c|bcd)?(a|ab|c|bcd)?(a|ab|c|bcd)?(a|ab|c|bcd)?(d*)"
+TDFA ("","ababcd","",["ab","ab","c","","d"])
+
+In the next series is the issue with 
+
+./Test-str "ababcd" "((a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)(a|ab|c|bcd)?)?)?)?(d*)"
+TDFA ("","ababcd","",["ababcd","ab","abcd","a","bcd","bcd","",""])
+./Test-str "ababcd" "<(a|ab|c|bcd)<(a|ab|c|bcd)<(a|ab|c|bcd)(a|ab|c|bcd)?>?>?>?(d*)" 
+TDFA ("","ababcd","",["ab","a","bcd","",""])
+./Test-str "ababcd" "(a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)(a|ab|c|bcd)?)?)?)?(d*)" 
+TDFA ("","ababcd","",["ab","abcd","a","bcd","bcd","","","",""])
+./Test-str "ababcd" "(a|ab|c|bcd)(a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)(a|ab|c|bcd)?)?)?)?(d*)" 
+TDFA ("","ababcd","",["ab","ab","c","c","","","","","","d"])
+./Test-str "ababcd" "(a|ab|c|bcd)(a|ab|c|bcd)(a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)(a|ab|c|bcd)?)?)?)?(d*)" 
+TDFA ("","ababcd","",["ab","ab","c","","","","","","","","d"])
+
 -}
     PBound 0 (Just j) p | cannotMatchNull p -> apply (quest' . (concat' p)) (pred j) (quest' p)
                         | canOnlyMatchNull p -> quest' p
                         | otherwise -> POr [ simplify' (PConcat (p : replicate (pred j) (nonEmpty' p))) , PEmpty ]
 --
-    PBound i (Just j) p | i == j    -> PConcat $ apply (p':) (pred i) [p]
-                        | cannotMatchNull p -> PConcat $ apply (p':) (pred i) $ (p:) $ 
+    PBound i (Just j) p | i == j  -> asGroup . PConcat $ apply (p':) (pred i) [p]
+                        | cannotMatchNull p -> asGroup . PConcat $ apply (p':) (pred i) $ (p:) $ 
                                                  [apply (quest' . (concat' p)) (pred (j-i)) (quest' p)]
                         | canOnlyMatchNull p -> p
-                        | otherwise -> PConcat $ (replicate (pred i) p') ++ p : (replicate (j-i) (nonEmpty' p))
+                        | otherwise -> asGroup . PConcat $ (replicate (pred i) p') ++ p : (replicate (j-i) (nonEmpty' p))
       where p' = nonCapture' p -- XXX cleanup
     -- Left intact
     PEmpty -> pass
@@ -260,6 +305,7 @@ starTrans' pIn =
     nonEmpty' = PNonEmpty
     nonCapture' = PNonCapture
     apply f n x = foldr ($) x (replicate n f)
+    asGroup p = PGroup Nothing (simplify' p)
     pass = pIn
 
 -- | Function to transform a pattern into an equivalent, but less

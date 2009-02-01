@@ -41,7 +41,7 @@ module Text.Regex.TDFA(getVersion_Text_Regex_TDFA
                       ,module Text.Regex.TDFA.Wrap
                       ,module Text.Regex.Base) where
 
-import Data.Version(Version(..))
+import Data.Version(Version)
 import Text.Regex.Base
 import Text.Regex.TDFA.String()
 import Text.Regex.TDFA.ByteString()
@@ -49,8 +49,7 @@ import Text.Regex.TDFA.ByteString.Lazy()
 import Text.Regex.TDFA.Sequence()
 import Text.Regex.TDFA.Wrap(Regex,CompOption(..),ExecOption(..),(=~),(=~~))
 
+import Paths_regex_tdfa(version)
+
 getVersion_Text_Regex_TDFA :: Version
-getVersion_Text_Regex_TDFA =
-  Version { versionBranch = [0,95,2]
-          , versionTags = ["tdfa","unstable"]
-          }
+getVersion_Text_Regex_TDFA = version
