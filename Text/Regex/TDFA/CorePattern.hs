@@ -386,8 +386,13 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
            a <- if noTag m1 && needsTags then uniq Minimize else return m1
            b <- if noTag m2 && needsTags then uniq Maximize else return m2
            c <- if needsOrbit then makeOrbit else return Nothing -- any Orbit tag is created after the pre and post tags
+           let nullView | mayFirstBeNull = cleanNullView $ addTagsToNullView (winTags (apply a) (apply b)) (nullQ q) ++ skipView
+                        | otherwise = skipView
+                 where skipView = emptyNull (winTags (apply a) (apply b))
+                       
            (q,resetTags) <- withOrbit (go p NoTag NoTag)
-           let nullView = emptyNull (winTags (apply a) (apply b)) -- chosen to represent skipping sub-pattern
+-- 2009-02-09 eliminate because this breaks (()*)* and ((.?)*)*
+--           let nullView = emptyNull (winTags (apply a) (apply b)) -- chosen to represent skipping sub-pattern
            return $ Q nullView
                       (0,if accepts then Nothing else (Just 0))
                       [] (apply a) (apply b)
