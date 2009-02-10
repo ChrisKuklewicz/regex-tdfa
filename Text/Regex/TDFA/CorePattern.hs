@@ -151,6 +151,17 @@ addTagsToNullView tags nv= do
   (test,tags') <- nv
   return (test,tags `mappend` tags')
 
+-- For PStar, need to put in the orbit TagTasks
+orbitWrapNullView :: Maybe Tag -> [Tag] -> NullView -> NullView
+orbitWrapNullView mOrbit orbitResets oldNV =
+  case (mOrbit,orbitResets) of
+    (Nothing,[]) -> oldNV
+    (Nothing,_) -> do (oldTests,oldTasks) <- oldNV
+                      return (oldTests,prepend oldTasks)
+    (Just o,_) -> do (oldTests,oldTasks) <- oldNV
+                     return (oldTests,prepend $ [(o,PreUpdate EnterOrbitTask)] ++ oldTasks ++ [(o,PreUpdate LeaveOrbitTask)])
+  where prepend = foldr (\h t -> (h:).t) id . map (\tag->(tag,PreUpdate ResetOrbitTask)) $ orbitResets
+
 -- For PGroup, need to prepend reset tasks before others in nullView
 addResetsToNullView :: [Tag]-> NullView -> NullView
 addResetsToNullView resetTags nv = [ (test, prepend tags) | (test,tags) <- nv ]
@@ -386,13 +397,14 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
            a <- if noTag m1 && needsTags then uniq Minimize else return m1
            b <- if noTag m2 && needsTags then uniq Maximize else return m2
            c <- if needsOrbit then makeOrbit else return Nothing -- any Orbit tag is created after the pre and post tags
-           let nullView | mayFirstBeNull = cleanNullView $ addTagsToNullView (winTags (apply a) (apply b)) (nullQ q) ++ skipView
-                        | otherwise = skipView
-                 where skipView = emptyNull (winTags (apply a) (apply b))
-                       
            (q,resetTags) <- withOrbit (go p NoTag NoTag)
 -- 2009-02-09 eliminate because this breaks (()*)* and ((.?)*)*
 --           let nullView = emptyNull (winTags (apply a) (apply b)) -- chosen to represent skipping sub-pattern
+           let nullView | mayFirstBeNull = cleanNullView $ childViews ++ skipView
+                        | otherwise = skipView
+                 where childViews = addTagsToNullView (winTags (apply a) (apply b)) 
+                                  . orbitWrapNullView c resetTags $ nullQ q
+                       skipView = emptyNull (winTags (apply a) (apply b))
            return $ Q nullView
                       (0,if accepts then Nothing else (Just 0))
                       [] (apply a) (apply b)
