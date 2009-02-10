@@ -1,7 +1,8 @@
 Name:                   regex-tdfa
-Version:                0.97.2
+Version:                0.97.3
 -- 0.97.1: Bug Fix: Use PGroup Nothing when expanding PBound
 -- 0.97.2: Bug Fix: Use more complex null view in PStar when mayFirstBeNull, fix (()*)* and ((.?)*)*
+-- 0.97.3: Bug Fix: RunMutState.updateWinning was borking the input state (.*)*...?()|. on 123456
 Cabal-Version:          >=1.2.3
 License:                BSD3
 License-File:           LICENSE

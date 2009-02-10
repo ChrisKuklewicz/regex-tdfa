@@ -332,6 +332,10 @@ updateWinning s1 (i1,ins,o) preTag n mw = do
       postTag = succ preTag
   if n==0
     then do
+      -- new change with 0.97.3: clear these 3 fields as we are stealing the allocated data!
+      unsafeWrite (m_pos s1) i1 Nothing
+      unsafeWrite (m_flag s1) i1 Nothing
+      unsafeWrite (m_orbit s1) i1 mempty
       mapM_ (\(tag,v) -> unsafeWrite pos1 tag (val v)) (newPos ins)
       mapM_ (\(tag,f) -> unsafeWrite flag1 tag (f)) (newFlags ins)
       case mw of
