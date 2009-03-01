@@ -31,7 +31,7 @@
 -- Uses recursive do notation.
 
 module Text.Regex.TDFA.TNFA(patternToNFA
-                           ,QNFA(..),QT(..),QTrans,TagUpdate(..)) where
+                            ,QNFA(..),QT(..),QTrans,TagUpdate(..)) where
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
@@ -39,15 +39,15 @@ import Control.Monad.State
 import Data.Array.IArray(Array,array)
 import Data.Char(toLower,toUpper,isAlpha,ord)
 import Data.List(foldl')
-import Data.IntMap.CharMap(CharMap(..))
-import qualified Data.IntMap.CharMap as Map(null,toAscList,singleton,map)
 import Data.IntMap (IntMap)
-import qualified Data.IntMap as IMap(size,toList,toAscList,null,unionWith,singleton,fromList,fromDistinctAscList)
+import qualified Data.IntMap as IMap(size,toAscList,null,unionWith,singleton,fromList,fromDistinctAscList)
+import Data.IntMap.CharMap2(CharMap(..))
+import qualified Data.IntMap.CharMap2 as Map(null,singleton,map)
+import qualified Data.IntMap.EnumMap2 as EMap(null,keysSet,assocs)
+import Data.IntSet.EnumSet2(EnumSet)
+import qualified Data.IntSet.EnumSet2 as Set(singleton,toList,insert)
 import Data.Maybe(catMaybes,isNothing)
 import Data.Monoid(mempty,mappend)
-import Data.IntSet.EnumSet(EnumSet)
-import qualified Data.IntSet.EnumSet as Set(singleton,toList,insert)
-import qualified Data.IntMap.EnumMap as EMap(null,keysSet,assocs)
 import qualified Data.Set(insert,toAscList)
 
 import Text.Regex.TDFA.Common
@@ -56,7 +56,7 @@ import Text.Regex.TDFA.CorePattern(Q(..),P(..),OP(..),WhichTest,cleanNullView,Nu
                                   ,mustAccept,cannotAccept,patternToQ)
 import Text.Regex.TDFA.Pattern(Pattern(..))
 import Text.Regex.TDFA.ReadRegex(decodePatternSet)
-import Debug.Trace
+--import Debug.Trace
 
 ecart :: String -> a -> a
 ecart _ = id
@@ -66,30 +66,6 @@ err t = common_error "Text.Regex.TDFA.TNFA" t
 
 debug :: (Show a) => a -> s -> s
 debug _ s = s
-
-instance Show QNFA where
-  show (QNFA {q_id = i, q_qt = qt}) = "QNFA {q_id = "++show i
-                                  ++"\n     ,q_qt = "++ show qt
-                                  ++"\n}"
-
-instance Show QT where
-  show = showQT
-
-showQT :: QT -> String
-showQT (Simple win trans other) = "{qt_win=" ++ show win
-                             ++ "\n, qt_trans=" ++ show (foo trans)
-                             ++ "\n, qt_other=" ++ show (foo' other) ++ "}"
-showQT (Testing test dopas a b) = "{Testing "++show test++" "++show (Set.toList dopas)
-                              ++"\n"++indent a
-                              ++"\n"++indent b++"}"
-    where indent = init . unlines . map (spaces++) . lines . showQT
-          spaces = replicate 9 ' '
-
-foo :: CharMap QTrans -> [(Char,[(Index,[TagCommand])])]
-foo = mapSnd foo' . Map.toAscList
-
-foo' :: QTrans -> [(Index,[TagCommand])]
-foo' = IMap.toList 
 
 instance Eq QT where
   t1@(Testing {}) == t2@(Testing {}) =
@@ -104,18 +80,15 @@ instance Eq QT where
           eqQTrans = (==)
   _ == _ = False
 
--- This uses the Eq QT instace above
--- ZZZ
-mkTesting :: QT -> QT
-mkTesting t@(Testing {qt_a=a,qt_b=b}) = if a==b then a else t -- Move to nfsToDFA XXX
-mkTesting t = t
-
 qtwin,qtlose :: QT
+-- qtwin is the continuation after matching the whole pattern.  It has
+-- no futher transitions and sets tag #1 to the current position.
 qtwin = Simple {qt_win=[(1,PreUpdate TagTask)],qt_trans=mempty,qt_other=mempty}
+-- qtlose is the continuation to nothing, used when ^ or $ tests fail.
 qtlose = Simple {qt_win=mempty,qt_trans=mempty,qt_other=mempty}
 
 patternToNFA :: CompOption
-             -> (Text.Regex.TDFA.Pattern.Pattern,(GroupIndex, DoPa))
+             -> (Pattern,(GroupIndex, DoPa))
              -> ((Index,Array Index QNFA)
                 ,Array Tag OP
                 ,Array GroupIndex [GroupInfo])
@@ -125,16 +98,7 @@ patternToNFA compOpt pattern =
   in debug msg (qToNFA compOpt q,tags,groups)
 
 -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
-
--- dumb smart constructor used by qToQNFA
--- could replace with something that is
---  (*) Monadic, using uniq to auto generate the new i
---  (*) Puts the new QNFA into the State's (list->list) (so it is ascending in order)
---  (*) Actually creates a simple DFA instead?
-mkQNFA :: Int -> QT -> QNFA
-mkQNFA i qt = debug ("\n>QNFA id="++show i) $
-  -- XXX Go through the qt and keep only the best tagged transition(s) to each state.
-  QNFA i (debug ("\ngetting QT for "++show i) qt)
+-- Query function on Q
 
 nullable :: Q -> Bool
 nullable = not . null . nullQ
@@ -152,10 +116,27 @@ usesQNFA (Q {wants=WantsBoth}) = True
 usesQNFA (Q {wants=WantsQNFA}) = True
 usesQNFA _ = False
 
+-- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
+-- Functions related to QT
+
+-- dumb smart constructor used by qToQNFA
+-- Possible: Go through the qt and keep only the best tagged transition(s) to each state to make simple NFA?
+mkQNFA :: Index -> QT -> QNFA
+mkQNFA i qt = debug ("\n>QNFA id="++show i) $
+  QNFA i (debug ("\ngetting QT for "++show i) qt)
+
+-- This uses the Eq QT instance above
+-- ZZZ
+mkTesting :: QT -> QT
+mkTesting t@(Testing {qt_a=a,qt_b=b}) = if a==b then a else t -- Move to nfsToDFA XXX
+mkTesting t = t
+
 nullQT :: QT -> Bool
 nullQT (Simple {qt_win=w,qt_trans=t,qt_other=o}) = noWin w && Map.null t && IMap.null o
 nullQT _ = False
 
+-- This reconstructs the set of tests checked in processing QT, adding
+-- them to the passed set.
 listTestInfo :: QT -> EnumSet WhichTest -> EnumSet WhichTest
 listTestInfo qt s = execState (helper qt) s
   where helper (Simple {}) = return ()
@@ -163,11 +144,12 @@ listTestInfo qt s = execState (helper qt) s
           modify (Set.insert wt)
           helper a
           helper b
--- This is used to view "win" only through NullView
+
+-- This is used to view "win" only through NullView, and is used in
+-- processing Or.
 applyNullViews :: NullView -> QT -> QT
 applyNullViews [] win = win
-applyNullViews nvs win = foldl' (dominate win winTests) qtlose (reverse $ cleanNullView nvs) where
-  winTests = listTestInfo win $ mempty
+applyNullViews nvs win = foldl' (dominate win) qtlose (reverse $ cleanNullView nvs) where
 
 -- This is used to prefer to view "win" through NullView.  Losing is
 -- replaced by the plain win.  This is employed by Star patterns to
@@ -175,15 +157,36 @@ applyNullViews nvs win = foldl' (dominate win winTests) qtlose (reverse $ cleanN
 -- skipping the NullView occurs if the match fails.
 preferNullViews :: NullView -> QT -> QT
 preferNullViews [] win = win
-preferNullViews nvs win = foldl' (dominate win winTests) win (reverse $ cleanNullView nvs) where
-  winTests = listTestInfo win $ mempty
+preferNullViews nvs win = foldl' (dominate win) win (reverse $ cleanNullView nvs) where
 
-dominate :: QT -> EnumSet WhichTest -> QT -> (SetTestInfo,WinTags) -> QT
-dominate win winTests lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x) $
+{- 
+dominate is common to applyNullViews and preferNullViews above.
+
+Even I no longer understand it without study.
+
+Oversimplified: The last argument has a new set of tests "sti" that
+must be satisfied to then apply the new "tags" and reach the "win" QT.
+Failing any of this set of tests leads to the "lose" QT.
+
+Closer: The "win" may already have some other set of tests leading to
+various branches, this set is cached in winTests.  And the "lose" may
+already have some other set of tests leading to various branches.  The
+combination of "win" and "lose" and "sti" must check the union of
+these tests, which is "allTests".
+
+Detail: The merging is done by useTest, where the tests in sti divert
+losing to a branch of "lose" and winning to a branch of "win".  Tests
+not in sti are unchanged (but the losing DoPa index might be added).
+-}
+dominate :: QT -> QT -> (SetTestInfo,WinTags) -> QT
+dominate win lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x) $
   let -- The winning states are reached through the SetTag
       win' = prependTags' tags win
       -- get the SetTestInfo 
-      allTests = (listTestInfo lose $ EMap.keysSet sti) `mappend` winTests
+      winTests = listTestInfo win $ mempty
+      allTests = (listTestInfo lose $ winTests) `mappend` (EMap.keysSet sti)
+      -- The first and second arguments of useTest are sorted
+      -- At all times the second argument of useTest is a subset of the first
       useTest _ [] w _ = w -- no more dominating tests to fail to choose lose, so just choose win
       useTest (aTest:tests) allD@((dTest,dopas):ds) w l =
         let (wA,wB,wD) = branches w
@@ -199,9 +202,12 @@ dominate win winTests lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x
                           ,qt_dopas = wD `mappend` lD
                           ,qt_a = useTest tests allD wA lA
                           ,qt_b = useTest tests allD wB lB}
-      useTest [] _ _  _ = err "This case in applyNullViews.useText cannot happen"
+      useTest [] _ _  _ = err "This case in dominate.useText cannot happen: second argument would have to have been null and that is checked before this case"
   in useTest (Set.toList allTests) (EMap.assocs sti) win' lose
 
+-- 'applyTest' is only used by addTest
+-- 2009: maybe need to keep track of whether a change is actually made
+-- (beyond DoPa tracking) to the QT.
 applyTest :: TestInfo -> QT -> QT
 applyTest (wt,dopa) qt | nullQT qt = qt
                        | otherwise = applyTest' qt where
@@ -225,13 +231,16 @@ applyTest (wt,dopa) qt | nullQT qt = qt
 -- Three ways to merge a pair of QT's varying how winning transitions
 -- are handled.
 --
--- mergeQT_2nd is used by the NonEmpty case
+-- mergeQT_2nd is used by the NonEmpty case and always discards the
+-- first argument's win and uses the second argment's win.
 --
--- mergeAltQT is used by the Or cases
+-- mergeAltQT is used by the Or cases and is biased to the first
+-- argument's winning transition, if present.
 --
--- 
+-- mergeQT is used by Star and mergeE and combines the winning
+-- transitions (concatenating the instructions).
 mergeQT_2nd,mergeAltQT,mergeQT :: QT -> QT -> QT
-mergeQT_2nd q1 q2 | nullQT q1 = q2  -- prefer winning with w1 then with w2
+mergeQT_2nd q1 q2 | nullQT q1 = q2
                   | otherwise = mergeQTWith (\_ w2 -> w2) q1 q2
 
 mergeAltQT q1 q2 | nullQT q1 = q2  -- prefer winning with w1 then with w2
@@ -251,10 +260,10 @@ mergeQTWith mergeWins = merge where
         t' = fuseQTrans t1 o1 t2 o2
         o' = mergeQTrans o1 o2
     in Simple w' t' o'
-  merge s@(Simple {}) t@(Testing _ _ a b) = mkTesting $
-    t {qt_a=(merge s a), qt_b=(merge s b)}
-  merge t@(Testing _ _ a b) s@(Simple {}) = mkTesting $
-    t {qt_a=(merge a s), qt_b=(merge b s)}
+  merge t1@(Testing _ _ a1 b1) s2@(Simple {}) = mkTesting $
+    t1 {qt_a=(merge a1 s2), qt_b=(merge b1 s2)}
+  merge s1@(Simple {}) t2@(Testing _ _ a2 b2) = mkTesting $
+    t2 {qt_a=(merge s1 a2), qt_b=(merge s1 b2)}
   merge t1@(Testing wt1 ds1 a1 b1) t2@(Testing wt2 ds2 a2 b2) = mkTesting $
     case compare wt1 wt2 of
       LT -> t1 {qt_a=(merge a1 t2), qt_b=(merge b1 t2)}
@@ -281,25 +290,59 @@ mergeQTWith mergeWins = merge where
   mergeQTrans :: QTrans -> QTrans -> QTrans
   mergeQTrans = IMap.unionWith mappend
 
+-- Note: There are no append* operations. There are only these
+-- prepend* operations because things are only prepended to the future
+-- continuation.  And the ordering is significant.
+
+-- This is only used in inStar/nullable
+prependPreTag :: Maybe Tag -> QT -> QT
+prependPreTag Nothing qt = qt
+prependPreTag (Just tag) qt = prependTags' [(tag,PreUpdate TagTask)] qt
+
+prependGroupResets :: [Tag] -> QT -> QT
+prependGroupResets [] qt = qt
+prependGroupResets tags qt = prependTags' [(tag,PreUpdate ResetGroupStopTask)|tag<-tags] qt
+
+prependTags' :: TagList -> QT -> QT
+prependTags' []  qt = qt
+prependTags' tcs' qt@(Testing {}) = qt { qt_a = prependTags' tcs' (qt_a qt)
+                                       , qt_b = prependTags' tcs' (qt_b qt) }
+prependTags' tcs' (Simple {qt_win=w,qt_trans=t,qt_other=o}) =
+  Simple { qt_win = if noWin w then w else tcs' `mappend` w
+         , qt_trans = Map.map prependQTrans t
+         , qt_other = prependQTrans o }
+  where prependQTrans = fmap (map (\(d,tcs) -> (d,tcs' `mappend` tcs)))
+
+-- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
+-- define type S which is a State monad, this allows the creation of the uniq QNFA ids and storing the QNFA
+-- in an ascending order difference list for later placement in an array.
+
 -- Type of State monad used inside qToNFA
-type S = State (Index                              -- Next available QNFA index
+type S = State (Index                             -- Next available QNFA index
                ,[(Index,QNFA)]->[(Index,QNFA)])    -- DList of previous QNFAs
 
 -- Type of continuation of the NFA, not much more complicated
-type E = (TagTasks            -- Things to de before the Either QNFA QT
-         ,Either QNFA QT)     -- The future, packged in the best way
+type E = (TagTasks            -- Things to do before the Either QNFA QT
+                              -- with OneChar these become PostUpdate otherwise they become PreUpdate
+         ,Either QNFA QT)     -- The future, packaged in the best way
 
-type ActCont = (E, Maybe E, Maybe (TagTasks,QNFA))
+-- See documentation below before the 'act' function.  This is for use inside a Star pattern.
+type ActCont = ( E                      -- The eLoop is the dangerous recursive reference to continuation
+                                        -- future that loops while accepting zero more characters
+               , Maybe E                -- This holds the safe non-zero-character accepting continuation
+               , Maybe (TagTasks,QNFA)) -- optimized merger of the above, used only inside act, to avoid orphan QNFA id values
 
+-- newQNFA is the only operation that actually uses the monad get and put operations
 newQNFA :: String -> QT -> S QNFA
 newQNFA s qt = do
   (thisI,oldQs) <- get
   let futureI = succ thisI in seq futureI $ debug (">newQNFA< "++s++" : "++show thisI) $ do
-  let qnfa =  mkQNFA thisI qt -- (strictQT qt) -- making strictQNFA kills test (1,11) ZZZ
-  put (futureI, oldQs . ((thisI,qnfa):))
+  let qnfa = mkQNFA thisI qt -- (strictQT qt) -- making strictQNFA kills test (1,11) ZZZ
+  put $! (futureI, oldQs . ((thisI,qnfa):))
   return qnfa
 
 -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
+-- E related functions
 
 fromQNFA :: QNFA -> E
 fromQNFA qnfa = (mempty,Left qnfa)
@@ -307,59 +350,83 @@ fromQNFA qnfa = (mempty,Left qnfa)
 fromQT :: QT -> E
 fromQT qt = (mempty,Right qt)
 
--- Promises (Left qnfa)
+-- Promises the output will match (_,Left _), used by Or cases when any branch wants a QNFA continuation
 asQNFA :: String -> E -> S E
 asQNFA _ x@(_,Left _) = return x
 asQNFA s (tags,Right qt) = do qnfa <- newQNFA s qt      -- YYY Policy choice: leave the tags
                               return (tags, Left qnfa)
 
+-- Convert continuation E into a QNFA, only done at "top level" by qToNFA to get unique start state
 getQNFA :: String -> E -> S QNFA
 getQNFA _ ([],Left qnfa) = return qnfa
 getQNFA s (tags,Left qnfa) = newQNFA s (prependTags' (promoteTasks PreUpdate tags) (q_qt qnfa))
 getQNFA s (tags,Right qt) = newQNFA s (prependTags' (promoteTasks PreUpdate tags) qt)
 
+-- Extract the QT from the E
 getQT :: E -> QT
 getQT (tags,cont) = prependTags' (promoteTasks PreUpdate tags) (either q_qt id cont)
 
+-- 2009: This looks realllly dodgy, since it can convert a QNFA/Testing to a QT/Testing
+-- without actually achieving anything except adding a DoPa to the Testing.  A diagnostic
+-- series of runs might be needed to decide if this ever creates orphan id numbers.
+-- Then applyTest might need to keep track of whether it actually changes anything.
 addTest :: TestInfo -> E -> E
-addTest ti (tags,Left qnfa) = (tags, Right $ applyTest ti (q_qt qnfa))
-addTest ti (tags,Right qt) = (tags, Right $ applyTest ti qt)
+addTest ti (tags,cont) = (tags, Right . applyTest ti . either q_qt id $ cont)
 
+-- This is used only with PreUpdate and PostUpdate as the first argument.
 promoteTasks :: (TagTask->TagUpdate) -> TagTasks -> TagList
 promoteTasks promote tags = map (\(tag,task) -> (tag,promote task)) tags
 
+-- only used in addWinTags
 demoteTags :: TagList -> TagTasks
 demoteTags = map helper
   where helper (tag,PreUpdate tt) = (tag,tt)
         helper (tag,PostUpdate tt) = (tag,tt)
 
+-- This is polymorphic so addWinTags can be cute below
 {-# INLINE addWinTags #-}
 addWinTags :: WinTags -> (TagTasks,a) -> (TagTasks,a)
-addWinTags wtags (tags,cont) = (demoteTags wtags `mappend` tags,cont)
+addWinTags wtags (tags,cont) = (demoteTags wtags `mappend` tags
+                               ,cont)
 
 {-# INLINE addTag' #-}
+-- This is polymorphic so addTagAC can be cute below
 addTag' :: Tag -> (TagTasks,a) -> (TagTasks,a)
-addTag' tag (tags,cont) = ((tag,TagTask):tags,cont)
+addTag' tag (tags,cont) = ((tag,TagTask):tags
+                          ,cont)
 
-{-# INLINE addGroupResets #-}
-addGroupResets :: (Show a) => [Tag] -> (TagTasks,a) -> (TagTasks,a)
-addGroupResets [] x = x
-addGroupResets tags (tags',cont) = (foldr (:) tags' . map (\tag -> (tag,ResetGroupStopTask)) $ tags,cont)
-
+-- a Maybe version of addTag' above, specializing 'a' to Either QNFA QT
 addTag :: Maybe Tag -> E -> E
 addTag Nothing e = e
 addTag (Just tag) e = addTag' tag e
 
-{- XXX use QT form instead
-enterOrbit :: Maybe Tag -> E -> E
-enterOrbit Nothing e = e
-enterOrbit (Just tag) (tags,cont) = ((tag,EnterOrbitTask):tags,cont)
--}
+{-# INLINE addGroupResets #-}
+-- This is polymorphic so addGroupResetsAC can be cute below
+addGroupResets :: (Show a) => [Tag] -> (TagTasks,a) -> (TagTasks,a)
+addGroupResets [] x = x
+addGroupResets tags (tags',cont) = (foldr (:) tags' . map (\tag -> (tag,ResetGroupStopTask)) $ tags
+                                   ,cont)
 
+addGroupSets :: (Show a) => [Tag] -> (TagTasks,a) -> (TagTasks,a)
+addGroupSets [] x = x
+addGroupSets tags (tags',cont) = (foldr (:) tags' . map (\tag -> (tag,SetGroupStopTask)) $ tags
+                                 ,cont)
+
+-- Consume an ActCont.  Uses the mergeQT form to combine non-accepting
+-- and accepting view of the continuation.
+getE :: ActCont -> E
+getE (_,_,Just (tags,qnfa)) = (tags, Left qnfa)  -- consume optimized mQNFA value returned by Star
+getE (eLoop,Just accepting,_) = fromQT (mergeQT (getQT eLoop) (getQT accepting))
+getE (eLoop,Nothing,_) = eLoop
+
+-- 2009: See coment for addTest.  Here is a case where the third component might be a (Just qnfa) and it
+-- is being lost even though the added test might be redundant.
 addTestAC :: TestInfo -> ActCont -> ActCont
 addTestAC ti (e,mE,_) = (addTest ti e
                         ,fmap (addTest ti) mE
                         ,Nothing)
+
+-- These are AC versions of the add functions on E
 
 addTagAC :: Maybe Tag -> ActCont -> ActCont
 addTagAC Nothing ac = ac
@@ -373,66 +440,43 @@ addGroupResetsAC tags (e,mE,mQNFA) = (addGroupResets tags e
                                      ,fmap (addGroupResets tags) mE
                                      ,fmap (addGroupResets tags) mQNFA)
 
+addGroupSetsAC :: [Tag] -> ActCont -> ActCont
+addGroupSetsAC [] ac = ac
+addGroupSetsAC tags (e,mE,mQNFA) = (addGroupSets tags e
+                                   ,fmap (addGroupSets tags) mE
+                                   ,fmap (addGroupSets tags) mQNFA)
+
 addWinTagsAC :: WinTags -> ActCont -> ActCont
 addWinTagsAC wtags (e,mE,mQNFA) = (addWinTags wtags e
                                   ,fmap (addWinTags wtags) mE
                                   ,fmap (addWinTags wtags) mQNFA)
-
-getE :: ActCont -> E
-getE (_,_,Just (tags,qnfa)) = (tags, Left qnfa)  -- consume optimized mQNFA value returned by Star
-getE (eLoop,Just accepting,_) = mergeE eLoop accepting
-getE (eLoop,Nothing,_) = eLoop
-
-mergeE :: E -> E -> E
-mergeE e1 e2 = fromQT (mergeQT (getQT e1) (getQT e2))
-
-prependTag :: Maybe Tag -> QT -> QT
-prependTag Nothing qt = qt
-prependTag (Just tag) qt = prependTags' [(tag,PreUpdate TagTask)] qt
-
-prependGroupResets :: [Tag] -> QT -> QT
-prependGroupResets [] qt = qt
-prependGroupResets tags qt = prependTags' [(tag,PreUpdate ResetGroupStopTask)|tag<-tags] qt
-
-prependTags' :: TagList -> QT -> QT
-prependTags' tcs' qt@(Testing {}) = qt { qt_a = prependTags' tcs' (qt_a qt)
-                                       , qt_b = prependTags' tcs' (qt_b qt) }
-prependTags' tcs' (Simple {qt_win=w,qt_trans=t,qt_other=o}) =
-  Simple { qt_win = if noWin w then w else tcs' `mappend` w
-         , qt_trans = Map.map prependQTrans t
-         , qt_other = prependQTrans o }
-  where prependQTrans = fmap (map (\(d,tcs) -> (d,tcs' `mappend` tcs)))
-
 -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
 
--- Initial preTag of 0th tag is implied
--- No other general pre-tags would be expected
+-- Initial preTag of 0th tag is implied. No other general pre-tags would be expected.
+-- The qtwin contains the preTag of the 1st tag and is only set when a match is completed.
+-- The fst Index is the index of the unique starting QNFA state.
+-- The snd (Array Index QNFA) is all the QNFA states.
+--
+-- In the cases below, Empty is handled much like a Test with no TestInfo.
 qToNFA :: CompOption -> Q -> (Index,Array Index QNFA)
 qToNFA compOpt qTop = (q_id startingQNFA
                       ,array (0,pred lastIndex) (table [])) where
+  -- Result startingQNFA is the top level's index
+  -- State pair: fst 0 is the next state number (not yet used) going in, and lastIndex coming out (succ of last used)
+  --             snd id is the difference list of states going in, and the finished list coming out
   (startingQNFA,(lastIndex,table)) =
     runState (getTrans qTop (fromQT $ qtwin) >>= getQNFA "top level") startState
   startState = (0,id)
 
-  -- This is the only place where PostUpdate is used
-  newTrans :: String -> [Tag] -> Maybe Tag -> Pattern -> E -> S E
-  newTrans s resets mPre pat (tags,cont) = do
-    i <- case cont of
-           Left qnfa -> return (q_id qnfa)     -- strictQNFA ZZZ no help
-           Right qt -> do qnfa <- newQNFA s qt -- strictQT ZZZ no help
-                          return (q_id qnfa)
-    let post = promoteTasks PostUpdate tags
-        pre = promoteTasks PreUpdate ([(tag,ResetGroupStopTask) | tag<-resets] ++ maybe [] (\tag -> [(tag,TagTask)]) mPre)
-    return . fromQT $ acceptTrans pre pat post i -- fromQT $ strictQT no help
-
   getTrans,getTransTagless :: Q -> E -> S E
-  getTrans qIn@(Q {preReset=resets,preTag=pre,postTag=post,unQ=pIn}) e = debug (">< getTrans "++show qIn++" <>") $
---    liftM strictE $ -- ZZZ causes stack overflow in test (1,36)
+  getTrans qIn@(Q {preReset=resets,postSet=sets,preTag=pre,postTag=post,unQ=pIn}) e = debug (">< getTrans "++show qIn++" <>") $
     case pIn of
-      OneChar pat -> newTrans "getTrans/OneChar" resets pre pat . addTag post $ e
-      Empty -> return . addGroupResets resets . addTag pre . addTag post $ e
-      Test ti -> return . addGroupResets resets . addTag pre . addTest ti . addTag post $ e
-      _ -> return . addGroupResets resets . addTag pre =<< getTransTagless qIn (addTag post $ e)
+      -- The case below is the ultimate consumer of every single OneChar in the input and the only caller of
+      -- newTrans/acceptTrans which is the sole source of QT/Simple nodes.
+      OneChar pat -> newTrans "getTrans/OneChar" resets pre pat . addTag post . addGroupSets sets $ e
+      Empty -> return . addGroupResets resets . addTag pre . addTag post . addGroupSets sets $ e
+      Test ti -> return . addGroupResets resets . addTag pre . addTest ti . addTag post . addGroupSets sets $ e
+      _ -> return . addGroupResets resets . addTag pre =<< getTransTagless qIn (addTag post . addGroupSets sets $ e)
 
   getTransTagless qIn e = debug (">< getTransTagless "++show qIn++" <>") $
     case unQ qIn of
@@ -441,13 +485,15 @@ qToNFA compOpt qTop = (q_id startingQNFA
       Or [q] -> getTrans q e
       Or qs -> do
         eqts <- if usesQNFA qIn
-                  then do eQNFA <- asQNFA "getTransTagless/Or/usesQNFA" e
-                          sequence [ getTrans q eQNFA | q <- qs ]
+                  then do
+                    eQNFA <- asQNFA "getTransTagless/Or/usesQNFA" e
+                    sequence [ getTrans q eQNFA | q <- qs ]
                   else sequence [ getTrans q e | q <- qs ]
         let qts = map getQT eqts
         return (fromQT (foldr1 mergeAltQT qts))
 
       Star mOrbit resetTheseOrbits mayFirstBeNull q ->
+        -- mOrbit of Just implies varies q and childGroups q
         let (e',clear) = -- debug ("\n>"++show e++"\n"++show q++"\n<") $
               if notNullable q then (e,True)  -- subpattern cannot be null
                 else if null resetTheseOrbits && isNothing mOrbit
@@ -455,14 +501,14 @@ qToNFA compOpt qTop = (q_id startingQNFA
                               Just [] -> (e,True)    -- True because null of subpattern is same as skipping subpattern
                               Just tagList -> (addWinTags tagList e,False) -- null of subpattern NOT same as skipping
                               _ -> (fromQT . preferNullViews (nullQ q) . getQT $ e,False)  -- is NOT same as skipping
-                       else (fromQT . resetOrbitsQT resetTheseOrbits . enterOrbitQT mOrbit
+                       else (fromQT . resetOrbitsQT resetTheseOrbits . enterOrbitQT mOrbit -- resetOrbitsQT and enterOrbitQT commute
                              . preferNullViews (nullQ q) . getQT . leaveOrbit mOrbit $ e,False)  -- perform resets when accepting 0 characters
         in if cannotAccept q then return e' else mdo
         mqt <- inStar q this
         (this,ans) <- case mqt of
                         Nothing -> err ("Weird pattern in getTransTagless/Star: " ++ show (qTop,qIn))
                         Just qt -> do
-                          let qt' = resetOrbitsQT resetTheseOrbits . enterOrbitQT mOrbit $ qt
+                          let qt' = resetOrbitsQT resetTheseOrbits . enterOrbitQT mOrbit $ qt -- resetOrbitsQT and enterOrbitQT commute
                               thisQT = mergeQT qt' . getQT . leaveOrbit mOrbit $ e -- capture of subpattern or leave via next pattern (avoid null of subpattern on way out)
                               ansE = fromQT . mergeQT qt' . getQT $ e' -- capture of subpattern or leave via null of subpattern
                           thisE <- if usesQNFA q
@@ -472,6 +518,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
         return (if mayFirstBeNull then (if clear then this  -- optimization to possibly preserve QNFA
                                                  else ans)
                   else this)
+
       {- NonEmpty is like actNullable (Or [Empty,q]) without the extra tag to prefer the first Empty branch -}
       NonEmpty q -> ecart ("\n> getTransTagless/NonEmpty"++show qIn)  $ do
         -- Assertion to check than Pattern.starTrans did its job right:
@@ -488,12 +535,12 @@ qToNFA compOpt qTop = (q_id startingQNFA
       _ -> err ("This case in Text.Regex.TNFA.TNFA.getTransTagless cannot happen" ++ show (qTop,qIn))
 
   inStar,inStarNullableTagless :: Q -> E -> S (Maybe QT)
-  inStar qIn@(Q {preReset=resets,preTag=pre,postTag=post}) eLoop | notNullable qIn =
+  inStar qIn@(Q {preReset=resets,postSet=sets,preTag=pre,postTag=post}) eLoop | notNullable qIn =
     debug (">< inStar/1 "++show qIn++" <>") $
     return . Just . getQT =<< getTrans qIn eLoop
-                                                 | otherwise =
+                                                                 | otherwise =
     debug (">< inStar/2 "++show qIn++" <>") $
-    return . fmap (prependGroupResets resets . prependTag pre) =<< inStarNullableTagless qIn (addTag post $ eLoop)
+    return . fmap (prependGroupResets resets . prependPreTag pre) =<< inStarNullableTagless qIn (addTag post . addGroupSets sets $ eLoop)
     
   inStarNullableTagless qIn eLoop = debug (">< inStarNullableTagless "++show qIn++" <>") $ do
     case unQ qIn of
@@ -508,8 +555,13 @@ qToNFA compOpt qTop = (q_id startingQNFA
         let qts = catMaybes mqts
             mqt = if null qts then Nothing else Just (foldr1 mergeAltQT qts)
         return mqt
+      -- Calls to act are inlined by hand to actNullable.  This returns only cases where q1 or q2 or both
+      -- accepted characters.  The zero-character case is handled by the tag wrapping by inStar.
+      -- 2009: Does this look dodgy and repetitios of tags?  Seq by policy has no preTag or postTag.
+      -- though it can have prependGroupResets, but those are not repeated in children so it is okay.
       Seq q1 q2 -> do (_,meAcceptingOut,_) <- actNullable q1 =<< actNullable q2 (eLoop,Nothing,Nothing)
                       return (fmap getQT meAcceptingOut)
+      -- Calls to act are inlined by hand and are we losing the tags?
       Star {} -> do (_,meAcceptingOut,_) <- actNullableTagless qIn (eLoop,Nothing,Nothing)
                     return (fmap getQT meAcceptingOut)
       NonEmpty {} -> ecart ("\n> inStarNullableTagless/NonEmpty"++show qIn) $
@@ -567,13 +619,13 @@ qToNFA compOpt qTop = (q_id startingQNFA
     return mqt  -- or "return (fromQT qtlose,mqt,Nothing)"
 
   actNullable,actNullableTagless :: Q -> ActCont -> S ActCont
-  actNullable qIn@(Q {preReset=resets,preTag=pre,postTag=post,unQ=pIn}) ac =
+  actNullable qIn@(Q {preReset=resets,postSet=sets,preTag=pre,postTag=post,unQ=pIn}) ac =
     debug (">< actNullable "++show qIn++" <>") $ do
     case pIn of
-      Empty -> return . addGroupResetsAC resets . addTagAC pre . addTagAC post $ ac
-      Test ti -> return . addGroupResetsAC resets . addTagAC pre . addTestAC ti . addTagAC post $ ac
+      Empty -> return . addGroupResetsAC resets . addTagAC pre . addTagAC post . addGroupSetsAC sets $ ac
+      Test ti -> return . addGroupResetsAC resets . addTagAC pre . addTestAC ti . addTagAC post . addGroupSetsAC sets $ ac
       OneChar {} -> err ("OneChar cannot have nullable True ")
-      _ -> return . addGroupResetsAC resets . addTagAC pre =<< actNullableTagless qIn ( addTagAC post $ ac )
+      _ -> return . addGroupResetsAC resets . addTagAC pre =<< actNullableTagless qIn ( addTagAC post . addGroupSetsAC sets $ ac )
 
   actNullableTagless qIn ac@(eLoop,mAccepting,mQNFA) = debug (">< actNullableTagless "++show (qIn)++" <>") $ do
     case unQ qIn of
@@ -678,6 +730,25 @@ qToNFA compOpt qTop = (q_id startingQNFA
   leaveOrbit | lastStarGreedy compOpt = const id
              | otherwise = maybe id (\tag->(\(tags,cont)->((tag,LeaveOrbitTask):tags,cont)))
 
+  -- 'newTrans' is the only place where PostUpdate is used and is only called from getTrans/OneChar
+  --  and is the only caller of 'acceptTrans' to make QT/Simple nodes.
+  newTrans :: String    -- debugging string for when a newQNFA is allocated
+           -> [Tag]     -- which tags get ResetGroupStopTask in this transition (PreUpdate)
+           -> Maybe Tag -- maybe one TagTask to update before incrementing the offset (PreUpdate)
+           -> Pattern   -- the one character accepting Pattern of this transition
+           -> E         -- the continuation state, reified to a QNFA, of after this Pattern
+                       -- The fst part of the E is consumed here as a TagTask (PostUpdate)
+           -> S E       -- the continuation state, as a QT, of before this Pattern
+  newTrans s resets mPre pat (tags,cont) = do
+    i <- case cont of
+           Left qnfa -> return (q_id qnfa)     -- strictQNFA ZZZ no help
+           Right qt -> do qnfa <- newQNFA s qt -- strictQT ZZZ no help
+                          return (q_id qnfa)
+    let post = promoteTasks PostUpdate tags
+        pre  = promoteTasks PreUpdate ([(tag,ResetGroupStopTask) | tag<-resets] ++ maybe [] (\tag -> [(tag,TagTask)]) mPre)
+    return . fromQT $ acceptTrans pre pat post i -- fromQT $ strictQT no help
+
+  -- 'acceptTrans' is the sole creator of QT/Simple and is only called by getTrans/OneChar/newTrans
   acceptTrans :: TagList -> Pattern -> TagList -> Index -> QT
   acceptTrans pre pIn post i =
     let target = IMap.singleton i [(getDoPa pIn,pre++post)]
@@ -713,3 +784,15 @@ qToNFA compOpt qTop = (q_id startingQNFA
       dotTrans | multiline compOpt = Map.singleton '\n' mempty
                | otherwise = mempty
 
+{-
+
+prepend architecture becomes
+prependTags :: TagTask -> [Tag] -> QT -> QT
+which always uses PreUpdate and the same task for all the tags
+
+qt_win seems to only allow PreUpdate so why keep the same type?
+
+
+ADD ORPHAN ID check and make this a fatal error while testing
+
+-}

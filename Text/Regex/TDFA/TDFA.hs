@@ -2,31 +2,33 @@
 -- A DFA state corresponds to a Set of QNFA states, repesented as list
 -- of Index which are used to lookup the DFA state in a lazy Trie
 -- which holds all possible subsets of QNFA states.
-module Text.Regex.TDFA.TDFA(patternToDFA,DFA(..),DT(..)
-                           ,examineDFA,isDFAFrontAnchored
-                           ,nfaToDFA,dfaMap) where
+module Text.Regex.TDFA.TDFA(patternToRegex,DFA(..),DT(..)
+                            ,examineDFA,isDFAFrontAnchored
+                            ,nfaToDFA,dfaMap) where
 
 --import Control.Arrow((***))
 import Control.Monad.Instances()
 import Control.Monad.RWS
-import Data.Array.IArray(Array,(!),bounds)
+import Control.Monad.State(State,MonadState(..),execState)
+import Data.Array.IArray(Array,(!),bounds,{-assocs-})
 import Data.IntMap(IntMap)
-import qualified Data.IntSet as ISet(empty,singleton,null)
+import qualified Data.IntMap as IMap
+import Data.IntMap.CharMap2(CharMap(..))
+import qualified Data.IntMap.CharMap2 as Map(empty)
+--import Data.IntSet(IntSet)
+import qualified Data.IntSet as ISet
 import Data.List(foldl')
-import Data.IntMap.CharMap(CharMap(..))
-import qualified Data.IntMap.CharMap as Map(empty)
-import qualified Data.IntMap as IMap(empty,null,singleton,keys,union
-                                    ,unionWith,elems,toList,toAscList,fromDistinctAscList)
 import qualified Data.Map (Map,empty,member,insert,elems)
 import Data.Maybe(isJust)
+import Data.Sequence as S((|>),{-viewl,ViewL(..)-})
 
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.IntArrTrieSet(TrieSet)
 import qualified Text.Regex.TDFA.IntArrTrieSet as Trie(lookupAsc,fromSinglesMerge)
 import Text.Regex.TDFA.Pattern(Pattern)
-import Text.Regex.TDFA.RunMutState(compareWith,toInstructions)
+--import Text.Regex.TDFA.RunMutState(toInstructions)
 import Text.Regex.TDFA.TNFA(patternToNFA)
--- import Debug.Trace
+--import Debug.Trace
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
@@ -51,15 +53,38 @@ ungroupBy f g = map helper where
 makeDFA :: SetIndex -> DT -> DFA
 makeDFA i dt = DFA i dt
 
--- Note that no CompOption parameter is needed.
+-- Note that no CompOption or ExecOption parameter is needed.
 nfaToDFA :: ((Index,Array Index QNFA),Array Tag OP,Array GroupIndex [GroupInfo])
-         -> (DFA,Index,Array Tag OP,Array GroupIndex [GroupInfo])
-nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupInfo) where
+         -> (CompOption -> ExecOption -> Regex)
+nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = Regex dfa startIndex indexBounds tagBounds trie aTagOp aGroupInfo where
   dfa = indexesToDFA [startIndex]
+  indexBounds = bounds aQNFA
+  tagBounds = bounds aTagOp
 
   indexesToDFA = {-# SCC "nfaToDFA.indexesToDFA" #-} Trie.lookupAsc trie  -- Lookup in cache
-    where trie :: TrieSet DFA
-          trie = Trie.fromSinglesMerge dlose mergeDFA (bounds aQNFA) indexToDFA
+
+  trie :: TrieSet DFA
+  trie = Trie.fromSinglesMerge dlose mergeDFA (bounds aQNFA) indexToDFA
+
+  newTransition :: DTrans -> Transition
+  newTransition dtrans = Transition { trans_many = indexesToDFA (IMap.keys dtransWithSpawn)
+                                    , trans_single = indexesToDFA (IMap.keys dtrans)
+                                    , trans_how = dtransWithSpawn }
+    where dtransWithSpawn = addSpawn dtrans
+
+  makeTransition :: DTrans -> Transition
+  makeTransition dtrans | hasSpawn  = Transition { trans_many = indexesToDFA (IMap.keys dtrans)
+                                                 , trans_single = indexesToDFA (IMap.keys (IMap.delete startIndex dtrans))
+                                                 , trans_how = dtrans }
+                        | otherwise = Transition { trans_many = indexesToDFA (IMap.keys dtrans)
+                                                 , trans_single = indexesToDFA (IMap.keys dtrans)
+                                                 , trans_how = dtrans }
+    where hasSpawn = maybe False IMap.null (IMap.lookup startIndex dtrans)
+
+  -- coming from (-1) means spawn a new starting item
+  addSpawn :: DTrans -> DTrans
+  addSpawn dtrans | IMap.member startIndex dtrans = dtrans
+                  | otherwise = IMap.insert startIndex mempty dtrans
 
   indexToDFA :: Index -> DFA  -- used to seed the Trie from the NFA
   indexToDFA i = {-# SCC "nfaToDFA.indexToDFA" #-} makeDFA (ISet.singleton source) (qtToDT qtIn)
@@ -74,24 +99,24 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
       qtToDT (Simple {qt_win=w, qt_trans=t, qt_other=o}) =
         Simple' { dt_win = makeWinner
                 , dt_trans = fmap qtransToDFA t
-                , dt_other = if IMap.null o then Nothing else Just (qtransToDFA o)}
+--                , dt_other = if IMap.null o then Just (newTransition $ IMap.singleton startIndex mempty) else Just (qtransToDFA o)}
+                , dt_other = Just (qtransToDFA o)}
         where
           makeWinner :: IntMap {- Index -} Instructions --  (RunState ())
           makeWinner | noWin w = IMap.empty
                      | otherwise = IMap.singleton source (cleanWin w)
 
-          qtransToDFA :: QTrans -> (DFA,DTrans)
+          qtransToDFA :: QTrans -> Transition
           qtransToDFA qtrans = {-# SCC "nfaToDFA.indexToDFA.qtransToDFA" #-}
-                               (indexesToDFA destinations,dtrans)
+                               newTransition dtrans
             where
               dtrans :: DTrans
-              dtrans = IMap.fromDistinctAscList . mapSnd (IMap.singleton source) $ best
-              destinations :: [Index]
-              destinations = map fst best
-              best :: [(Index,(DoPa,Instructions))]
+              dtrans =IMap.fromDistinctAscList . mapSnd (IMap.singleton source) $ best
+              best :: [(Index {- Destination -} ,(DoPa,Instructions))]
               best = pickQTrans aTagOp $ qtrans
 
-  -- The DFA states are built up by merging the singleton ones converted from the NFA
+  -- The DFA states are built up by merging the singleton ones converted from the NFA.
+  -- Thus the "source" indices in the DTrans should not collide.
   mergeDFA :: DFA -> DFA -> DFA
   mergeDFA d1 d2 = {-# SCC "nfaToDFA.mergeDFA" #-} makeDFA i dt
     where
@@ -106,11 +131,11 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
                 (Just o1', Just o2') -> Just (mergeDTrans o1' o2')
                 _                    -> o1 `mplus` o2
           -- This is very much like mergeQTrans
-          mergeDTrans :: (DFA,DTrans) -> (DFA,DTrans) -> (DFA,DTrans)
-          mergeDTrans (_,dt1) (_,dt2) = (indexesToDFA (IMap.keys dtrans),dtrans)
+          mergeDTrans :: Transition -> Transition -> Transition
+          mergeDTrans (Transition {trans_how=dt1}) (Transition {trans_how=dt2}) = makeTransition dtrans
             where dtrans = IMap.unionWith IMap.union dt1 dt2
           -- This is very much like fuseQTrans
-          fuseDTrans :: CharMap (DFA,DTrans)
+          fuseDTrans :: CharMap Transition
           fuseDTrans = CharMap (IMap.fromDistinctAscList (fuse l1 l2))
             where
               l1 = IMap.toAscList (unCharMap t1)
@@ -139,8 +164,8 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = (dfa,startIndex,aTagOp,aGroupI
       nestDT dt1@(Testing' {dt_a=a,dt_b=b}) dt2 = dt1 { dt_a = mergeDT a dt2, dt_b = mergeDT b dt2 }
       nestDT _ _ = err "nestDT called on Simple -- cannot happen"
 
-patternToDFA :: CompOption -> (Pattern,(GroupIndex, DoPa)) -> (DFA,Index,Array Tag OP,Array GroupIndex [GroupInfo])
-patternToDFA compOpt pattern = nfaToDFA (patternToNFA compOpt pattern)
+patternToRegex :: (Pattern,(GroupIndex, DoPa)) -> CompOption -> ExecOption -> Regex
+patternToRegex pattern compOpt execOpt = nfaToDFA (patternToNFA compOpt pattern) compOpt execOpt
 
 dfaMap :: DFA -> Data.Map.Map SetIndex DFA
 dfaMap = seen (Data.Map.empty) where
@@ -150,12 +175,14 @@ dfaMap = seen (Data.Map.empty) where
       else let new = Data.Map.insert i d old
            in foldl' seen new (flattenDT dt)
 
+-- Get all trans_many states
 flattenDT :: DT -> [DFA]
-flattenDT (Simple' {dt_trans=(CharMap mt),dt_other=mo}) = map fst . maybe id (:) mo . IMap.elems $ mt
+flattenDT (Simple' {dt_trans=(CharMap mt),dt_other=mo}) = concatMap (\d -> [trans_many d,trans_single d]) . maybe id (:) mo . IMap.elems $ mt
 flattenDT (Testing' {dt_a=a,dt_b=b}) = flattenDT a ++ flattenDT b
 
-examineDFA :: (DFA,Index,Array Tag OP,Array GroupIndex [GroupInfo]) -> String
-examineDFA (dfa,_,_,_) = unlines $ map show $ Data.Map.elems $ dfaMap dfa
+examineDFA :: Regex -> String
+examineDFA (Regex {regex_dfa=dfa}) = unlines . (:) ("Number of reachable DFA states: "++show (length dfas)) . map show $ dfas
+  where dfas = Data.Map.elems $ dfaMap dfa
 
 {-
 
@@ -202,40 +229,95 @@ cleanWin = toInstructions
 bestTrans :: Array Tag OP -> [TagCommand] -> (DoPa,Instructions)
 bestTrans _ [] = err "bestTrans : There were no transition choose from!"
 bestTrans aTagOP (f:fs) | null fs = canonical f
-                        | otherwise = foldl' pick (canonical f) fs where
+                        | otherwise = answer -- if null toDisplay then answer else trace toDisplay answer
+ where
+  answer = foldl' pick (canonical f) fs
+  {- toDisplay | null fs = ""
+               | otherwise = unlines $ "bestTrans" : show (answer) : "from among" : concatMap (\x -> [show x, show (toInstructions (snd x))]) (f:fs) -}
   canonical :: TagCommand -> (DoPa,Instructions)
   canonical (dopa,spec) = (dopa, toInstructions spec)
   pick :: (DoPa,Instructions) -> TagCommand -> (DoPa,Instructions)
-  pick win@(dopa1,Instructions {newPos = winPos}) (dopa2,spec) =
-    let next@(Instructions {newPos = nextPos}) = toInstructions spec
-    in case compareWith choose winPos nextPos of
+  pick win@(dopa1,winI) (dopa2,spec) =
+    let nextI = toInstructions spec
+--    in case compareWith choose winPos nextPos of -- XXX 2009: add in enterOrbit information
+    in case compareWith choose (toListing winI) (toListing nextI) of
          GT -> win
-         LT -> (dopa2,next)
-         EQ -> if dopa1 >= dopa2 then win else (dopa2,next) -- no deep reason not to just pick win
+         LT -> (dopa2,nextI)
+         EQ -> if dopa1 >= dopa2 then win else (dopa2,nextI) -- no deep reason not to just pick win
+
+  toListing :: Instructions -> [(Tag,Action)]
+  toListing (Instructions {newPos = nextPos}) = filter notReset nextPos
+    where notReset (_,SetVal (-1)) = False
+          notReset _ = True
+{-
+  toListing (Instructions {newPos = nextPos}) = mergeTagOrbit nextPos (filter snd nextFlags)
+
+  mergeTagOrbit xx [] = xx
+  mergeTagOrbit [] yy = yy
+  mergeTagOrbit xx@(x:xs) yy@(y:ys) = 
+    case compare (fst x) (fst y) of
+      GT -> y : mergeTagOrbit xx ys
+      LT -> x : mergeTagOrbit xs yy
+      EQ -> x : mergeTagOrbit xs ys -- keep tag setting over orbit setting.
+-}
+
+  {-# INLINE choose #-}
+  choose :: Maybe (Tag,Action) -> Maybe (Tag,Action) -> Ordering
   choose Nothing Nothing = EQ
   choose Nothing x = flipOrder (choose x Nothing)
-  choose (Just (tag,post)) Nothing =
+  choose (Just (tag,_post)) Nothing =
     case aTagOP!tag of
       Maximize -> GT
-      Minimize -> LT
-      Orbit -> err $ "bestTrans.choose : Very Unexpeted Orbit in Just Nothing: "++show (tag,post,aTagOP,f:fs)
+      Minimize -> LT -- needed to choose best path inside nested * operators,
+                    -- this needs a leading Minimize tag inside at least the parent * operator
+      Ignore -> GT -- XXX this is a guess in analogy with Maximize for the end bit of a group
+      Orbit -> LT -- trace ("choose LT! Just "++show tag++" < Nothing") LT -- 2009 XXX : comment out next line and use the Orbit instead
+--      Orbit -> err $ "bestTrans.choose : Very Unexpeted Orbit in Just Nothing: "++show (tag,post,aTagOP,f:fs)
   choose (Just (tag,post1)) (Just (_,post2)) =
     case aTagOP!tag of
-      Maximize -> compare post1 post2
-      Minimize -> (flip compare) post1 post2
-      Orbit -> err $ "bestTrans.choose : Very Unexpeted Orbit in Just Just: "++show (tag,(post1,post2),aTagOP,f:fs)
+      Maximize -> order
+      Minimize -> flipOrder order
+      Ignore -> EQ
+      Orbit -> EQ
+--      Orbit -> err $ "bestTrans.choose : Very Unexpeted Orbit in Just Just: "++show (tag,(post1,post2),aTagOP,f:fs)
+   where order = case (post1,post2) of
+                   (SetPre,SetPre) -> EQ
+                   (SetPost,SetPost) -> EQ
+                   (SetPre,SetPost) -> LT
+                   (SetPost,SetPre) -> GT
+                   (SetVal v1,SetVal v2) -> compare v1 v2
+                   _ -> err $ "bestTrans.compareWith.choose sees incomparable "++show (tag,post1,post2)
 
 
+  {-# INLINE compareWith #-}
+  compareWith :: (Ord x,Monoid a) => (Maybe (x,b) -> Maybe (x,c) -> a) -> [(x,b)] -> [(x,c)] -> a
+  compareWith comp = cw where
+    cw [] [] = comp Nothing Nothing
+    cw xx@(x:xs) yy@(y:ys) =
+      case compare (fst x) (fst y) of
+        GT -> comp Nothing  (Just y) `mappend` cw xx ys
+        EQ -> comp (Just x) (Just y) `mappend` cw xs ys
+        LT -> comp (Just x) Nothing  `mappend` cw xs yy
+    cw xx [] = foldr (\x rest -> comp (Just x) Nothing  `mappend` rest) mempty xx
+    cw [] yy = foldr (\y rest -> comp Nothing  (Just y) `mappend` rest) mempty yy
+
+-- can DT never win or accept a character?
 isDTLosing :: DT -> Bool
 isDTLosing (Testing' {dt_a=a,dt_b=b}) = isDTLosing a && isDTLosing b
-isDTLosing (Simple' {dt_win=w})
-    | not (IMap.null w) = False
-isDTLosing (Simple' {dt_other=Just (dfa,_)})
-    | not (ISet.null (d_id dfa)) = False
-isDTLosing (Simple' {dt_trans=CharMap t}) =
-  let destinations = map (d_id . fst) . IMap.elems $ t
-  in all ISet.null destinations -- True for empty list of destinations
+isDTLosing (Simple' {dt_win=w}) | not (IMap.null w) = False -- can win
+isDTLosing (Simple' {dt_trans=CharMap mt,dt_other=mo}) =
+  let ts = (maybe id (:) mo) (IMap.elems mt)
+  in all transLoses ts
 
+transLoses :: Transition -> Bool
+transLoses t@(Transition {trans_single=dfa}) = isSpawning t || ISet.null (d_id dfa)
+isSpawning :: Transition -> Bool
+isSpawning t = case IMap.elems (trans_how t) of
+                 [m] -> case IMap.keys m of
+                         [] -> True
+                         _ -> False
+                 _ -> False
+                   
 -- Assumes that Test_BOL is the smallest (and therefore always first) test
 isDTFrontAnchored :: DT -> Bool
 isDTFrontAnchored (Testing' {dt_test=wt,dt_b=b}) | wt == Test_BOL = isDTLosing b
@@ -243,3 +325,115 @@ isDTFrontAnchored _ = False
 
 isDFAFrontAnchored :: DFA -> Bool
 isDFAFrontAnchored = isDTFrontAnchored . d_dt
+
+{- toInstructions -}
+
+toInstructions :: TagList -> Instructions
+toInstructions spec =
+  let (p,o) = execState (assemble spec) (mempty,mempty)
+  in Instructions { newPos = IMap.toList p
+                  , newOrbits = if IMap.null o then Nothing
+                                  else Just $ alterOrbits (IMap.toList o)
+                  }
+
+type CompileInstructions a = State
+  ( IntMap Action -- 2009: change to SetPre | SetPost enum
+  , IntMap AlterOrbit
+  ) a
+
+data AlterOrbit = AlterReset                        -- removing the Orbits record from the OrbitLog
+                | AlterLeave                        -- set inOrbit to False
+                | AlterModify { newInOrbit :: Bool   -- set inOrbit to the newInOrbit value
+                              , freshOrbit :: Bool}  -- freshOrbit of True means to set getOrbits to mempty
+                  deriving (Show)                   -- freshOrbit of False means try appending position or else Seq.empty
+
+assemble :: TagList -> CompileInstructions ()
+assemble = mapM_ oneInstruction where
+  oneInstruction (tag,command) =
+    case command of
+      PreUpdate TagTask -> setPreTag tag
+      PreUpdate ResetGroupStopTask -> resetGroupTag tag
+      PreUpdate SetGroupStopTask -> setGroupTag tag
+      PreUpdate ResetOrbitTask -> resetOrbit tag
+      PreUpdate EnterOrbitTask -> enterOrbit tag
+      PreUpdate LeaveOrbitTask -> leaveOrbit tag
+      PostUpdate TagTask -> setPostTag tag
+      PostUpdate ResetGroupStopTask -> resetGroupTag tag
+      PostUpdate SetGroupStopTask -> setGroupTag tag
+      _ -> err ("assemble : Weird orbit command: "++show (tag,command))
+
+setPreTag :: Tag -> CompileInstructions ()
+setPreTag = modifyPos SetPre
+
+setPostTag :: Tag -> CompileInstructions ()
+setPostTag = modifyPos SetPost
+
+resetGroupTag :: Tag -> CompileInstructions ()
+resetGroupTag = modifyPos (SetVal (-1))
+
+setGroupTag :: Tag -> CompileInstructions ()
+setGroupTag = modifyPos (SetVal 0)
+
+resetOrbit :: Tag -> CompileInstructions ()
+resetOrbit tag = modifyPos (SetVal (-1)) tag >> modifyOrbit (IMap.insert tag AlterReset)
+
+enterOrbit :: Tag -> CompileInstructions ()
+enterOrbit tag = modifyPos (SetVal 0) tag >> modifyOrbit changeOrbit where
+  changeOrbit = IMap.insertWith overwriteOrbit tag appendNewOrbit
+
+  appendNewOrbit = AlterModify {newInOrbit = True, freshOrbit = False} -- try to append
+  startNewOrbit  = AlterModify {newInOrbit = True, freshOrbit = True}  -- will start a new series
+
+  overwriteOrbit _ AlterReset = startNewOrbit
+  overwriteOrbit _ AlterLeave = startNewOrbit
+  overwriteOrbit _ (AlterModify {newInOrbit = False}) = startNewOrbit
+  overwriteOrbit _ (AlterModify {newInOrbit = True}) =
+    err $ "enterOrbit: Cannot enterOrbit twice in a row: " ++ show tag
+
+leaveOrbit :: Tag -> CompileInstructions ()
+leaveOrbit tag = modifyOrbit escapeOrbit where
+  escapeOrbit = IMap.insertWith setInOrbitFalse tag AlterLeave where
+    setInOrbitFalse _ x@(AlterModify {}) = x {newInOrbit = False}
+    setInOrbitFalse _ x = x
+
+modifyPos :: Action -> Tag -> CompileInstructions ()
+modifyPos todo tag = do
+  (a,c) <- get
+  let a' = IMap.insert tag todo a
+  seq a' $ put (a',c)
+
+modifyOrbit :: (IntMap AlterOrbit -> IntMap AlterOrbit) -> CompileInstructions ()
+modifyOrbit f = do
+  (a,c) <- get
+  let c' = f c
+  seq c' $ put (a,c')
+
+----
+
+alterOrbits :: [(Tag,AlterOrbit)] -> (Position -> OrbitTransformer)
+alterOrbits x = let items = map alterOrbit x
+                in (\ pos m -> foldl (flip ($)) m (map ($ pos) items))
+
+alterOrbit :: (Tag,AlterOrbit) -> (Position -> OrbitTransformer)
+
+alterOrbit (tag,AlterModify {newInOrbit = inOrbit',freshOrbit = True}) =
+  (\ pos m -> IMap.insert tag (Orbits { inOrbit = inOrbit'
+                                     , basePos = pos
+                                     , ordinal = Nothing
+                                     , getOrbits = mempty}) m)
+
+alterOrbit (tag,AlterModify {newInOrbit = inOrbit',freshOrbit = False}) =
+  (\ pos m -> IMap.insertWithKey (updateOrbit pos) tag (newOrbit pos) m) where
+  newOrbit pos = Orbits { inOrbit = inOrbit'
+                        , basePos = pos
+                        , ordinal = Nothing
+                        , getOrbits = mempty}
+  updateOrbit pos _tag new old | inOrbit old = old { inOrbit = inOrbit'
+                                                   , getOrbits = getOrbits old |> pos }
+                               | otherwise = new
+
+alterOrbit (tag,AlterReset) = (\ _ m -> IMap.delete tag m)
+
+alterOrbit (tag,AlterLeave) = (\ _ m -> case IMap.lookup tag m of
+                                         Nothing -> m
+                                         Just x -> IMap.insert tag (x {inOrbit=False}) m)

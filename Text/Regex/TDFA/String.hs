@@ -24,9 +24,9 @@ import Data.Array((!),elems)
 import Text.Regex.Base.Impl(polymatch,polymatchM)
 import Text.Regex.Base.RegexLike(RegexMaker(..),RegexLike(..),RegexContext(..),MatchOffset,MatchLength,MatchArray)
 import Text.Regex.TDFA.Common(common_error)
+import qualified Text.Regex.TDFA.NewDFA as N(matchAll,matchOnce,matchCount,matchTest)
 import Text.Regex.TDFA.ReadRegex(parseRegex)
-import Text.Regex.TDFA.MutRun(findMatch,findMatchAll,countMatchAll)
-import Text.Regex.TDFA.TDFA(patternToDFA)
+import Text.Regex.TDFA.TDFA(patternToRegex)
 import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
@@ -45,9 +45,7 @@ compile  :: CompOption -- ^ Flags (summed together)
 compile compOpt execOpt source =
   case parseRegex source of
     Left msg -> Left ("parseRegex for Text.Regex.TDFA.String failed:"++show msg)
-    Right pattern ->
-      let (dfa,i,tags,groups) = patternToDFA compOpt pattern
-      in Right (Regex dfa i tags groups compOpt execOpt)
+    Right pattern -> Right (patternToRegex pattern compOpt execOpt)
 
 instance RegexMaker Regex CompOption ExecOption String where
   makeRegexOpts c e source = unwrap (compile c e source)
@@ -56,7 +54,7 @@ instance RegexMaker Regex CompOption ExecOption String where
 execute :: Regex      -- ^ Compiled regular expression
         -> String     -- ^ String to match against
         -> Either String (Maybe MatchArray)
-execute r s = Right (matchOnce r s)
+execute r s = Right (N.matchOnce r s)
 
 regexec :: Regex      -- ^ Compiled regular expression
         -> String     -- ^ String to match against
@@ -71,10 +69,10 @@ regexec r s =
 
 -- Minimal defintion for now
 instance RegexLike Regex String where
-  matchOnce = findMatch
-  matchAll = findMatchAll
-  matchCount = countMatchAll
--- matchTest
+  matchOnce = N.matchOnce
+  matchAll = N.matchAll
+  matchCount = N.matchCount
+  matchTest = N.matchTest
 -- matchOnceText
 -- matchTextAll
 

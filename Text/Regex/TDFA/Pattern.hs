@@ -30,13 +30,13 @@ err = common_error "Text.Regex.TDFA.Pattern"
 -- This is consumed by the CorePattern module and the tender leaves
 -- are nibbled by the TNFA module.
 data Pattern = PEmpty
-             | PGroup  (Maybe GroupIndex) Pattern -- Nothing to indicate non-matching PGroup
-             | POr     [Pattern]
-             | PConcat [Pattern]
-             | PQuest  Pattern
-             | PPlus   Pattern
+             | PGroup  (Maybe GroupIndex) Pattern -- Nothing to indicate non-matching PGroup (Nothing never used!)
+             | POr     [Pattern]                  -- flattened by starTrans
+             | PConcat [Pattern]                  -- flattened by starTrans
+             | PQuest  Pattern                    -- eliminated by starTrans
+             | PPlus   Pattern                    -- eliminated by starTrans
              | PStar   Bool Pattern               -- True means mayFirstBeNull is True
-             | PBound  Int (Maybe Int) Pattern
+             | PBound  Int (Maybe Int) Pattern    -- eliminated by starTrans
              -- The rest of these need an index of where in the regex string it is from
              | PCarat  {getDoPa::DoPa}
              | PDollar {getDoPa::DoPa}
@@ -44,11 +44,11 @@ data Pattern = PEmpty
              | PDot    {getDoPa::DoPa}            -- Any character (newline?) at all
              | PAny    {getDoPa::DoPa,getPatternSet::PatternSet} -- Square bracketed things
              | PAnyNot {getDoPa::DoPa,getPatternSet::PatternSet} -- Inverted square bracketed things
-             | PEscape {getDoPa::DoPa,getPatternChar::Char}       -- Backslashed Character
-             | PChar   {getDoPa::DoPa,getPatternChar::Char}       -- Specific Character
+             | PEscape {getDoPa::DoPa,getPatternChar::Char}      -- Backslashed Character
+             | PChar   {getDoPa::DoPa,getPatternChar::Char}      -- Specific Character
              -- The following are semantic tags created in starTrans, not the parser
-             | PNonCapture Pattern
-             | PNonEmpty Pattern
+             | PNonCapture Pattern               -- introduced by starTrans
+             | PNonEmpty Pattern                 -- introduced by starTrans
                deriving (Eq,Show)
 
 -- | I have not been checking, but this should have the property that
@@ -80,11 +80,13 @@ showPattern pIn =
     -- The following were not directly from the parser, and will not be parsed in properly
     PNonCapture p -> showPattern p
     PNonEmpty p -> showPattern p
-  where groupRange x n (y:ys) = if (fromEnum y)-(fromEnum x) == n then groupRange x (succ n) ys
+  where {-
+        groupRange x n (y:ys) = if (fromEnum y)-(fromEnum x) == n then groupRange x (succ n) ys
                                 else (if n <=3 then take n [x..]
                                       else x:'-':(toEnum (pred n+fromEnum x)):[]) ++ groupRange y 1 ys
         groupRange x n [] = if n <=3 then take n [x..]
                             else x:'-':(toEnum (pred n+fromEnum x)):[]
+-}
         paren s = ('(':s)++")"
        
 data PatternSet = PatternSet (Maybe (Set Char))
@@ -129,10 +131,11 @@ instance Show PatternSetEquivalenceClass where
 -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
 
 -- | Do the transformation and simplification in a single traversal.
--- This removes the PPlus PQuest and PBound values for POr and PEmpty
--- and PStar True/False.  For some PBound values it creates PNonEmpty
--- and PNonCapture.  It also simplifies to flatten out nested POr and
--- PConcat instances and elimiate some uneeded PEmpty values.
+-- This removes the PPlus, PQuest, and PBound values, changing to POr
+-- and PEmpty and PStar True/False.  For some PBound values it adds
+-- PNonEmpty and PNonCapture semantic marker.  It also simplifies to
+-- flatten out nested POr and PConcat instances and eliminate some
+-- uneeded PEmpty values.
 starTrans :: Pattern -> Pattern
 starTrans = dfsPattern (simplify' . starTrans')
 
@@ -166,7 +169,8 @@ starTrans' pIn =
 {- The PStar should not capture 0 characters on its first iteration,
    so set its mayFirstBeNull flag to False
  -}
-    PPlus  p -> PConcat [p,simplify' $ PStar False p]
+    PPlus p | canOnlyMatchNull p -> p
+            | otherwise -> asGroup $ PConcat [p,PStar False p]
 
 {- "An ERE matching a single character repeated by an '*' , '?' , or
    an interval expression shall not match a null expression unless
@@ -174,22 +178,12 @@ starTrans' pIn =
    satisfy the exact or minimum number of occurrences for the interval
    expression."
  -}
--- Easy cases
-    PBound i _        _ | i<0 -> PEmpty  -- malformed
-    PBound i (Just j) _ | i>j -> PEmpty  -- malformed
-    PBound _ (Just 0) _ -> PEmpty
-    PBound 0 Nothing  p -> PStar True p
-    PBound 0 (Just 1) p -> POr [p,PEmpty]
-
-{- The iterations before the last required one cannot determine the
-   group capture so change the PGroups to False or wrap in PNonCapture.
--}
-    PBound i Nothing  p -> asGroup . PConcat $ apply (p':) (pred i) [p,simplify' $ PStar False p]
-      where p' = nonCapture' p -- XXX cleanup
-
-{- p{0,2} is (pp?)? is p?p? and p{0,3} is (p(pp?)?)? is p?p?p?
-   p{1,2} is pp{0,1} is pp?
-   p{2,5} is ppp{0,3} is pp(p(pp?)?)? is ppp?p?p?
+{- p? is p|PEmpty which prefers even a 0-character match for p
+   p{0,1} is p? is POr [p,PEmpty]
+   p{0,2} is (pp?)? NOT p?p?
+   p{0,3} is (p(pp?)?)?
+   p{1,2} is like pp{0,1} is like pp? but see below
+   p{2,5} is ppp{0,3} is pp(p(pp?)?)?
 
    But this is not always right.  Because if the second use of p in
    p?p? matches 0 characters then the perhaps non 0 character match of
@@ -202,9 +196,13 @@ starTrans' pIn =
    simplicity, only use ! when p can match 0 characters but not only 0
    characters.
 
-   Call this (PNonEmpty p) in the Pattern type.  Note that if p cannot
-   match 0 characters then p! is equivalent to p?
-   The p{0,1} is still always p?
+   Call this (PNonEmpty p) in the Pattern type. 
+   p! is PNonEmpty p is POr [PEmpty,p]
+   IS THIS TRUE?  Use QuickCheck?
+
+   Note that if p cannot match 0 characters then p! is p? and vice versa
+
+   The p{0,1} is still always p? and POr [p,PEmpty]
    Now p{0,2} means p?p! or (pp!)? and p{0,3} means (p(pp!)!)? or p?p!p!
    Equivalently p?p! and p?p!p!
    And p{2,2} is p'p and p{3,3} is p'p'p and p{4} is p'p'p'p
@@ -223,71 +221,79 @@ starTrans' pIn =
    if p can match 0 or non-zero characters then cases are
    p{0,0} is (), p{0,1} is (p)?, p{0,2} is (pp!)?, p{0,3} is (pp!p!)?
    p{1,1} is p, p{1,2} is pp!, p{1,3} is pp!p!, p{1,4} is pp!p!p!
-   p{2,2} is p'p, p{2,3} is p'pp!, p{2,4} is p'pp!p!, p{2,5} is p'pp!p!p!
-   p{3,3} is p'p'p, p{3,4} is p'p'pp!, p{3,5} is p'p'pp!p!
+   p{2,2} is p'p, 
+   p{2,3} is p'pp!, 
+   p{2,4} is p'pp!p! or p'p(pp!)!
+   p{2,5} is p'pp!p!p! or p'p(p(pp!)!)!
+   p{3,3} is p'p'p, p{3,4} is p'p'pp!, p{3,5} is p'p'pp!p!, p{3,6} is p'p'pp!p!p!
+
+   if p can only match 1 or more characters then cases are
+   p{0,0} is ()
+   p{0,1} is p?, p{0,2} is (pp?)?, p{0,3} is (p(pp?)?)?, p{0,4} is (pp{0,3})?
+   p{1,1} is p, p{1,j} is pp{0,pred j}
+   p{2,2} is p'p, p{2,3} is p'pp?, p{2,4} is p'p(pp?)?, p{2,5} = p'p{1,4} = p'(pp{0,3})
+   p{3,3} is p'p'p, p{3,4} is p'p'pp?, p{3,5} is p'p'p(pp?)?, p{3,6} is 
 
    And by this logic, the PStar False is really p*!  So p{0,} is p*
    and p{1,} is pp*! and p{2,} is p'pp*! and p{3,} is p'p'pp*!
 
-WTF BUG: but which is right? The last capture is "" if the (){,} is
-itself put in parenthesis.  So the simple solution is to wrap the
-expanded PBound in a (PGroup Nothing).
+   The (nonEmpty' p) below is the only way PNonEmpty is introduced
+   into the Pattern.  It is always preceded by p inside a PConcat
+   list.  The p involved never simplifies to PEmpty.  Thus it is
+   impossible to have PNonEmpty directly nested, i.e. (PNonEmpty
+   (PNonEmpty _)) never occurs even after simplifications.
 
-/Test-str "ababcd" "(a|ab|c|bcd){0,10}(d*)"
-TDFA ("","ababcd","",["bcd",""])
-/Test-str "ababcd" "(a|ab|c|bcd){1,10}(d*)"
-TDFA ("","ababcd","",["bcd",""])
-/Test-str "ababcd" "(a|ab|c|bcd){2,10}(d*)"
-TDFA ("","ababcd","",["c","d"])
-/Test-str "ababcd" "(a|ab|c|bcd){3,10}(d*)"
-TDFA ("","ababcd","",["c","d"])
-./Test-str "ababcd" "(a|ab|c|bcd){4,10}(d*)"
-TDFA ("ababcd","","",[])
-
-./Test-str "ababcd" "(a|ab|c|bcd){0,}(d*)"
-TDFA ("","ababcd","",["bcd",""])
-./Test-str "ababcd" "(a|ab|c|bcd){1,}(d*)"
-TDFA ("","ababcd","",["bcd",""])
-./Test-str "ababcd" "(a|ab|c|bcd){2,}(d*)"
-TDFA ("","ababcd","",["c","d"])
-./Test-str "ababcd" "(a|ab|c|bcd){3,}(d*)"
-TDFA ("","ababcd","",["c","d"])
-./Test-str "ababcd" "(a|ab|c|bcd){4,}(d*)"
-TDFA ("ababcd","","",[])
-
-The two parsing are, explicity in my notation:
-
-./Test-str "ababcd" "(a|ab|c|bcd)?(a|ab|c|bcd)?(a|ab|c|bcd)?(a|ab|c|bcd)?(d*)"
-TDFA ("","ababcd","",["ab","ab","c","","d"])
-
-In the next series is the issue with 
-
-./Test-str "ababcd" "((a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)(a|ab|c|bcd)?)?)?)?(d*)"
-TDFA ("","ababcd","",["ababcd","ab","abcd","a","bcd","bcd","",""])
-./Test-str "ababcd" "<(a|ab|c|bcd)<(a|ab|c|bcd)<(a|ab|c|bcd)(a|ab|c|bcd)?>?>?>?(d*)" 
-TDFA ("","ababcd","",["ab","a","bcd","",""])
-./Test-str "ababcd" "(a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)(a|ab|c|bcd)?)?)?)?(d*)" 
-TDFA ("","ababcd","",["ab","abcd","a","bcd","bcd","","","",""])
-./Test-str "ababcd" "(a|ab|c|bcd)(a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)(a|ab|c|bcd)?)?)?)?(d*)" 
-TDFA ("","ababcd","",["ab","ab","c","c","","","","","","d"])
-./Test-str "ababcd" "(a|ab|c|bcd)(a|ab|c|bcd)(a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)((a|ab|c|bcd)(a|ab|c|bcd)?)?)?)?(d*)" 
-TDFA ("","ababcd","",["ab","ab","c","","","","","","","","d"])
+   The (nonCapture' p) below is the only way PNonCapture is
+   introduced into the Pattern. It is always followed by p inside a
+   PConcat list.
 
 -}
-    PBound 0 (Just j) p | cannotMatchNull p -> apply (quest' . (concat' p)) (pred j) (quest' p)
-                        | canOnlyMatchNull p -> quest' p
-                        | otherwise -> POr [ simplify' (PConcat (p : replicate (pred j) (nonEmpty' p))) , PEmpty ]
---
-    PBound i (Just j) p | i == j  -> asGroup . PConcat $ apply (p':) (pred i) [p]
-                        | cannotMatchNull p -> asGroup . PConcat $ apply (p':) (pred i) $ (p:) $ 
-                                                 [apply (quest' . (concat' p)) (pred (j-i)) (quest' p)]
-                        | canOnlyMatchNull p -> p
-                        | otherwise -> asGroup . PConcat $ (replicate (pred i) p') ++ p : (replicate (j-i) (nonEmpty' p))
-      where p' = nonCapture' p -- XXX cleanup
+-- Easy cases
+    PBound i _        _ | i<0 -> PEmpty  -- impossibly malformed
+    PBound i (Just j) _ | i>j -> PEmpty  -- impossibly malformed
+    PBound _ (Just 0) _ -> PEmpty
+-- Medium cases
+    PBound 0 Nothing  p | canOnlyMatchNull p -> quest p
+                        | otherwise -> PStar True p
+    PBound 0 (Just 1) p -> quest p
+-- Hard cases
+    PBound i Nothing  p | canOnlyMatchNull p -> p
+                        | otherwise -> asGroup . PConcat $ apply (nc'p:) (pred i) [p,PStar False p]
+      where nc'p = nonCapture' p
+    PBound 0 (Just j) p | canOnlyMatchNull p -> quest p
+                        -- The first operation is quest NOT nonEmpty. This can be tested with
+                        -- "a\nb" "((^)?|b){0,3}" and "a\nb" "((^)|b){0,3}"
+                        | otherwise -> quest . (concat' p) $
+                                        apply (nonEmpty' . (concat' p)) (j-2) (nonEmpty' p)
+{- 0.99.6 remove
+| cannotMatchNull p -> apply (quest' . (concat' p)) (pred j) (quest' p)
+| otherwise -> POr [ simplify' (PConcat (p : replicate (pred j) (nonEmpty' p))) , PEmpty ]
+-}
+{- 0.99.6 add, 0.99.7 remove
+    PBound i (Just j) p | canOnlyMatchNull p -> p
+                        | i == j -> PConcat $ apply (p':) (pred i) [p]
+                        | otherwise -> PConcat $ apply (p':) (pred i)
+                                        [p,apply (nonEmpty' . (concat' p)) (j-i-1) (nonEmpty' p) ]
+      where p' = nonCapture' p
+-}
+{- 0.99.7 add -}
+    PBound i (Just j) p | canOnlyMatchNull p -> p
+                        | i == j -> asGroup . PConcat $ apply (nc'p:) (pred i) [p]
+                        | otherwise -> asGroup . PConcat $ apply (nc'p:) (pred i)
+                                        [p,apply (nonEmpty' . (concat' p)) (j-i-1) (ne'p) ]
+      where nc'p = nonCapture' p
+            ne'p = nonEmpty' p
+{- 0.99.6
+| cannotMatchNull p -> PConcat $ apply (p':) (pred i) $ (p:) $
+  [apply (quest' . (concat' p)) (pred (j-i)) (quest' p)]
+| otherwise -> PConcat $ (replicate (pred i) p') ++ p : (replicate (j-i) (nonEmpty' p))
+-}
+    PStar mayFirstBeNull p | canOnlyMatchNull p -> if mayFirstBeNull then quest p
+                                                                    else PEmpty
+                           | otherwise -> pass
     -- Left intact
     PEmpty -> pass
     PGroup {} -> pass
-    PStar {} -> pass
     POr {} -> pass
     PConcat {} -> pass
     PCarat {} -> pass
@@ -298,18 +304,20 @@ TDFA ("","ababcd","",["ab","ab","c","","","","","","","","d"])
     PEscape {} -> pass
     PChar {} -> pass
     PNonCapture {} -> pass
-    PNonEmpty {} -> pass
+    PNonEmpty {} -> pass -- TODO : remove PNonEmpty from program
   where
-    quest' = (\p -> simplify' $ POr [p,PEmpty])  -- require p to have been simplified
+    quest = (\ p -> POr [p,PEmpty])  -- require p to have been simplified
+--    quest' = (\ p -> simplify' $ POr [p,PEmpty])  -- require p to have been simplified
     concat' a b = simplify' $ PConcat [a,b]      -- require a and b to have been simplified
-    nonEmpty' = PNonEmpty
+    nonEmpty' = (\ p -> simplify' $ POr [PEmpty,p]) -- 2009-01-19 : this was PNonEmpty
     nonCapture' = PNonCapture
-    apply f n x = foldr ($) x (replicate n f)
+    apply f n x = foldr ($) x (replicate n f) -- function f applied n times to x : f^n(x)
     asGroup p = PGroup Nothing (simplify' p)
     pass = pIn
 
 -- | Function to transform a pattern into an equivalent, but less
--- redundant form.  Nested 'POr' and 'PConcat' are flattened.
+-- redundant form.  Nested 'POr' and 'PConcat' are flattened. PEmpty
+-- is propagated.
 simplify' :: Pattern -> Pattern
 simplify' x@(POr _) = 
   let ps' = case span notPEmpty (flatten x) of
@@ -326,6 +334,8 @@ simplify' x@(PConcat _) =
        [p] -> p
        _ -> PConcat ps' -- PConcat ps'
 simplify' (PStar _ PEmpty) = PEmpty
+simplify' (PNonCapture PEmpty) = PEmpty -- 2009, perhaps useful
+--simplify' (PNonEmpty PEmpty) = err "simplify' (PNonEmpty PEmpty) = should be Impossible!" -- 2009
 simplify' other = other
 
 -- | Function to flatten nested POr or nested PConcat applicataions.
@@ -341,6 +351,28 @@ flatten _ = err "flatten can only be applied to POr or PConcat"
 notPEmpty :: Pattern -> Bool
 notPEmpty PEmpty = False
 notPEmpty _      = True
+
+-- | Determines if pIn will fail or accept [] and never accept any
+-- characters. Treat PCarat and PDollar as True.
+canOnlyMatchNull :: Pattern -> Bool
+canOnlyMatchNull pIn =
+  case pIn of
+    PEmpty -> True
+    PGroup _ p -> canOnlyMatchNull p
+    POr ps -> all canOnlyMatchNull ps
+    PConcat ps -> all canOnlyMatchNull ps
+    PQuest p -> canOnlyMatchNull p
+    PPlus p -> canOnlyMatchNull p
+    PStar _ p -> canOnlyMatchNull p
+    PBound _ (Just 0) _ -> True
+    PBound _ _ p -> canOnlyMatchNull p
+    PCarat _ -> True
+    PDollar _ -> True
+    PNonCapture p -> canOnlyMatchNull p
+--    PNonEmpty p -> canOnlyMatchNull p -- like PQuest
+    _ ->False
+
+{-
 
 -- | If 'cannotMatchNull' returns 'True' then it is known that the
 -- 'Pattern' will never accept an empty string.  If 'cannotMatchNull'
@@ -363,27 +395,6 @@ cannotMatchNull pIn =
     PCarat _ -> False
     PDollar _ -> False
     PNonCapture p -> cannotMatchNull p
-    PNonEmpty _ -> False -- like PQuest
+--    PNonEmpty _ -> False -- like PQuest
     _ -> True
-
--- | Determines if pIn will fail or accept [] and never accept any
--- characters. Treat PCarat and PDollar as True.
-canOnlyMatchNull :: Pattern -> Bool
-canOnlyMatchNull pIn =
-  case pIn of
-    PEmpty -> True
-    PGroup _ p -> canOnlyMatchNull p
-    POr [] -> True
-    POr ps -> all canOnlyMatchNull ps
-    PConcat [] -> True
-    PConcat ps -> all canOnlyMatchNull ps
-    PQuest p -> canOnlyMatchNull p
-    PPlus p -> canOnlyMatchNull p
-    PStar _ p -> canOnlyMatchNull p
-    PBound _ (Just 0) _ -> True
-    PBound _ _ p -> canOnlyMatchNull p
-    PCarat _ -> True
-    PDollar _ -> True
-    PNonCapture p -> canOnlyMatchNull p
-    PNonEmpty p -> canOnlyMatchNull p -- like PQuest
-    _ ->False
+-}

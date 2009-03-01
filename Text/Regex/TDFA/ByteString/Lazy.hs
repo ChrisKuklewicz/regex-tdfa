@@ -24,8 +24,7 @@ import Text.Regex.Base(MatchArray,RegexContext(..),RegexMaker(..),RegexLike(..))
 import Text.Regex.Base.Impl(polymatch,polymatchM)
 import Text.Regex.TDFA.ReadRegex(parseRegex)
 import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
-import Text.Regex.TDFA.TDFA(patternToDFA)
-import Text.Regex.TDFA.MutRunLBS(findMatch,findMatchAll,countMatchAll)
+import Text.Regex.TDFA.TDFA(patternToRegex)
 import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
@@ -38,12 +37,27 @@ instance RegexMaker Regex CompOption ExecOption L.ByteString where
   makeRegexOptsM c e source = makeRegexOptsM c e (L.unpack source)
 
 instance RegexLike Regex L.ByteString where
-  matchOnce = findMatch
-  matchAll = findMatchAll
-  matchCount = countMatchAll
--- matchTest
--- matchOnceText
--- matchTextAll
+  matchOnce r = matchOnce r . L.unpack
+  matchAll r = matchAll r . L.unpack
+  matchCount r = matchCount r . L.unpack
+  matchTest r = matchTest r . L.unpack
+  matchOnceText regex source = 
+    fmap (\ma ->
+            let (o32,l32) = ma!0
+                o = fi o32
+                l = fi l32
+            in (L.take o source
+               ,fmap (\ol@(off32,len32) ->
+                        let off = fi off32
+                            len = fi len32
+                        in (L.take len (L.drop off source),ol)) ma
+               ,L.drop (o+l) source))
+         (matchOnce regex source)
+  matchAllText regex source =
+    map (fmap (\ol@(off32,len32) -> (L.take (fi len32) (L.drop (fi off32) source),ol)))
+        (matchAll regex source)
+
+fi = fromIntegral
 
 compile :: CompOption -- ^ Flags (summed together)
         -> ExecOption -- ^ Flags (summed together)
@@ -52,9 +66,7 @@ compile :: CompOption -- ^ Flags (summed together)
 compile compOpt execOpt bs =
   case parseRegex (L.unpack bs) of
     Left err -> Left ("parseRegex for Text.Regex.TDFA.ByteString failed:"++show err)
-    Right pattern ->
-      let (dfa,i,tags,groups) = patternToDFA compOpt pattern
-      in Right (Regex dfa i tags groups compOpt execOpt)
+    Right pattern -> Right (patternToRegex pattern compOpt execOpt)
 
 execute :: Regex      -- ^ Compiled regular expression
         -> L.ByteString -- ^ ByteString to match against

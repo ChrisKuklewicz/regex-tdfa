@@ -1,7 +1,10 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 -- | This is a POSIX version of parseRegex that allows NUL characters.
 -- Lazy/Possessive/Backrefs are not recognized.  Anchors ^ and $ are
--- not recognized.
+-- recognized.
+--
+-- The PGroup returned always have (Maybe GroupIndex) set to (Just _)
+-- and never to Nothing.
 module Text.Regex.TDFA.ReadRegex (parseRegex
                                  ,decodePatternSet
                                  ,legalCharacterClasses) where
@@ -64,6 +67,9 @@ p_bound_spec atom = do lowS <- many1 digit
                        let lowI = read lowS
                        highMI <- option (Just lowI) $ try $ do 
                                    char ','
+  -- parsec note: if 'many digits' fails below then the 'try' ensures
+  -- that the ',' will not match the closing '}' in p_bound, same goes
+  -- for any non '}' garbage after the 'many digits'.
                                    highS <- many digit
                                    if null highS then return Nothing -- no upper bound
                                      else do let highI = read highS
@@ -89,12 +95,11 @@ p_char = p_dot <|> p_left_brace <|> p_escaped <|> p_other_char where
   p_left_brace = try $ (char '{' >> notFollowedBy digit >> char_index >>= return . (`PChar` '{'))
   p_escaped = char '\\' >> anyChar >>= \c -> char_index >>= return . (`PEscape` c)
   p_other_char = noneOf specials >>= \c -> char_index >>= return . (`PChar` c) 
-  specials  = "^.[$()|*+?{\\"
+    where specials  = "^.[$()|*+?{\\"
 
 -- parse [bar] and [^bar] sets of characters
 p_bracket = (char '[') >> ( (char '^' >> p_set True) <|> (p_set False) )
 
--- p_set does not support [.ch.] or [=y=] or [:foo:]
 -- p_set :: Bool -> GenParser Char st Pattern
 p_set invert = do initial <- (option "" ((char ']' >> return "]") <|> (char '-' >> return "-")))
                   values <- many1 p_set_elem

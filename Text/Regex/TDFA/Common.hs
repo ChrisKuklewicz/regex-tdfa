@@ -7,14 +7,21 @@ module Text.Regex.TDFA.Common {- export everything -} where
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
 import Text.Show.Functions()
-import Control.Monad.State(State)
+--import Control.Monad.State(State)
+import Data.Monoid(mempty,mappend)
+import Data.Foldable(Foldable(..))
 import Data.Array.IArray(Array)
-import Data.IntSet.EnumSet(EnumSet)
-import Data.IntMap as IMap (IntMap,findWithDefault,assocs)
+import Data.IntSet.EnumSet2(EnumSet)
+import qualified Data.IntSet.EnumSet2 as Set(toList)
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IMap (findWithDefault,assocs,toList,null)
 import Data.IntSet(IntSet)
-import Data.IntMap.CharMap as Map (CharMap,assocs)
+import Data.IntMap.CharMap2(CharMap)
+import qualified Data.IntMap.CharMap2 as Map (assocs,toAscList,null)
 import Data.Sequence(Seq)
 --import Debug.Trace
+
+import Text.Regex.TDFA.IntArrTrieSet(TrieSet)
 
 {-# INLINE look #-}
 look :: Int -> IntMap a -> a
@@ -81,7 +88,7 @@ instance Show DoPa where
 data CompOption = CompOption { caseSensitive :: Bool    -- ^ True by default
                              , multiline :: Bool        -- ^ True by default, implies "." and "[^a]" will not match '\n'
                              , rightAssoc :: Bool       -- ^ False (and therefore left associative) by default
-                             , lastStarGreedy ::  Bool  -- ^ False by default.  This is POSIX correct by takes space and is slower.
+                             , lastStarGreedy ::  Bool  -- ^ False by default.  This is POSIX correct but it takes space and is slower.
                                                         -- Setting this to true will improve performance, and should be done
                                                         -- if you plan to set the captureGroups execoption to False.
                              } deriving (Read,Show)
@@ -92,7 +99,7 @@ data ExecOption = ExecOption { captureGroups :: Bool    -- ^ True by default.  S
 -- | Used by implementation to name certain Postions during matching
 type Tag = Int           -- ^ identity of Position tag to set during a transition
 -- | Internal use to indicate type of tag and preference for larger or smaller Positions
-data OP = Maximize | Minimize | Orbit deriving (Eq,Show)
+data OP = Maximize | Minimize | Orbit | Ignore deriving (Eq,Show)
 type Index = Int         -- ^ Internal NFA node identity number
 type SetIndex = IntSet {- Index -} -- ^ Internal DFA identity is this Set of NFA Index
 type Position = Int      -- ^ Index into the text being searched
@@ -103,16 +110,23 @@ type GroupIndex = Int
 -- | GroupInfo collects the parent and tag information for an instance 
 -- of a group
 data GroupInfo = GroupInfo {thisIndex,parentIndex::GroupIndex
-                           ,startTag,stopTag::Tag
+                           ,startTag,stopTag,flagTag::Tag
                            } deriving Show
 
 -- | The TDFA backend specific 'Regex' type, used by this module's RegexOptions and RegexMaker
-data Regex = Regex {regex_dfa::DFA                             -- ^ starting DFA state
-                   ,regex_init::Index                          -- ^ index of starting DFA state
-                   ,regex_tags::Array Tag OP                   -- ^ information about each tag
-                   ,regex_groups::Array GroupIndex [GroupInfo] -- ^ information about each group
-                   ,regex_compOptions::CompOption              -- 
-                   ,regex_execOptions::ExecOption}
+data Regex = Regex {regex_dfa :: DFA                             -- ^ starting DFA state
+                   ,regex_init :: Index                          -- ^ index of starting state
+                   ,regex_b_index :: (Index,Index)               -- ^ indexes of smallest and largest states
+                   ,regex_b_tags :: (Tag,Tag)                    -- ^ indexes of smallest and largest tags
+                   ,regex_trie :: TrieSet DFA                    -- ^ All DFA states
+                   ,regex_tags :: Array Tag OP                   -- ^ information about each tag
+                   ,regex_groups :: Array GroupIndex [GroupInfo] -- ^ information about each group
+                   ,regex_compOptions :: CompOption              -- 
+                   ,regex_execOptions :: ExecOption}
+
+data WinEmpty = WinEmpty Instructions
+              | WinTest WhichTest (Maybe WinEmpty) (Maybe WinEmpty)
+  deriving Show
 
 -- | Internal NFA node type
 data QNFA = QNFA {q_id :: Index
@@ -138,7 +152,7 @@ data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord,Enum)
 -- ResetGroupStopTask are for tags with Maximize or Minimize OP
 -- values.  ResetOrbitTask and EnterOrbitTask and LeaveOrbitTask are
 -- for tags with Orbit OP value.
-data TagTask = TagTask | ResetGroupStopTask
+data TagTask = TagTask | ResetGroupStopTask | SetGroupStopTask
              | ResetOrbitTask | EnterOrbitTask | LeaveOrbitTask deriving (Show,Eq)
 -- | Ordered list of tags and their associated Task
 type TagTasks = [(Tag,TagTask)]
@@ -156,72 +170,157 @@ type WinTags = TagList
 
 -- | Internal DFA node, identified by the Set of indices of the QNFA
 -- nodes it represents.
-data DFA = DFA { d_id :: SetIndex, d_dt :: DT} deriving(Show)
+data DFA = DFA { d_id :: SetIndex, d_dt :: DT } deriving(Show)
+data Transition = Transition { trans_many :: DFA    -- ^ where to go (maximal), including respawning
+                             , trans_single :: DFA  -- ^ where to go, not including respawning
+                             , trans_how :: DTrans    -- ^ how to go, including respawning
+                             }
 -- | Internal to the DFA node
-data DT = Simple' { dt_win :: IntMap {- Index -} Instructions -- ^ Actions to perform to win
-                  , dt_trans :: CharMap (DFA,DTrans) -- ^ Transition to accept Char
-                  , dt_other :: Maybe (DFA,DTrans) -- ^ Optional default accepting transition
+data DT = Simple' { dt_win :: IntMap {- Source Index -} Instructions -- ^ Actions to perform to win
+                  , dt_trans :: CharMap Transition -- ^ Transition to accept Char
+                  , dt_other :: Maybe Transition -- ^ Optional default accepting transition
                   }
         | Testing' { dt_test :: WhichTest -- ^ The test to perform
                    , dt_dopas :: EnumSet DoPa -- ^ location(s) of the anchor(s) in the original regexp
                    , dt_a,dt_b :: DT      -- ^ use dt_a if test is True else use dt_b
                    }
 
-instance Show DT where show = showDT
-
-showDT :: DT -> String
-showDT (Simple' w t o) = "Simple' { dt_win = " ++ (unlines . map show . IMap.assocs $ w)
-                      ++ "\n        , dt_trans = " ++ (unlines . map (\(char,(dfa,dtrans)) -> "("++show char++", "++show (d_id dfa)++", "
-                                                                                    ++ seeDTrans dtrans ++")") . Map.assocs $ t)
-                      ++ "\n        , dt_other = " ++ maybe "None" (\(dfa,dtrans) -> "("++show (d_id dfa)++", "++ seeDTrans dtrans++")") o
-                      ++ "\n        }"
-
-showDT (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
-                          ++ "\n         , dt_dopas = " ++ show d
-                          ++ "\n         , dt_a = " ++ indent a
-                          ++ "\n         , dt_b = " ++ indent b
-                          ++ "\n         }"
- where indent = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT
-       spaces = replicate 10 ' '
-
-seeDTrans :: DTrans -> String
-seeDTrans x = concatMap (\(dest,y) -> unlines . map (\(source,ins) -> show (dest,source,ins) ) . IMap.assocs $ y) (IMap.assocs x)
-
-
 -- | Internal type to repesent the commands for the tagged transition.
 -- The outer IntMap is for the destination Index and the inner IntMap
 -- is for the Source Index.  This is convenient since all runtime data
 -- going to the same destination must be compared to find the best.
+--
+-- A Destination IntMap entry may have an empty Source IntMap if and
+-- only if the destination is the starting index and the NFA/DFA.
+-- This instructs the matching engine to spawn a new entry starting at
+-- the post-update position.
 type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,Instructions))
 -- type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,RunState ()))
 -- | Internal convenience type for the text display code
 type DTrans' = [(Index, [(Index, (DoPa, ([(Tag, (Position,Bool))],[String])))])]
 
 -- | Positions for which a * was re-started while looping.  Need to
--- append locations but compare starting with front, so use Seq as a
--- Queue.
+-- append locations at back but compare starting with front, so use
+-- Seq as a Queue.  The initial position is saved in basePos (and a
+-- Maximize Tag), the middle positions in the Seq, and the final
+-- position is NOT saved in the Orbits (only in a Maximize Tag).
+--
+-- The orderinal code is being written XXX TODO document it.
 data Orbits = Orbits
   { inOrbit :: !Bool        -- True if enterOrbit, False if LeaveOrbit
+  , basePos :: Position
+  , ordinal :: (Maybe Int)
   , getOrbits :: !(Seq Position)
   } deriving (Show)
 
+-- | The 'newPos' and 'newFlags' lists in Instructions are sorted by, and unique in, the Tag values
 data Instructions = Instructions
-  { newPos :: ![(Tag,Bool)] -- False is preUpdate, True is postUpdate
-  , newFlags :: ![(Tag,Bool)]   -- apply to scratchFlags
+  { newPos :: ![(Tag,Action)] -- False is preUpdate, True is postUpdate (there are no Orbit tags here) -- 2009 : Change to enum from bool?
   , newOrbits :: !(Maybe (Position -> OrbitTransformer))
   } deriving (Show)
-
-type OrbitLog = IntMap Orbits
+data Action = SetPre | SetPost | SetVal Int deriving (Show,Eq)
 type OrbitTransformer = OrbitLog -> OrbitLog
+type OrbitLog = IntMap Orbits
 
-type CompileInstructions a = State
-  ( IntMap Bool
-  , IntMap Bool
-  , IntMap AlterOrbit
-  ) a
+instance Show QNFA where
+  show (QNFA {q_id = i, q_qt = qt}) = "QNFA {q_id = "++show i
+                                  ++"\n     ,q_qt = "++ show qt
+                                  ++"\n}"
 
-data AlterOrbit = AlterReset                        -- Delete Orbits
-                | AlterLeave                        -- set inOrbit to False if it exists
-                | AlterModify { newInOrbit :: Bool  -- new inOrbit value
-                              , freshOrbit :: Bool} -- True means getOrbits=Seq.empty
-                  deriving (Show)                   -- False means try appening position or else Seq.empty
+instance Show QT where
+  show = showQT
+
+showQT :: QT -> String
+showQT (Simple win trans other) = "{qt_win=" ++ show win
+                             ++ "\n, qt_trans=" ++ show (foo trans)
+                             ++ "\n, qt_other=" ++ show (foo' other) ++ "}"
+  where foo :: CharMap QTrans -> [(Char,[(Index,[TagCommand])])]
+        foo = mapSnd foo' . Map.toAscList
+        foo' :: QTrans -> [(Index,[TagCommand])]
+        foo' = IMap.toList 
+showQT (Testing test dopas a b) = "{Testing "++show test++" "++show (Set.toList dopas)
+                              ++"\n"++indent' a
+                              ++"\n"++indent' b++"}"
+    where indent' = init . unlines . map (spaces++) . lines . showQT
+          spaces = replicate 9 ' '
+
+instance Show DT where show = showDT
+
+indent :: [String] -> String
+indent = unlines . map (\x -> ' ':' ':x)
+
+showDT :: DT -> String
+showDT (Simple' w t o) =
+       "Simple' { dt_win = " ++ seeWin1
+  ++ "\n        , dt_trans = " ++ seeTrans1
+  ++ "\n        , dt_other = " ++ seeOther1 o
+  ++ "\n        }"
+ where
+  seeWin1 | IMap.null w = "No win"
+          | otherwise = indent . map show . IMap.assocs $ w
+
+  seeTrans1 :: String
+  seeTrans1 | Map.null t = "No (Char,Transition)"
+            | otherwise = ('\n':) . indent $
+     map (\(char,Transition {trans_many=dfa,trans_single=dfa2,trans_how=dtrans}) ->
+                           concat ["("
+                                  ,show char
+                                  ,", MANY "
+                                  ,show (d_id dfa)
+                                  ,", SINGLE "
+                                  ,show (d_id dfa2)
+                                  ,", \n"
+                                  ,seeDTrans dtrans
+                                  ,")"]) (Map.assocs t)
+
+  seeOther1 Nothing = "None"
+  seeOther1 (Just (Transition {trans_many=dfa,trans_single=dfa2,trans_how=dtrans})) =
+    concat ["(MANY "
+           ,show (d_id dfa)
+           ,", SINGLE "
+           ,show (d_id dfa2)
+           ,", \n"
+           ,seeDTrans dtrans
+           ,")"]
+
+showDT (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
+                          ++ "\n         , dt_dopas = " ++ show d
+                          ++ "\n         , dt_a = " ++ indent' a
+                          ++ "\n         , dt_b = " ++ indent' b
+                          ++ "\n         }"
+ where indent' = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT
+       spaces = replicate 10 ' '
+
+
+seeDTrans :: DTrans -> String
+--seeDTrans x = concatMap (\(dest,y) -> unlines . map (\(source,ins) -> show (dest,source,ins) ) . IMap.assocs $ y) (IMap.assocs x)
+seeDTrans x | IMap.null x = "No DTrans"
+seeDTrans x = concatMap seeSource (IMap.assocs x)
+  where seeSource (dest,srcMap) | IMap.null srcMap = indent [show (dest,"SPAWN")]
+                                | otherwise = indent . map (\(source,ins) -> show (dest,source,ins) ) . IMap.assocs $ srcMap
+--        spawnIns = Instructions { newPos = [(0,SetPost)], newOrbits = Nothing }
+
+data SList a = !a :! !(SList a) | SEnd
+
+infixr :!
+
+instance Functor SList where
+  fmap f = go where go SEnd = SEnd
+                    go (a :! b) = f a :! go b
+
+instance Foldable SList where
+  fold SEnd = mempty
+  fold (a :! b) = a `mappend` fold b
+  foldMap f = go where go SEnd = mempty
+                       go (a :! b) = f a `mappend` go b
+  foldr f x = go where go (a :! b) = f a (go b)
+                       go SEnd = x
+  foldr1 f = go where go (a :! SEnd) = a
+                      go (a :! b) = f a (go b)
+                      go SEnd = error "foldr1 on SEnd"
+  foldl f x = go x where go c (a :! b) = go (f c a) b
+                         go c SEnd = c
+  foldl1 f = start where start SEnd = error "foldl1 on SEnd"
+                         start (a :! b) = go a b
+                         go c (a :! b) = go (f c a) b
+                         go c SEnd = c

@@ -11,11 +11,12 @@
 
 
 {-| 
+
 The "Text.Regex.TDFA" module provides a backend for regular
-expressions. To use it should be imported along with
-"Text.Regex.Base".  If you import this along with other backends, then
-you should do so with qualified imports, perhaps renamed for
-convenience.
+expressions. It provides instances for the classes defined and
+documented in "Text.Regex.Base" and re-exported by this module.  If
+you import this along with other backends then you should do so with
+qualified imports (with renaming for convenience).
 
 Todo:
   compNoCapture to avoid creating any tags and optimize inStar stuff...

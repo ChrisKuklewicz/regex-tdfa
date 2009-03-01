@@ -24,8 +24,7 @@ import Text.Regex.Base(MatchArray,RegexContext(..),RegexMaker(..),RegexLike(..))
 import Text.Regex.Base.Impl(polymatch,polymatchM)
 import Text.Regex.TDFA.ReadRegex(parseRegex)
 import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
-import Text.Regex.TDFA.TDFA(patternToDFA)
-import Text.Regex.TDFA.MutRunBS(findMatch,findMatchAll,countMatchAll)
+import Text.Regex.TDFA.TDFA(patternToRegex)
 import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
@@ -38,12 +37,19 @@ instance RegexMaker Regex CompOption ExecOption B.ByteString where
   makeRegexOptsM c e source = makeRegexOptsM c e (B.unpack source)
 
 instance RegexLike Regex B.ByteString where
-  matchOnce = findMatch
-  matchAll = findMatchAll
-  matchCount = countMatchAll
--- matchTest
--- matchOnceText
--- matchTextAll
+  matchOnce r = matchOnce r . B.unpack
+  matchAll r = matchAll r . B.unpack
+  matchCount r = matchCount r . B.unpack
+  matchTest r = matchTest r . B.unpack
+  matchOnceText regex source = 
+    fmap (\ma -> let (o,l) = ma!0
+                 in (B.take o source
+                    ,fmap (\ol@(off,len) -> (B.take len (B.drop off source),ol)) ma
+                    ,B.drop (o+l) source))
+         (matchOnce regex source)
+  matchAllText regex source =
+    map (fmap (\ol@(off,len) -> (B.take len (B.drop off source),ol)))
+        (matchAll regex source)
 
 compile :: CompOption -- ^ Flags (summed together)
         -> ExecOption -- ^ Flags (summed together)
@@ -52,9 +58,7 @@ compile :: CompOption -- ^ Flags (summed together)
 compile compOpt execOpt bs =
   case parseRegex (B.unpack bs) of
     Left err -> Left ("parseRegex for Text.Regex.TDFA.ByteString failed:"++show err)
-    Right pattern ->
-      let (dfa,i,tags,groups) = patternToDFA compOpt pattern
-      in Right (Regex dfa i tags groups compOpt execOpt)
+    Right pattern -> Right (patternToRegex pattern compOpt execOpt)
 
 execute :: Regex      -- ^ Compiled regular expression
         -> B.ByteString -- ^ ByteString to match against
