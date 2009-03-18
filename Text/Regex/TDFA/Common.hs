@@ -121,6 +121,7 @@ data Regex = Regex {regex_dfa :: DFA                             -- ^ starting D
                    ,regex_trie :: TrieSet DFA                    -- ^ All DFA states
                    ,regex_tags :: Array Tag OP                   -- ^ information about each tag
                    ,regex_groups :: Array GroupIndex [GroupInfo] -- ^ information about each group
+                   ,regex_isFrontAnchored :: Bool                -- ^ used for optimizing execution
                    ,regex_compOptions :: CompOption              -- 
                    ,regex_execOptions :: ExecOption}
 
@@ -178,7 +179,7 @@ data Transition = Transition { trans_many :: DFA    -- ^ where to go (maximal), 
 -- | Internal to the DFA node
 data DT = Simple' { dt_win :: IntMap {- Source Index -} Instructions -- ^ Actions to perform to win
                   , dt_trans :: CharMap Transition -- ^ Transition to accept Char
-                  , dt_other :: Maybe Transition -- ^ Optional default accepting transition
+                  , dt_other :: Transition -- ^ default accepting transition
                   }
         | Testing' { dt_test :: WhichTest -- ^ The test to perform
                    , dt_dopas :: EnumSet DoPa -- ^ location(s) of the anchor(s) in the original regexp
@@ -273,8 +274,7 @@ showDT (Simple' w t o) =
                                   ,seeDTrans dtrans
                                   ,")"]) (Map.assocs t)
 
-  seeOther1 Nothing = "None"
-  seeOther1 (Just (Transition {trans_many=dfa,trans_single=dfa2,trans_how=dtrans})) =
+  seeOther1 (Transition {trans_many=dfa,trans_single=dfa2,trans_how=dtrans}) =
     concat ["(MANY "
            ,show (d_id dfa)
            ,", SINGLE "

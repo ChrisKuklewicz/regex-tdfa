@@ -6,6 +6,7 @@ This modules provides 'RegexMaker' and 'RegexLike' instances for using
 This exports instances of the high level API and the medium level
 API of 'compile','execute', and 'regexec'.
 -}
+{- By Chris Kuklewicz, 2009. BSD License, see the LICENSE file. -}
 module Text.Regex.TDFA.String(
   -- ** Types
   Regex
@@ -19,17 +20,19 @@ module Text.Regex.TDFA.String(
  ,regexec
  ) where
 
-import Data.Array((!),elems)
+import Data.Array.IArray((!),amap)
 
 import Text.Regex.Base.Impl(polymatch,polymatchM)
 import Text.Regex.Base.RegexLike(RegexMaker(..),RegexLike(..),RegexContext(..),MatchOffset,MatchLength,MatchArray)
-import Text.Regex.TDFA.Common(common_error)
-import qualified Text.Regex.TDFA.NewDFA as N(matchAll,matchOnce,matchCount,matchTest)
+import Text.Regex.TDFA.Common(common_error,Regex(..),CompOption,ExecOption(captureGroups))
 import Text.Regex.TDFA.ReadRegex(parseRegex)
 import Text.Regex.TDFA.TDFA(patternToRegex)
-import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
+import Text.Regex.TDFA.Wrap()
 
-{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
+import Data.Array.IArray((!),listArray,elems,bounds)
+import Data.Maybe(listToMaybe)
+import Text.Regex.TDFA.NewDFA.Engine(execMatch)
+import Text.Regex.TDFA.NewDFA.Tester as Tester(matchTest)
 
 err :: String -> a
 err = common_error "Text.Regex.TDFA.String"
@@ -54,7 +57,7 @@ instance RegexMaker Regex CompOption ExecOption String where
 execute :: Regex      -- ^ Compiled regular expression
         -> String     -- ^ String to match against
         -> Either String (Maybe MatchArray)
-execute r s = Right (N.matchOnce r s)
+execute r s = Right (matchOnce r s)
 
 regexec :: Regex      -- ^ Compiled regular expression
         -> String     -- ^ String to match against
@@ -69,12 +72,20 @@ regexec r s =
 
 -- Minimal defintion for now
 instance RegexLike Regex String where
-  matchOnce = N.matchOnce
-  matchAll = N.matchAll
-  matchCount = N.matchCount
-  matchTest = N.matchTest
--- matchOnceText
--- matchTextAll
+  matchOnce r s = listToMaybe (matchAll r s)
+  matchAll r s = execMatch r 0 '\n' s
+  matchCount r s = length (matchAll r' s)
+    where r' = r { regex_execOptions = (regex_execOptions r) {captureGroups = False} }
+  matchTest = Tester.matchTest
+  -- matchOnceText
+  matchAllText r s =
+    let go i _ _ | i `seq` False = undefined
+        go i t [] = []
+        go i t (x:xs) = let (off0,len0) = x!0
+                            trans pair@(off,len) = (take len (drop (off-i) t),pair)
+                            t' = drop (off0+len0-i) t
+                        in amap trans x : seq t' (go (i+off0+len0) t' xs)
+    in go 0 s (matchAll r s)
 
 instance RegexContext Regex String String where
   match = polymatch

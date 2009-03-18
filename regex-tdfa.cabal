@@ -1,5 +1,5 @@
 Name:                   regex-tdfa
-Version:                1.0.0
+Version:                1.1.0
 -- 0.99.4 tests pnonempty' = \ p -> POr [ PEmpty, p ] instead of PNonEmpty
 -- 0.99.5 remove PNonEmpty constructor
 -- 0.99.6 change to nested nonEmpty calls for PBound
@@ -17,6 +17,26 @@ Version:                1.0.0
 -- 0.99.18 try alternate lazy/strict strategy in NewDFA.  Fix offset laziness.
 -- 0.99.19 try for pre-comparison of orbit-logs!
 -- 0.99.20 go to many vs single?
+-- 1.0.0
+-- 1.0.1 add NewDFATest.hs
+-- 1.0.2 arg, the prof is fast and the normal slow!
+-- 1.0.3 try to alter matchTest to not have the Bool args? No
+--  np2  comment out all Testing code? No
+--  np3  !off the multi? No
+--  np4  comment out all Single0 and Single code? No
+--  np5  comment out all Multi0 code? No
+--  np6  comment out ans check? No
+--  np7  just return True? Fast
+--  np8  np6 and NOINLINE endOff? No
+--  np9  INLINE endOf? No
+--  np10 Peel off CharMap/IntMap and DFA/DT with pattern matching? No
+--  np11 break multi to not look at o and just return True? Yes !!!!
+--  np12 expand o in the case where t lookup get Nothing? Yes--this is the fix!?
+--  np13 try to improve readability with the "mm" combinator? Yes!
+-- 1.0.4 try repaired NewDFATest_SBS
+-- 1.0.5 use "uncons" on SBS
+-- 1.0.6 try NewDFATest_SBS with uncons
+-- 1.0.7 make NewDFA directory and String_NC
 License:                BSD3
 License-File:           LICENSE
 Copyright:              Copyright (c) 2007, Christopher Kuklewicz
@@ -29,29 +49,42 @@ Synopsis:               Replaces/Enhances Text.Regex
 Description:            A new all Haskell "tagged" DFA regex engine, inspired by libtre
 Category:               Text
 Tested-With:            GHC
-Build-Depends:          regex-base >= 0.93.1, base >= 2.0, parsec, mtl, containers, array, bytestring,ghc-prim
 Build-Type:             Simple
-other-modules:          Paths_regex_tdfa
-Exposed-Modules:        Text.Regex.TDFA.Common
-                        Text.Regex.TDFA.IntArrTrieSet
-                        Text.Regex.TDFA.TNFA
-                        Text.Regex.TDFA.TDFA
-                        Text.Regex.TDFA.Pattern
-                        Text.Regex.TDFA.ReadRegex
-                        Text.Regex.TDFA.CorePattern
-                        Text.Regex.TDFA.NewDFA
-                        Text.Regex.TDFA.String
-                        Text.Regex.TDFA.ByteString
-                        Text.Regex.TDFA.ByteString.Lazy
-                        Text.Regex.TDFA.Sequence
-                        Text.Regex.TDFA.Wrap
-                        Text.Regex.TDFA
-                        Data.IntSet.EnumSet2
-                        Data.IntMap.EnumMap2
-                        Data.IntMap.CharMap2
-Buildable:              True
-Extensions:             MultiParamTypeClasses, FunctionalDependencies, BangPatterns, MagicHash, RecursiveDo, NoMonoPatBinds, ForeignFunctionInterface, UnboxedTuples, TypeOperators, FlexibleContexts, ExistentialQuantification, UnliftedFFITypes, TypeSynonymInstances
-GHC-Options:            -Wall -O2 -funbox-strict-fields
--- GHC-Options:            -Wall -O2
--- GHC-Options:            -Wall -ddump-minimal-imports
-GHC-Prof-Options:       -auto-all
+Cabal-Version:          >= 1.2.3
+
+flag base4
+
+library 
+  Build-Depends:        regex-base >= 0.93.1, parsec, mtl, containers, array, bytestring
+  if flag(base4)
+    Build-Depends:      base >= 4.0, ghc-prim
+  else
+    Build-Depends:      base < 4.0
+
+  other-modules:          Paths_regex_tdfa
+  Exposed-Modules:        Data.IntMap.CharMap2
+                          Data.IntMap.EnumMap2
+                          Data.IntSet.EnumSet2
+                          Text.Regex.TDFA
+                          Text.Regex.TDFA.ByteString
+                          Text.Regex.TDFA.ByteString.Lazy
+                          Text.Regex.TDFA.Common
+                          Text.Regex.TDFA.CorePattern
+                          Text.Regex.TDFA.IntArrTrieSet
+                          Text.Regex.TDFA.NewDFA.Engine
+                          Text.Regex.TDFA.NewDFA.Engine_FA
+                          Text.Regex.TDFA.NewDFA.Engine_NC
+                          Text.Regex.TDFA.NewDFA.Engine_NC_FA
+                          Text.Regex.TDFA.NewDFA.Tester
+                          Text.Regex.TDFA.NewDFA.Uncons
+                          Text.Regex.TDFA.Pattern
+                          Text.Regex.TDFA.ReadRegex
+                          Text.Regex.TDFA.Sequence
+                          Text.Regex.TDFA.String
+                          Text.Regex.TDFA.TDFA
+                          Text.Regex.TDFA.TNFA
+                          Text.Regex.TDFA.Wrap
+  Buildable:              True
+  Extensions:             MultiParamTypeClasses, FunctionalDependencies, BangPatterns, MagicHash, RecursiveDo, NoMonoPatBinds, ForeignFunctionInterface, UnboxedTuples, TypeOperators, FlexibleContexts, ExistentialQuantification, UnliftedFFITypes, TypeSynonymInstances, FlexibleInstances
+  GHC-Options:            -Wall -O2 -funbox-strict-fields
+  GHC-Prof-Options:       -auto-all

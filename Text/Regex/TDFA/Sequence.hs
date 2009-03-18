@@ -17,16 +17,22 @@ module Text.Regex.TDFA.Sequence(
  ,regexec
  ) where
 
-import Data.Array((!),elems)
-import Data.Sequence as S
+import qualified Data.Sequence as S
+import Data.Sequence (ViewL(EmptyL,(:<)))
 
 import Text.Regex.Base(MatchArray,RegexContext(..),RegexMaker(..),RegexLike(..))
 import Text.Regex.Base.Impl(polymatch,polymatchM)
+import Text.Regex.TDFA.Common(common_error,Regex(..),CompOption,ExecOption(captureGroups))
 import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
 import Text.Regex.TDFA.TDFA(patternToRegex)
-import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
+import Text.Regex.TDFA.Wrap()
 import Text.Regex.TDFA.ReadRegex(parseRegex)
 import qualified Data.Foldable as F(toList)
+
+import Data.Array.IArray((!),listArray,elems,bounds)
+import Data.Maybe(listToMaybe)
+import Text.Regex.TDFA.NewDFA.Engine(execMatch)
+import Text.Regex.TDFA.NewDFA.Tester as Tester(matchTest)
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
@@ -38,10 +44,11 @@ instance RegexMaker Regex CompOption ExecOption (S.Seq Char) where
   makeRegexOptsM c e source = either fail return $ compile c e source
 
 instance RegexLike Regex (S.Seq Char) where
-  matchOnce r = matchOnce r . F.toList
-  matchAll r = matchAll r . F.toList
-  matchCount r = matchCount r . F.toList
-  matchTest r = matchTest r . F.toList
+  matchOnce r s = listToMaybe (matchAll r s)
+  matchAll r s = execMatch r 0 '\n' s
+  matchCount r s = length (matchAll r' s)
+    where r' = r { regex_execOptions = (regex_execOptions r) {captureGroups = False} }
+  matchTest = Tester.matchTest
   matchOnceText regex source = 
     fmap (\ma -> let (o,l) = ma!0
                  in (S.take o source

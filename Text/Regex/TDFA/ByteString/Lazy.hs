@@ -17,7 +17,7 @@ module Text.Regex.TDFA.ByteString.Lazy(
  ,regexec
  ) where
 
-import Data.Array((!),elems)
+import Data.Array.IArray((!),elems,amap)
 import qualified Data.ByteString.Lazy.Char8 as L
 
 import Text.Regex.Base(MatchArray,RegexContext(..),RegexMaker(..),RegexLike(..))
@@ -25,7 +25,12 @@ import Text.Regex.Base.Impl(polymatch,polymatchM)
 import Text.Regex.TDFA.ReadRegex(parseRegex)
 import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
 import Text.Regex.TDFA.TDFA(patternToRegex)
-import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
+import Text.Regex.TDFA.Common(Regex(..),CompOption,ExecOption(captureGroups))
+import Text.Regex.TDFA.Wrap()
+
+import Data.Maybe(listToMaybe)
+import Text.Regex.TDFA.NewDFA.Engine(execMatch)
+import Text.Regex.TDFA.NewDFA.Tester as Tester(matchTest)
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
@@ -37,10 +42,11 @@ instance RegexMaker Regex CompOption ExecOption L.ByteString where
   makeRegexOptsM c e source = makeRegexOptsM c e (L.unpack source)
 
 instance RegexLike Regex L.ByteString where
-  matchOnce r = matchOnce r . L.unpack
-  matchAll r = matchAll r . L.unpack
-  matchCount r = matchCount r . L.unpack
-  matchTest r = matchTest r . L.unpack
+  matchOnce r s = listToMaybe (matchAll r s)
+  matchAll r s = execMatch r 0 '\n' s
+  matchCount r s = length (matchAll r' s)
+    where r' = r { regex_execOptions = (regex_execOptions r) {captureGroups = False} }
+  matchTest = Tester.matchTest
   matchOnceText regex source = 
     fmap (\ma ->
             let (o32,l32) = ma!0
@@ -54,8 +60,14 @@ instance RegexLike Regex L.ByteString where
                ,L.drop (o+l) source))
          (matchOnce regex source)
   matchAllText regex source =
-    map (fmap (\ol@(off32,len32) -> (L.take (fi len32) (L.drop (fi off32) source),ol)))
-        (matchAll regex source)
+    let go i _ _ | i `seq` False = undefined
+        go i t [] = []
+        go i t (x:xs) =
+          let (off0,len0) = x!0
+              trans pair@(off32,len32) = (L.take (fi len32) (L.drop (fi (off32-i)) t),pair)
+              t' = L.drop (fi (off0+len0-i)) t
+          in amap trans x : seq t' (go (i+off0+len0) t' xs) 
+    in go 0 source (matchAll regex source)
 
 fi = fromIntegral
 

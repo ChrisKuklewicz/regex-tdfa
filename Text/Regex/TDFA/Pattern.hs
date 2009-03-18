@@ -161,6 +161,10 @@ unCapture = dfsPattern unCapture' where
   unCapture' x = x
 -}
 
+reGroup p@(PConcat xs) | 2 <= length xs = PGroup Nothing p
+reGroup p@(POr xs)     | 2 <= length xs = PGroup Nothing p
+reGroup p = p
+
 starTrans' :: Pattern -> Pattern
 starTrans' pIn =
   case pIn of -- We know that "p" has been simplified in each of these cases:
@@ -170,7 +174,7 @@ starTrans' pIn =
    so set its mayFirstBeNull flag to False
  -}
     PPlus p | canOnlyMatchNull p -> p
-            | otherwise -> asGroup $ PConcat [p,PStar False p]
+            | otherwise -> asGroup $ PConcat [reGroup p,PStar False p]
 
 {- "An ERE matching a single character repeated by an '*' , '?' , or
    an interval expression shall not match a null expression unless
@@ -258,7 +262,7 @@ starTrans' pIn =
     PBound 0 (Just 1) p -> quest p
 -- Hard cases
     PBound i Nothing  p | canOnlyMatchNull p -> p
-                        | otherwise -> asGroup . PConcat $ apply (nc'p:) (pred i) [p,PStar False p]
+                        | otherwise -> asGroup . PConcat $ apply (nc'p:) (pred i) [reGroup p,PStar False p]
       where nc'p = nonCapture' p
     PBound 0 (Just j) p | canOnlyMatchNull p -> quest p
                         -- The first operation is quest NOT nonEmpty. This can be tested with
@@ -278,9 +282,9 @@ starTrans' pIn =
 -}
 {- 0.99.7 add -}
     PBound i (Just j) p | canOnlyMatchNull p -> p
-                        | i == j -> asGroup . PConcat $ apply (nc'p:) (pred i) [p]
+                        | i == j -> asGroup . PConcat $ apply (nc'p:) (pred i) [reGroup p]
                         | otherwise -> asGroup . PConcat $ apply (nc'p:) (pred i)
-                                        [p,apply (nonEmpty' . (concat' p)) (j-i-1) (ne'p) ]
+                                        [reGroup p,apply (nonEmpty' . (concat' p)) (j-i-1) (ne'p) ]
       where nc'p = nonCapture' p
             ne'p = nonEmpty' p
 {- 0.99.6
@@ -308,7 +312,7 @@ starTrans' pIn =
   where
     quest = (\ p -> POr [p,PEmpty])  -- require p to have been simplified
 --    quest' = (\ p -> simplify' $ POr [p,PEmpty])  -- require p to have been simplified
-    concat' a b = simplify' $ PConcat [a,b]      -- require a and b to have been simplified
+    concat' a b = simplify' $ PConcat [reGroup a,reGroup b]      -- require a and b to have been simplified
     nonEmpty' = (\ p -> simplify' $ POr [PEmpty,p]) -- 2009-01-19 : this was PNonEmpty
     nonCapture' = PNonCapture
     apply f n x = foldr ($) x (replicate n f) -- function f applied n times to x : f^n(x)

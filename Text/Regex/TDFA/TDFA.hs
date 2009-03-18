@@ -3,8 +3,7 @@
 -- of Index which are used to lookup the DFA state in a lazy Trie
 -- which holds all possible subsets of QNFA states.
 module Text.Regex.TDFA.TDFA(patternToRegex,DFA(..),DT(..)
-                            ,examineDFA,isDFAFrontAnchored
-                            ,nfaToDFA,dfaMap) where
+                            ,examineDFA,nfaToDFA,dfaMap) where
 
 --import Control.Arrow((***))
 import Control.Monad.Instances()
@@ -39,15 +38,8 @@ dlose :: DFA
 dlose = DFA { d_id = ISet.empty
             , d_dt = Simple' { dt_win = IMap.empty
                              , dt_trans = Map.empty
-                             , dt_other = Nothing } }
+                             , dt_other = Transition dlose dlose mempty } }
 
-{-
--- Specilized utility
-ungroupBy :: (a->x) -> ([a]->y) -> [[a]] -> [(x,y)]
-ungroupBy f g = map helper where
-  helper [] = (err "empty group passed to ungroupBy",g [])
-  helper x@(x1:_) = (f x1,g x)
--}
 -- dumb smart constructor for tracing construction (I wanted to monitor laziness)
 {-# INLINE makeDFA #-}
 makeDFA :: SetIndex -> DT -> DFA
@@ -55,11 +47,13 @@ makeDFA i dt = DFA i dt
 
 -- Note that no CompOption or ExecOption parameter is needed.
 nfaToDFA :: ((Index,Array Index QNFA),Array Tag OP,Array GroupIndex [GroupInfo])
-         -> (CompOption -> ExecOption -> Regex)
-nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = Regex dfa startIndex indexBounds tagBounds trie aTagOp aGroupInfo where
+         -> CompOption -> ExecOption
+         -> Regex
+nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) co eo = Regex dfa startIndex indexBounds tagBounds trie aTagOp aGroupInfo ifa co eo where
   dfa = indexesToDFA [startIndex]
   indexBounds = bounds aQNFA
   tagBounds = bounds aTagOp
+  ifa = (not (multiline co)) && isDFAFrontAnchored dfa
 
   indexesToDFA = {-# SCC "nfaToDFA.indexesToDFA" #-} Trie.lookupAsc trie  -- Lookup in cache
 
@@ -100,7 +94,7 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = Regex dfa startIndex indexBoun
         Simple' { dt_win = makeWinner
                 , dt_trans = fmap qtransToDFA t
 --                , dt_other = if IMap.null o then Just (newTransition $ IMap.singleton startIndex mempty) else Just (qtransToDFA o)}
-                , dt_other = Just (qtransToDFA o)}
+                , dt_other = qtransToDFA o}
         where
           makeWinner :: IntMap {- Index -} Instructions --  (RunState ())
           makeWinner | noWin w = IMap.empty
@@ -127,9 +121,7 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = Regex dfa startIndex indexBoun
         where
           w = w1 `mappend` w2
           t = fuseDTrans -- t1 o1 t2 o2
-          o = case (o1,o2) of
-                (Just o1', Just o2') -> Just (mergeDTrans o1' o2')
-                _                    -> o1 `mplus` o2
+          o = mergeDTrans o1 o2
           -- This is very much like mergeQTrans
           mergeDTrans :: Transition -> Transition -> Transition
           mergeDTrans (Transition {trans_how=dt1}) (Transition {trans_how=dt2}) = makeTransition dtrans
@@ -140,17 +132,16 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) = Regex dfa startIndex indexBoun
             where
               l1 = IMap.toAscList (unCharMap t1)
               l2 = IMap.toAscList (unCharMap t2)
-              merge_o1 = case o1 of Nothing -> id
-                                    Just o1' -> mergeDTrans o1'
-              merge_o2 = case o2 of Nothing -> id
-                                    Just o2' -> mergeDTrans o2'
-              fuse [] y = if isJust o1 then mapSnd merge_o1 y else y
-              fuse x [] = if isJust o2 then mapSnd merge_o2 x else x
+              fuse :: [(IMap.Key, Transition)]
+                   -> [(IMap.Key, Transition)]
+                   -> [(IMap.Key, Transition)]
+              fuse [] y = fmap (fmap (mergeDTrans o1)) y
+              fuse x [] = fmap (fmap (mergeDTrans o2)) x
               fuse x@((xc,xa):xs) y@((yc,ya):ys) = 
                 case compare xc yc of
-                  LT -> (xc,merge_o2 xa) : fuse xs y
+                  LT -> (xc,mergeDTrans o2 xa) : fuse xs y
                   EQ -> (xc,mergeDTrans xa ya) : fuse xs ys
-                  GT -> (yc,merge_o1 ya) : fuse x ys
+                  GT -> (yc,mergeDTrans o1 ya) : fuse x ys
       mergeDT dt1@(Testing' wt1 dopas1 a1 b1) dt2@(Testing' wt2 dopas2 a2 b2) =
         case compare wt1 wt2 of
           LT -> nestDT dt1 dt2
@@ -177,7 +168,7 @@ dfaMap = seen (Data.Map.empty) where
 
 -- Get all trans_many states
 flattenDT :: DT -> [DFA]
-flattenDT (Simple' {dt_trans=(CharMap mt),dt_other=mo}) = concatMap (\d -> [trans_many d,trans_single d]) . maybe id (:) mo . IMap.elems $ mt
+flattenDT (Simple' {dt_trans=(CharMap mt),dt_other=o}) = concatMap (\d -> [trans_many d {-,trans_single d-}]) . (:) o . IMap.elems $ mt
 flattenDT (Testing' {dt_a=a,dt_b=b}) = flattenDT a ++ flattenDT b
 
 examineDFA :: Regex -> String
@@ -301,30 +292,32 @@ bestTrans aTagOP (f:fs) | null fs = canonical f
     cw xx [] = foldr (\x rest -> comp (Just x) Nothing  `mappend` rest) mempty xx
     cw [] yy = foldr (\y rest -> comp Nothing  (Just y) `mappend` rest) mempty yy
 
--- can DT never win or accept a character?
-isDTLosing :: DT -> Bool
-isDTLosing (Testing' {dt_a=a,dt_b=b}) = isDTLosing a && isDTLosing b
-isDTLosing (Simple' {dt_win=w}) | not (IMap.null w) = False -- can win
-isDTLosing (Simple' {dt_trans=CharMap mt,dt_other=mo}) =
-  let ts = (maybe id (:) mo) (IMap.elems mt)
-  in all transLoses ts
-
-transLoses :: Transition -> Bool
-transLoses t@(Transition {trans_single=dfa}) = isSpawning t || ISet.null (d_id dfa)
-isSpawning :: Transition -> Bool
-isSpawning t = case IMap.elems (trans_how t) of
-                 [m] -> case IMap.keys m of
-                         [] -> True
-                         _ -> False
-                 _ -> False
                    
--- Assumes that Test_BOL is the smallest (and therefore always first) test
-isDTFrontAnchored :: DT -> Bool
-isDTFrontAnchored (Testing' {dt_test=wt,dt_b=b}) | wt == Test_BOL = isDTLosing b
-isDTFrontAnchored _ = False
-
 isDFAFrontAnchored :: DFA -> Bool
 isDFAFrontAnchored = isDTFrontAnchored . d_dt
+ where
+  isDTFrontAnchored :: DT -> Bool
+  isDTFrontAnchored (Simple' {}) = False
+  isDTFrontAnchored (Testing' {dt_test=wt,dt_a=a,dt_b=b}) | wt == Test_BOL = isDTLosing b
+                                                          | otherwise = isDTFrontAnchored a && isDTFrontAnchored b
+   where
+    -- can DT never win or accept a character (when following trans_single)?
+    isDTLosing :: DT -> Bool
+    isDTLosing (Testing' {dt_a=a,dt_b=b}) = isDTLosing a && isDTLosing b
+    isDTLosing (Simple' {dt_win=w}) | not (IMap.null w) = False -- can win with 0 characters
+    isDTLosing (Simple' {dt_trans=CharMap mt,dt_other=o}) =
+      let ts = o : IMap.elems mt
+      in all transLoses ts
+     where
+      transLoses :: Transition -> Bool
+      transLoses (Transition {trans_single=dfa,trans_how=dtrans}) = isDTLose dfa || onlySpawns dtrans
+       where
+        isDTLose :: DFA -> Bool
+        isDTLose dfa = ISet.null (d_id dfa)
+        onlySpawns :: DTrans -> Bool
+        onlySpawns t = case IMap.elems t of
+                         [m] -> IMap.null m
+                         _ -> False
 
 {- toInstructions -}
 

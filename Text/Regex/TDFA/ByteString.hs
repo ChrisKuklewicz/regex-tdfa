@@ -8,6 +8,7 @@ import "Text.Regex.TDFA".
 This exports instances of the high level API and the medium level
 API of 'compile','execute', and 'regexec'.
 -}
+{- By Chris Kuklewicz, 2009. BSD License, see the LICENSE file. -}
 module Text.Regex.TDFA.ByteString(
   Regex
  ,CompOption
@@ -25,9 +26,12 @@ import Text.Regex.Base.Impl(polymatch,polymatchM)
 import Text.Regex.TDFA.ReadRegex(parseRegex)
 import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
 import Text.Regex.TDFA.TDFA(patternToRegex)
-import Text.Regex.TDFA.Wrap(Regex(..),CompOption,ExecOption)
+import Text.Regex.TDFA.Common(Regex(..),CompOption,ExecOption(captureGroups))
+import Text.Regex.TDFA.Wrap()
 
-{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
+import Data.Maybe(listToMaybe)
+import Text.Regex.TDFA.NewDFA.Engine(execMatch)
+import Text.Regex.TDFA.NewDFA.Tester as Tester(matchTest)
 
 instance RegexContext Regex B.ByteString B.ByteString where
   match = polymatch
@@ -37,10 +41,11 @@ instance RegexMaker Regex CompOption ExecOption B.ByteString where
   makeRegexOptsM c e source = makeRegexOptsM c e (B.unpack source)
 
 instance RegexLike Regex B.ByteString where
-  matchOnce r = matchOnce r . B.unpack
-  matchAll r = matchAll r . B.unpack
-  matchCount r = matchCount r . B.unpack
-  matchTest r = matchTest r . B.unpack
+  matchOnce r s = listToMaybe (matchAll r s)
+  matchAll r s = execMatch r 0 '\n' s
+  matchCount r s = length (matchAll r' s)
+    where r' = r { regex_execOptions = (regex_execOptions r) {captureGroups = False} }
+  matchTest = Tester.matchTest
   matchOnceText regex source = 
     fmap (\ma -> let (o,l) = ma!0
                  in (B.take o source

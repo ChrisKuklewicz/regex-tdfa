@@ -1,11 +1,9 @@
--- | This is the "rewrite" of RunMutState ++ MutRun.  It is supposed
--- to never backtrack in the consumption of the input.  This is more
--- complicated then RunMutState which only considered a single
--- starting offset, and MutRun which incremented the starting offset
--- by one with each failed match.
---
--- This is not optimized for speed.
-module Text.Regex.TDFA.NewDFA(matchAll,matchOnce,matchCount,matchTest) where
+-- | This is the code for the main engine.  This captures the posix subexpressions. This 'execMatch'
+-- also dispatches to "Engine_NC", "Engine_FA", and "Engine_FC_NA"
+-- 
+-- It is polymorphic over the internal Uncons type class, and specialized to produce the needed
+-- variants.
+module Text.Regex.TDFA.NewDFA.Engine(execMatch) where
 
 import Control.Monad(when,forM,forM_,liftM2,foldM,join,MonadPlus(..),filterM)
 import Data.Array.Base(unsafeRead,unsafeWrite,STUArray(..))
@@ -39,14 +37,18 @@ import Data.List(partition,sort,foldl',sortBy,groupBy)
 import Data.STRef
 import qualified Control.Monad.ST.Lazy as L
 import qualified Control.Monad.ST.Strict as S
-import Data.Sequence(ViewL(..),viewl)
+import Data.Sequence(Seq,ViewL(..),viewl)
 import qualified Data.Sequence as Seq
+import qualified Data.ByteString.Char8 as SBS
+import qualified Data.ByteString.Lazy.Char8 as LBS
 
 import Text.Regex.Base(MatchArray,MatchOffset,MatchLength)
 import qualified Text.Regex.TDFA.IntArrTrieSet as Trie
 import Text.Regex.TDFA.Common hiding (indent)
-import Text.Regex.TDFA.TDFA(isDFAFrontAnchored)
-import Text.Regex.TDFA.NewDFATest(matchTest)
+import Text.Regex.TDFA.NewDFA.Uncons(Uncons(uncons))
+import qualified Text.Regex.TDFA.NewDFA.Engine_FA as FA(execMatch)
+import qualified Text.Regex.TDFA.NewDFA.Engine_NC as NC(execMatch)
+import qualified Text.Regex.TDFA.NewDFA.Engine_NC_FA as NC_FA(execMatch)
 
 --import Debug.Trace
 
@@ -63,91 +65,62 @@ err s = common_error "Text.Regex.TDFA.NewDFA"  s
 set :: (MArray a e (S.ST s),Ix i) => a i e -> Int -> e -> S.ST s ()
 set = unsafeWrite
  
-matchAll :: Regex -> String -> [MatchArray]
-matchAll r s = execMatch r 0 '\n' s
-
-matchOnce :: Regex -> String -> Maybe MatchArray
-matchOnce r s = listToMaybe (matchAll r s)
-
-matchCount :: Regex -> String -> Int
-matchCount regexIn stringIn = length (matchAll regexNC stringIn)
-  where regexNC = regexIn { regex_execOptions = (regex_execOptions regexIn) {captureGroups = False} }
-
-execMatch :: Regex -> Position -> Char -> String -> [MatchArray]
-execMatch (Regex { regex_dfa = dfaIn
-                 , regex_init = startState
-                 , regex_b_index = b_index
-                 , regex_b_tags = b_tags_all
-                 , regex_trie = trie
-                 , regex_tags = aTags
-                 , regex_groups = aGroups
-                 , regex_compOptions = CompOption { multiline = newline }
-                 , regex_execOptions = ExecOption { captureGroups = capture
-                                                  , testMatch = _checkMatch }})
-          offsetIn prevIn inputIn = L.runST runCaptureGroup where
-
-{-
-  msg = "subCapture "++show subCapture
-        ++ ", frontAnchored "++show (frontAnchored,(not newline,isDFAFrontAnchored dfaIn))
-        ++ ", b_index "++show b_index
-        ++ ", b_tags "++show b_tags
-        ++ ", orbitTags "++show orbitTags
--}
-
-  subCapture,frontAnchored :: Bool
-  !subCapture = capture && (1<=rangeSize (bounds aGroups))
-  !frontAnchored = (not newline) && isDFAFrontAnchored dfaIn
+{-# SPECIALIZE execMatch :: Regex -> Position -> Char -> ([] Char) -> [MatchArray] #-}
+{-# SPECIALIZE execMatch :: Regex -> Position -> Char -> (Seq Char) -> [MatchArray] #-}
+{-# SPECIALIZE execMatch :: Regex -> Position -> Char -> SBS.ByteString -> [MatchArray] #-}
+{-# SPECIALIZE execMatch :: Regex -> Position -> Char -> LBS.ByteString -> [MatchArray] #-}
+execMatch :: Uncons text => Regex -> Position -> Char -> text -> [MatchArray]
+execMatch r@(Regex { regex_dfa = DFA {d_id=didIn,d_dt=dtIn}
+                   , regex_init = startState
+                   , regex_b_index = b_index
+                   , regex_b_tags = b_tags_all
+                   , regex_trie = trie
+                   , regex_tags = aTags
+                   , regex_groups = aGroups
+                   , regex_isFrontAnchored = frontAnchored
+                   , regex_compOptions = CompOption { multiline = newline }
+                   , regex_execOptions = ExecOption { captureGroups = capture
+                                                    , testMatch = _checkMatch }})
+          offsetIn prevIn inputIn = case (subCapture,frontAnchored) of
+                                      (True  ,False) -> L.runST runCaptureGroup
+                                      (True  ,True)  -> FA.execMatch r offsetIn prevIn inputIn
+                                      (False ,False) -> NC.execMatch r offsetIn prevIn inputIn
+                                      (False ,True)  -> NC_FA.execMatch r offsetIn prevIn inputIn
+ where
+  subCapture :: Bool
+  subCapture = capture && (1<=rangeSize (bounds aGroups))
 
   b_tags :: (Tag,Tag)
-  !b_tags | subCapture = b_tags_all
-          | otherwise = (0,1)
+  !b_tags = b_tags_all
 
   orbitTags :: [Tag]
   !orbitTags = map fst . filter ((Orbit==).snd) . assocs $ aTags
 
-  test :: WhichTest -> Index -> Char -> String -> Bool
   !test = mkTest newline         
 
-  spawnStart :: (Tag,Tag) -> BlankScratch s -> Index -> MScratch s -> Position -> S.ST s Position
-  spawnStart | frontAnchored = \ _ _ _ _ _ -> return maxBound
-             | otherwise = spawnAt -- regardless of subCapture
-
-  doActions :: Position -> STUArray s Tag Position -> [(Tag, Action)] -> ST s ()
-  doActions | subCapture = doAllActions
-            | otherwise = \ _ _ _ -> return ()
-
-  doFinalActions :: Position -> STUArray s Tag Position -> [(Tag, Action)] -> ST s ()
-  doFinalActions | subCapture = doAllActions
-                 | otherwise = do01Actions
-
   comp :: C s
-  comp | subCapture = {-# SCC "matchHere.comp" #-} ditzyComp'3 aTags
-       | otherwise = comp01
-
-  tagsToGroupsST | subCapture = tagsToAllGroupsST
-                 | otherwise = tagsToGroup0ST
+  comp = {-# SCC "matchHere.comp" #-} ditzyComp'3 aTags
 
   runCaptureGroup :: L.ST s [MatchArray]
   runCaptureGroup = {-# SCC "runCaptureGroup" #-} do
     obtainNext <- L.strictToLazyST constructNewEngine
     let loop = do vals <- L.strictToLazyST obtainNext
                   if null vals -- force vals before defining valsRest
-                    then return []
+                    then return [] -- end of capturing
                     else do valsRest <- loop
                             return (vals ++ valsRest)
     loop
 
---  constructNewEngine :: forall s. S.ST s (S.ST s [MatchArray])
+  constructNewEngine :: S.ST s (S.ST s [MatchArray])
   constructNewEngine =  {-# SCC "constructNewEngine" #-} do
-    (SScratch s1In s2In restScratch@(_winQ,blank,_which)) <- newScratch b_index b_tags
-    spawnAt b_tags blank startState s1In offsetIn
     storeNext <- newSTRef undefined
-    writeSTRef storeNext (goNext storeNext restScratch s1In s2In dfaIn offsetIn prevIn inputIn)
+    writeSTRef storeNext (goNext storeNext)
     let obtainNext = join (readSTRef storeNext)
     return obtainNext
 
-  goNext storeNext (winQ,blank,which) s1In' s2In' dfaIn' offsetIn' prevIn' inputIn' = {-# SCC "goNext" #-} do
-    writeSTRef storeNext (err "obtainNext called while goNext is running!")
+  goNext storeNext = {-# SCC "goNext" #-} do
+    (SScratch s1In s2In (winQ,blank,which)) <- newScratch b_index b_tags
+    spawnStart b_tags blank startState s1In offsetIn
     eliminatedStateFlag <- newSTRef False
     eliminatedRespawnFlag <- newSTRef False
     let next s1 s2 did dt offset prev input = {-# SCC "goNext.next" #-}
@@ -156,41 +129,31 @@ execMatch (Regex { regex_dfa = dfaIn
               if test wt offset prev input
                 then next s1 s2 did a offset prev input
                 else next s1 s2 did b offset prev input
-            Simple' {dt_win=w} -> do
-              if IMap.null w then proceedNow s1 s2 did dt offset prev input
-                else newWinnerThenProceed s1 s2 did dt offset prev input
+            Simple' {dt_win=w,dt_trans=t, dt_other=o}
+              | IMap.null w ->
+                  case uncons input of
+                    Nothing -> finalizeWinners
+                    Just (c,input') ->
+                      case CMap.findWithDefault o c t of
+                        Transition {trans_many=DFA {d_id=did',d_dt=dt'},trans_how=dtrans} ->
+                          findTrans s1 s2 did' dt' dtrans offset c input'
+              | otherwise -> do
+                  (did',dt') <- processWinner s1 did dt w offset
+                  next' s1 s2 did' dt' offset prev input
 
-        proceedNow | frontAnchored = proceedNowSingle
-                   | otherwise = proceedNowMany
-
-        proceedNowSingle s1 s2 did dt offset prev input = {-# SCC "goNext.proceedNowSingle" #-}
+        next' s1 s2 did dt offset prev input = {-# SCC "goNext.next'" #-}
           case dt of
             Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
               if test wt offset prev input
-                then proceedNowSingle s1 s2 did a offset prev input
-                else proceedNowSingle s1 s2 did b offset prev input
-            Simple' {dt_trans=t, dt_other=o} ->
-              case input of
-                [] -> finalizeWinners
-                (c:input') -> do
+                then next' s1 s2 did a offset prev input
+                else next' s1 s2 did b offset prev input
+            Simple' {dt_win=w,dt_trans=t, dt_other=o} ->
+              case uncons input of
+                Nothing -> finalizeWinners
+                Just (c,input') ->
                   case CMap.findWithDefault o c t of
-                    Transition {trans_single=dfa',trans_how=dtrans} | ISet.null (d_id dfa') -> finalizeWinners
-                                                                    | otherwise ->
-                      findTrans s1 s2 (d_id dfa') (d_dt dfa') dtrans offset c input'
-
-        proceedNowMany s1 s2 did dt offset prev input = {-# SCC "goNext.proceedNowMany" #-}
-          case dt of
-            Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
-              if test wt offset prev input
-                then proceedNowMany s1 s2 did a offset prev input
-                else proceedNowMany s1 s2 did b offset prev input
-            Simple' {dt_trans=t, dt_other=o} ->
-              case input of
-                [] -> finalizeWinners
-                (c:input') -> do
-                  case CMap.findWithDefault o c t of
-                    Transition {trans_many=dfa',trans_how=dtrans} ->
-                      findTrans s1 s2 (d_id dfa') (d_dt dfa') dtrans offset c input'
+                    Transition {trans_many=DFA {d_id=did',d_dt=dt'},trans_how=dtrans} ->
+                      findTrans s1 s2 did' dt' dtrans offset c input'
 
 -- compressOrbits gets all the current Tag-0 start information from
 -- the NFA states; then it loops through all the Orbit tags with
@@ -309,14 +272,6 @@ execMatch (Regex { regex_dfa = dfaIn
                                     ,blank_pos blank,mempty)
                                               | otherwise = do
                 let prep (sourceIndex,(_dopa,instructions)) = {-# SCC "goNext.findTrans.prep" #-} do
-{-
-                      ms1 <- showMS s1 sourceIndex
-                      let msg = unlines $ [ "findTrans prep: "++show (sourceIndex,destIndex) ++ " at offset "++show offset ++ "for d_id of "++show did'
-                                          , ms1
-                                          , show instructions
-                                          ]
-                      trace msg $ do
--}
                       pos <- maybe (err $ "findTrans,1 : "++show (sourceIndex,destIndex,did')) return
                                =<< m_pos s1 !! sourceIndex
                       orbit <- m_orbit s1 !! sourceIndex
@@ -324,20 +279,6 @@ execMatch (Regex { regex_dfa = dfaIn
                       return ((sourceIndex,instructions),pos,orbit')
                     challenge x1@((_si1,ins1),_p1,_o1) x2@((_si2,ins2),_p2,_o2) = {-# SCC "goNext.findTrans.challenge" #-} do
                       check <- comp offset x1 (newPos ins1) x2 (newPos ins2)
-{-
-                      ms1 <- showMS s1 _si1
-                      ms2 <- showMS s1 _si2
-                      let msg = unlines $ [ "findTrans challenge: "++show ((_si1,_si2),destIndex) ++ " at offset "++show offset ++ "for d_id of "++show did'
-                                          , ms1
-                                          , show ins1
-                                          , show _o1
-                                          , ms2
-                                          , show ins2
-                                          , show _o2
-                                          , "Result "++show check
-                                          ]
-                      trace msg $ do
--}
                       if check==LT then return x2 else return x1
                 (first:rest) <- mapM prep (IMap.toList sources)
                 set which destIndex =<< foldM challenge first rest
@@ -372,89 +313,69 @@ execMatch (Regex { regex_dfa = dfaIn
 -- winEmpty possibility is also checked for. (unit test pattern ".*")
 -- (futher test "(.+|.+.)*" on "aa\n")
 
-        newWinnerThenProceed s1 s2 did dt offset prev input = {-# SCC "goNext.newWinnerThenProceed" #-}
-          case dt of
-            Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
-              if test wt offset prev input
-                then newWinnerThenProceed s1 s2 did a offset prev input
-                else newWinnerThenProceed s1 s2 did b offset prev input
-            Simple' {dt_win=w} -> do
-              let prep x@(sourceIndex,instructions) = {-# SCC "goNext.newWinnerThenProceed.prep" #-} do
-                    pos <- maybe (err "newWinnerThenProceed,1") return =<< m_pos s1 !! sourceIndex
-                    startPos <- pos !! 0
-                    orbit <- m_orbit s1 !! sourceIndex
-                    let orbit' = maybe orbit (\ f -> f offset orbit) (newOrbits instructions)
-                    return (startPos,(x,pos,orbit'))
-                  challenge x1@((_si1,ins1),_p1,_o1) x2@((_si2,ins2),_p2,_o2) = {-# SCC "goNext.newWinnerThenProceed.challenge" #-} do
-                    check <- comp offset x1 (newPos ins1) x2 (newPos ins2)
-{-
-                    ms1 <- showMS s1 _si1
-                    ms2 <- showMS s1 _si2
-                    let msg = unlines $ [ "newWinnerThenProceed challenge: "++show (_si1,_si2) ++ " at offset "++show offset
-                                        , ms1
-                                        , show ins1
-                                        , show _o1
-                                        , ms2
-                                        , show ins2
-                                        , show _o2
-                                        , "Result "++show check
-                                        ]
-                    trace msg $ do
--}
-                    if check==LT then return x2 else return x1
-              prep'd <- mapM prep (IMap.toList w)
-              let (emptyFalse,emptyTrue) = partition ((offset >) . fst) prep'd
-              mayID <- {-# SCC "goNext.newWinnerThenProceed.mayID" #-}
-                       case map snd emptyFalse of
-                        [] -> return Nothing
-                        (first:rest) -> do
-                          best@((_sourceIndex,_instructions),bp,_orbit') <- foldM challenge first rest
-                          newWinner offset best
-                          startWin <- bp !! 0
-                          let states = ISet.toAscList did
-                              keepState i1 = do
-                                pos <- maybe (err "newWinnerThenProceed,2") return =<< m_pos s1 !! i1
-                                startsAt <- pos !! 0
-                                let keep = (startsAt <= startWin) || (offset <= startsAt)
-                                when (not keep) $ do
-                                  writeSTRef eliminatedStateFlag True
-                                  when (i1 == startState) (writeSTRef eliminatedRespawnFlag True)
-                                return keep
-                          states' <- filterM keepState states
-                          changed <- readSTRef eliminatedStateFlag
-                          if changed then return (Just states') else return Nothing
-              case emptyTrue of
-                [] -> case IMap.lookup startState w of
-                       Nothing -> return ()
-                       Just ins -> winEmpty offset ins
-                [first] -> newWinner offset (snd first)
-                _ -> err "newWinnerThenProceed,3 : too many emptyTrue values"
-              case mayID of
-                Nothing -> proceedNow s1 s2 did dt offset prev input
-                Just states' -> do
-                  writeSTRef eliminatedStateFlag False
-                  respawn <- readSTRef eliminatedRespawnFlag
-                  if respawn
-                    then do
-                      writeSTRef eliminatedRespawnFlag False
-                      spawnStart b_tags blank startState s1 (succ offset)
-                      let dfa' = Trie.lookupAsc trie (sort (states'++[startState]))
-                      proceedNow s1 s2 (d_id dfa') (d_dt dfa') offset prev input
-                    else do
-                      let dfa' = Trie.lookupAsc trie states'
-                      proceedNow s1 s2 (d_id dfa') (d_dt dfa') offset prev input
+        {-# INLINE processWinner #-}
+        processWinner s1 did dt w offset = {-# SCC "goNext.newWinnerThenProceed" #-} do
+          let prep x@(sourceIndex,instructions) = {-# SCC "goNext.newWinnerThenProceed.prep" #-} do
+                pos <- maybe (err "newWinnerThenProceed,1") return =<< m_pos s1 !! sourceIndex
+                startPos <- pos !! 0
+                orbit <- m_orbit s1 !! sourceIndex
+                let orbit' = maybe orbit (\ f -> f offset orbit) (newOrbits instructions)
+                return (startPos,(x,pos,orbit'))
+              challenge x1@((_si1,ins1),_p1,_o1) x2@((_si2,ins2),_p2,_o2) = {-# SCC "goNext.newWinnerThenProceed.challenge" #-} do
+                check <- comp offset x1 (newPos ins1) x2 (newPos ins2)
+                if check==LT then return x2 else return x1
+          prep'd <- mapM prep (IMap.toList w)
+          let (emptyFalse,emptyTrue) = partition ((offset >) . fst) prep'd
+          mayID <- {-# SCC "goNext.newWinnerThenProceed.mayID" #-}
+                   case map snd emptyFalse of
+                    [] -> return Nothing
+                    (first:rest) -> do
+                      best@((_sourceIndex,_instructions),bp,_orbit') <- foldM challenge first rest
+                      newWinner offset best
+                      startWin <- bp !! 0
+                      let states = ISet.toAscList did
+                          keepState i1 = do
+                            pos <- maybe (err "newWinnerThenProceed,2") return =<< m_pos s1 !! i1
+                            startsAt <- pos !! 0
+                            let keep = (startsAt <= startWin) || (offset <= startsAt)
+                            when (not keep) $ do
+                              writeSTRef eliminatedStateFlag True
+                              when (i1 == startState) (writeSTRef eliminatedRespawnFlag True)
+                            return keep
+                      states' <- filterM keepState states
+                      changed <- readSTRef eliminatedStateFlag
+                      if changed then return (Just states') else return Nothing
+          case emptyTrue of
+            [] -> case IMap.lookup startState w of
+                   Nothing -> return ()
+                   Just ins -> winEmpty offset ins
+            [first] -> newWinner offset (snd first)
+            _ -> err "newWinnerThenProceed,3 : too many emptyTrue values"
+          case mayID of
+            Nothing -> return (did,dt) -- proceedNow s1 s2 did dt offset prev input
+            Just states' -> do
+              writeSTRef eliminatedStateFlag False
+              respawn <- readSTRef eliminatedRespawnFlag
+              DFA {d_id=did',d_dt=dt'} <-
+                if respawn
+                  then do
+                    writeSTRef eliminatedRespawnFlag False
+                    spawnStart b_tags blank startState s1 (succ offset)
+                    return (Trie.lookupAsc trie (sort (states'++[startState])))
+                  else return (Trie.lookupAsc trie states')
+              return (did',dt')
 
         winEmpty preTag winInstructions = {-# SCC "goNext.winEmpty" #-} do
           newerPos <- newA_ b_tags
           copySTU (blank_pos blank) newerPos
           set newerPos 0 preTag
-          doFinalActions preTag newerPos (newPos winInstructions)
+          doActions preTag newerPos (newPos winInstructions)
           putMQ (WScratch newerPos) winQ
                 
         newWinner preTag ((_sourceIndex,winInstructions),oldPos,_newOrbit) = {-# SCC "goNext.newWinner" #-} do
           newerPos <- newA_ b_tags
           copySTU oldPos newerPos
-          doFinalActions preTag newerPos (newPos winInstructions)
+          doActions preTag newerPos (newPos winInstructions)
           putMQ (WScratch newerPos) winQ
 
         finalizeWinners = do
@@ -465,51 +386,29 @@ execMatch (Regex { regex_dfa = dfaIn
           mapM (tagsToGroupsST aGroups) winners
 
     -- goNext then ends with the next statement
-    next s1In' s2In' (d_id dfaIn') (d_dt dfaIn') offsetIn' prevIn' inputIn'
+    next s1In s2In didIn dtIn offsetIn prevIn inputIn
 
-{-# INLINE do01Actions #-}
-do01Actions :: Position -> STUArray s Tag Position -> [(Tag, Action)] -> ST s ()
-do01Actions preTag pos ins = doAllActions preTag pos (filter ((1>=) . fst) ins)
-
-{-# INLINE doAllActions #-}
-doAllActions :: Position -> STUArray s Tag Position -> [(Tag, Action)] -> ST s ()
-doAllActions preTag pos ins = mapM_ doAction ins where
+{-# INLINE doActions #-}
+doActions :: Position -> STUArray s Tag Position -> [(Tag, Action)] -> ST s ()
+doActions preTag pos ins = mapM_ doAction ins where
   postTag = succ preTag
   doAction (tag,SetPre) = set pos tag preTag
   doAction (tag,SetPost) = set pos tag postTag
   doAction (tag,SetVal v) = set pos tag v
 
-
-{-
-
-Lets say that NFA states start at positions 0,1,2,3,4,5 and offset is 5.
-Thus none are in the startState.
-We are about to process the 6th character.
-The first winner is now found, and it starts with the index 2 and ends at index 5 (always the offset).
-In addition a null winner starting and ending at 5 is found (between 5th and 6th characters).
-Lets also say that the 0,2,4 NFA states _may_ transition next to include the startState
-position 0 -> keep (might win startState, which is okay)
-position 1 -> keep (normal keep case)
-position 2 -> keep (just created winner, may be extended)
-position 3 -> drop (normal drop case)
-position 4 -> drop (must not win startState)
-position 5 -> keep (just created empty winner)
-
-if "position 0" does feed a start state then a new one will be respawn, starting with "position 6".
-
--}
-
 ----
 
 {-# INLINE mkTest #-}
-mkTest :: Bool -> WhichTest -> Index -> Char -> String -> Bool
+mkTest :: Uncons text => Bool -> WhichTest -> Index -> Char -> text -> Bool
 mkTest isMultiline = if isMultiline then test_multiline else test_singleline
   where test_multiline Test_BOL _off prev _input = prev == '\n'
-        test_multiline Test_EOL _off _prev input = case input of
-                                                     [] -> True
-                                                     (next:_) -> next == '\n'
+        test_multiline Test_EOL _off _prev input = case uncons input of
+                                                     Nothing -> True
+                                                     Just (next,_) -> next == '\n'
         test_singleline Test_BOL off _prev _input = off == 0
-        test_singleline Test_EOL _off _prev input = null input
+        test_singleline Test_EOL _off _prev input = case uncons input of
+                                                      Nothing -> True
+                                                      _ -> False
 
 ----
 
@@ -534,11 +433,6 @@ resetMQ (MQ {mq_earliest=earliest,mq_list=list}) = do
 
 putMQ :: WScratch s -> MQ s -> S.ST s ()
 putMQ ws (MQ {mq_earliest=earliest,mq_list=list}) = do
-{-
-  sws <-s howWS ws
-  let msg = "putMQ\n"++sws
-  trace msg $ do
--}
   start <- w_pos ws !! 0
   let mqa = MQA start ws
   startE <- readSTRef earliest
@@ -780,8 +674,8 @@ tagsToGroup0ST _aGroups (WScratch {w_pos=pos})= do
   set ma 0 (startPos0,stopPos0-startPos0)
   unsafeFreeze ma
 
-tagsToAllGroupsST :: forall s. Array GroupIndex [GroupInfo] -> WScratch s -> S.ST s MatchArray
-tagsToAllGroupsST aGroups (WScratch {w_pos=pos})= do
+tagsToGroupsST :: forall s. Array GroupIndex [GroupInfo] -> WScratch s -> S.ST s MatchArray
+tagsToGroupsST aGroups (WScratch {w_pos=pos})= do
   let b_max = snd (bounds (aGroups))
   ma <- newArray (0,b_max) (-1,0) :: ST s (STArray s Int (MatchOffset,MatchLength))
   startPos0 <- pos !! 0
@@ -806,11 +700,11 @@ tagsToAllGroupsST aGroups (WScratch {w_pos=pos})= do
 
 {- MUTABLE TAGGED TRANSITION (returning Tag-0 value) -}
 
-{-# INLINE spawnAt #-}
+{-# INLINE spawnStart #-}
 -- Reset the entry at "Index", or allocate such an entry.
 -- set tag 0 to the "Position"
-spawnAt :: (Tag,Tag) -> BlankScratch s -> Index -> MScratch s -> Position -> S.ST s Position
-spawnAt b_tags (BlankScratch blankPos) i s1 thisPos = do
+spawnStart :: (Tag,Tag) -> BlankScratch s -> Index -> MScratch s -> Position -> S.ST s Position
+spawnStart b_tags (BlankScratch blankPos) i s1 thisPos = do
   oldPos <- m_pos s1 !! i
   pos <- case oldPos of
            Nothing -> do
