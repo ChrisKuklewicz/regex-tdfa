@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-| 
 This modules provides 'RegexMaker' and 'RegexLike' instances for using
 'ByteString' with the DFA backend ("Text.Regex.Lib.WrapDFAEngine" and
@@ -18,7 +17,7 @@ module Text.Regex.TDFA.ByteString.Lazy(
  ) where
 
 import Data.Array.IArray((!),elems,amap)
-import qualified Data.ByteString.Lazy.Char8 as L
+import qualified Data.ByteString.Lazy.Char8 as L(ByteString,take,drop,unpack)
 
 import Text.Regex.Base(MatchArray,RegexContext(..),RegexMaker(..),RegexLike(..))
 import Text.Regex.Base.Impl(polymatch,polymatchM)
@@ -26,7 +25,6 @@ import Text.Regex.TDFA.ReadRegex(parseRegex)
 import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
 import Text.Regex.TDFA.TDFA(patternToRegex)
 import Text.Regex.TDFA.Common(Regex(..),CompOption,ExecOption(captureGroups))
-import Text.Regex.TDFA.Wrap()
 
 import Data.Maybe(listToMaybe)
 import Text.Regex.TDFA.NewDFA.Engine(execMatch)
@@ -61,14 +59,15 @@ instance RegexLike Regex L.ByteString where
          (matchOnce regex source)
   matchAllText regex source =
     let go i _ _ | i `seq` False = undefined
-        go i t [] = []
+        go _i _t [] = []
         go i t (x:xs) =
           let (off0,len0) = x!0
               trans pair@(off32,len32) = (L.take (fi len32) (L.drop (fi (off32-i)) t),pair)
               t' = L.drop (fi (off0+len0-i)) t
-          in amap trans x : seq t' (go (i+off0+len0) t' xs) 
+          in amap trans x : seq t' (go (off0+len0) t' xs) 
     in go 0 source (matchAll regex source)
 
+fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
 
 compile :: CompOption -- ^ Flags (summed together)

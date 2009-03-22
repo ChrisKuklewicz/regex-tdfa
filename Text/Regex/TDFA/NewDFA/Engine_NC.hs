@@ -1,47 +1,28 @@
 -- | This is the non-capturing form of Text.Regex.TDFA.NewDFA.String
 module Text.Regex.TDFA.NewDFA.Engine_NC(execMatch) where
 
-import Control.Monad(when,forM,forM_,liftM2,foldM,join,MonadPlus(..),filterM)
-import Data.Array.Base(unsafeRead,unsafeWrite,STUArray(..))
--- #ifdef __GLASGOW_HASKELL__
-import GHC.Arr(STArray(..))
-import GHC.ST(ST(..))
-import GHC.Prim(MutableByteArray#,RealWorld,Int#,sizeofMutableByteArray#,unsafeCoerce#)
-{-
--- #else
-import Control.Monad.ST(ST)
-import Data.Array.ST(STArray)
--- #endif
--}
+import Control.Monad(when,join,filterM)
+import Data.Array.Base(unsafeRead,unsafeWrite)
 import Prelude hiding ((!!))
 
-import Data.Array.MArray(MArray(..),unsafeFreeze,getAssocs)
-import Data.Array.IArray(Array,bounds,assocs)
---import qualified Data.Foldable as F
-import qualified Data.IntMap.CharMap2 as CMap(lookup,findWithDefault)
-import Data.IntMap(IntMap)
-import qualified Data.IntMap as IMap(null,toList,lookup,insert,keys,member)
-import Data.Ix(Ix,rangeSize,range)
-import Data.Maybe(catMaybes,listToMaybe)
-import Data.Monoid(Monoid(..))
---import Data.IntSet(IntSet)
-import qualified Data.IntSet as ISet(toAscList,null)
-import qualified Data.Array.ST
-import Data.Array.IArray((!))
-import qualified Data.Array.MArray as MA
-import Data.List(partition,sort,foldl',sortBy,groupBy)
-import Data.STRef
-import qualified Control.Monad.ST.Lazy as L
-import qualified Control.Monad.ST.Strict as S
-import Data.Sequence(Seq,ViewL(..),viewl)
-import qualified Data.Sequence as Seq
-import qualified Data.ByteString.Char8 as SBS
-import qualified Data.ByteString.Lazy.Char8 as LBS
+import Data.Array.MArray(MArray(..),unsafeFreeze)
+import Data.Array.IArray(Ix)
+import Data.Array.ST(STArray,STUArray)
+import qualified Data.IntMap.CharMap2 as CMap(findWithDefault)
+import qualified Data.IntMap as IMap(null,toList,keys,member)
+import qualified Data.IntSet as ISet(toAscList)
+import Data.STRef(STRef,newSTRef,readSTRef,writeSTRef)
+import qualified Control.Monad.ST.Lazy as L(runST,strictToLazyST)
+import qualified Control.Monad.ST.Strict as S(ST)
+import Data.Sequence(Seq)
+import qualified Data.ByteString.Char8 as SBS(ByteString)
+import qualified Data.ByteString.Lazy.Char8 as LBS(ByteString)
 
 import Text.Regex.Base(MatchArray,MatchOffset,MatchLength)
-import qualified Text.Regex.TDFA.IntArrTrieSet as Trie
+import qualified Text.Regex.TDFA.IntArrTrieSet as Trie(lookupAsc)
 import Text.Regex.TDFA.Common hiding (indent)
 import Text.Regex.TDFA.NewDFA.Uncons(Uncons(uncons))
+import Text.Regex.TDFA.NewDFA.MakeTest(test_singleline,test_multiline)
 
 -- import Debug.Trace
 
@@ -52,11 +33,11 @@ err :: String -> a
 err s = common_error "Text.Regex.TDFA.NewDFA.Engine_NC"  s
 
 {-# INLINE (!!) #-}
-(!!) :: (MArray a e (S.ST s),Ix i) => a i e -> i -> S.ST s e
-(!!) = MA.readArray -- unsafeRead
+(!!) :: (MArray a e (S.ST s),Ix i) => a i e -> Int -> S.ST s e
+(!!) = unsafeRead
 {-# INLINE set #-}
-set :: (MArray a e (S.ST s),Ix i) => a i e -> i -> e -> S.ST s ()
-set = MA.writeArray -- unsafeWrite
+set :: (MArray a e (S.ST s),Ix i) => a i e -> Int -> e -> S.ST s ()
+set = unsafeWrite
 
 {-# SPECIALIZE execMatch :: Regex -> Position -> Char -> ([] Char) -> [MatchArray] #-}
 {-# SPECIALIZE execMatch :: Regex -> Position -> Char -> (Seq Char) -> [MatchArray] #-}
@@ -66,13 +47,8 @@ execMatch :: Uncons text => Regex -> Position -> Char -> text -> [MatchArray]
 execMatch (Regex { regex_dfa = (DFA {d_id=didIn,d_dt=dtIn})
                  , regex_init = startState
                  , regex_b_index = b_index
-                 , regex_b_tags = b_tags_all
                  , regex_trie = trie
-                 , regex_tags = aTags
-                 , regex_groups = aGroups
-                 , regex_compOptions = CompOption { multiline = newline }
-                 , regex_execOptions = ExecOption { captureGroups = capture
-                                                  , testMatch = _checkMatch }})
+                 , regex_compOptions = CompOption { multiline = newline } } )
           offsetIn prevIn inputIn = L.runST runCaptureGroup where
 
   !test = mkTest newline         
@@ -98,7 +74,6 @@ execMatch (Regex { regex_dfa = (DFA {d_id=didIn,d_dt=dtIn})
     set s1In startState offsetIn
     writeSTRef storeNext (err "obtainNext called while goNext is running!")
     eliminatedStateFlag <- newSTRef False
-    eliminatedRespawnFlag <- newSTRef False
     let next s1 s2 did dt offset prev input = {-# SCC "goNext.next" #-}
           case dt of
             Testing' {dt_test=wt,dt_a=a,dt_b=b} ->
@@ -123,7 +98,7 @@ execMatch (Regex { regex_dfa = (DFA {d_id=didIn,d_dt=dtIn})
               if test wt offset prev input
                 then next' s1 s2 did a offset prev input
                 else next' s1 s2 did b offset prev input
-            Simple' {dt_win=w,dt_trans=t, dt_other=o} ->
+            Simple' {dt_trans=t, dt_other=o} ->
               case uncons input of
                 Nothing -> finalizeWinners
                 Just (c,input') -> do
@@ -196,14 +171,6 @@ execMatch (Regex { regex_dfa = (DFA {d_id=didIn,d_dt=dtIn})
 {-# INLINE mkTest #-}
 mkTest :: Uncons text => Bool -> WhichTest -> Index -> Char -> text -> Bool
 mkTest isMultiline = if isMultiline then test_multiline else test_singleline
-  where test_multiline Test_BOL _off prev _input = prev == '\n'
-        test_multiline Test_EOL _off _prev input = case uncons input of
-                                                     Nothing -> True
-                                                     Just (next,_) -> next == '\n'
-        test_singleline Test_BOL off _prev _input = off == 0
-        test_singleline Test_EOL _off _prev input = case uncons input of
-                                                      Nothing -> True
-                                                      _ -> False
 
 ----
 
@@ -225,7 +192,7 @@ resetMQ (MQ {mq_earliest=earliest,mq_list=list}) = do
   writeSTRef list []
 
 putMQ :: WScratch -> MQ s -> S.ST s ()
-putMQ ws@(WScratch {ws_start=start,ws_stop=stop}) (MQ {mq_earliest=earliest,mq_list=list}) = do
+putMQ ws@(WScratch {ws_start=start}) (MQ {mq_earliest=earliest,mq_list=list}) = do
   startE <- readSTRef earliest
   if start <= startE
     then writeSTRef earliest start >> writeSTRef list [ws]
@@ -235,7 +202,7 @@ putMQ ws@(WScratch {ws_start=start,ws_stop=stop}) (MQ {mq_earliest=earliest,mq_l
           !new = ws : rest
       writeSTRef list new
 
-getMQ :: Position -> MQ s -> ST s [WScratch]
+getMQ :: Position -> MQ s -> S.ST s [WScratch]
 getMQ pos (MQ {mq_earliest=earliest,mq_list=list}) = do
   old <- readSTRef list
   case span (\ w -> pos <= ws_start w) old of
@@ -255,19 +222,15 @@ data SScratch s = SScratch { _s_1 :: !(MScratch s)
                            , _s_mq :: !(MQ s)
                            }
 type MScratch s = STUArray s Index Position
-data WScratch = WScratch {ws_start,ws_stop :: !Position}
+data WScratch = WScratch {ws_start,_ws_stop :: !Position}
   deriving Show
 
 {- DEBUGGING HELPERS -}
 {- CREATING INITIAL MUTABLE SCRATCH DATA STRUCTURES -}
 
 {-# INLINE newA #-}
-newA :: (MArray (STUArray s) e (ST s)) => (Tag,Tag) -> e -> S.ST s (STUArray s Tag e)
+newA :: (MArray (STUArray s) e (S.ST s)) => (Tag,Tag) -> e -> S.ST s (STUArray s Tag e)
 newA b_tags initial = newArray b_tags initial
-
-{-# INLINE newA_ #-}
-newA_ :: (MArray (STUArray s) e (ST s)) => (Tag,Tag) -> S.ST s (STUArray s Tag e)
-newA_ b_tags = newArray_ b_tags
 
 newScratch :: (Index,Index) -> S.ST s (SScratch s)
 newScratch b_index = do
@@ -281,8 +244,8 @@ newMScratch b_index = newA b_index (-1)
 
 {- CONVERT WINNERS TO MATCHARRAY -}
 
-wsToGroup :: WScratch -> ST s MatchArray
+wsToGroup :: WScratch -> S.ST s MatchArray
 wsToGroup (WScratch start stop) = do
-  ma <- newArray (0,0) (start,stop-start)  :: ST s (STArray s Int (MatchOffset,MatchLength))
+  ma <- newArray (0,0) (start,stop-start)  :: S.ST s (STArray s Int (MatchOffset,MatchLength))
   unsafeFreeze ma
 

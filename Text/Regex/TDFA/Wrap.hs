@@ -1,28 +1,13 @@
-{-# OPTIONS -fno-warn-orphans #-}
 -- | "Text.Regex.TDFA.Wrap" provides the instance of RegexOptions and
 -- the definition of (=~) and (=~~).  This is all re-exported by
 -- "Text.Regex.TDFA".
 
 module Text.Regex.TDFA.Wrap(Regex(..),CompOption(..),ExecOption(..),(=~),(=~~)) where
 
-{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
+{- By Chris Kuklewicz, 2007-2009. BSD License, see the LICENSE file. -}
 
-import Text.Regex.Base.RegexLike(RegexMaker(..),RegexOptions(..),RegexContext(..))
+import Text.Regex.Base.RegexLike(RegexMaker(..),RegexContext(..))
 import Text.Regex.TDFA.Common(CompOption(..),ExecOption(..),Regex(..))
-
-instance RegexOptions Regex CompOption ExecOption where
-  blankCompOpt = defaultCompOpt
-  blankExecOpt = defaultExecOpt
-  defaultCompOpt = CompOption { caseSensitive = True
-                              , multiline = True
-                              , rightAssoc = True
-                              , lastStarGreedy = False
-                              }
-  defaultExecOpt = ExecOption { captureGroups = True
-                              , testMatch = False
-                              }
-  setExecOpts e r = r {regex_execOptions=e}
-  getExecOpts r = regex_execOptions r
 
 -- | This is the pure functional matching operator.  If the target
 -- cannot be produced then some empty result will be returned.  If

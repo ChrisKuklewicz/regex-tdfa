@@ -7,21 +7,23 @@ module Text.Regex.TDFA.TDFA(patternToRegex,DFA(..),DT(..)
 
 --import Control.Arrow((***))
 import Control.Monad.Instances()
-import Control.Monad.RWS
+import Data.Monoid(Monoid(..))
 import Control.Monad.State(State,MonadState(..),execState)
 import Data.Array.IArray(Array,(!),bounds,{-assocs-})
 import Data.IntMap(IntMap)
-import qualified Data.IntMap as IMap
+import qualified Data.IntMap as IMap(empty,keys,delete,null,lookup,fromDistinctAscList
+                                    ,member,unionWith,singleton,union
+                                    ,toAscList,Key,elems,toList,insert
+                                    ,insertWith,insertWithKey)
 import Data.IntMap.CharMap2(CharMap(..))
 import qualified Data.IntMap.CharMap2 as Map(empty)
 --import Data.IntSet(IntSet)
-import qualified Data.IntSet as ISet
+import qualified Data.IntSet as ISet(empty,singleton,null)
 import Data.List(foldl')
 import qualified Data.Map (Map,empty,member,insert,elems)
-import Data.Maybe(isJust)
 import Data.Sequence as S((|>),{-viewl,ViewL(..)-})
 
-import Text.Regex.TDFA.Common
+import Text.Regex.TDFA.Common {- all -}
 import Text.Regex.TDFA.IntArrTrieSet(TrieSet)
 import qualified Text.Regex.TDFA.IntArrTrieSet as Trie(lookupAsc,fromSinglesMerge)
 import Text.Regex.TDFA.Pattern(Pattern)
@@ -303,7 +305,7 @@ isDFAFrontAnchored = isDTFrontAnchored . d_dt
    where
     -- can DT never win or accept a character (when following trans_single)?
     isDTLosing :: DT -> Bool
-    isDTLosing (Testing' {dt_a=a,dt_b=b}) = isDTLosing a && isDTLosing b
+    isDTLosing (Testing' {dt_a=a',dt_b=b'}) = isDTLosing a' && isDTLosing b'
     isDTLosing (Simple' {dt_win=w}) | not (IMap.null w) = False -- can win with 0 characters
     isDTLosing (Simple' {dt_trans=CharMap mt,dt_other=o}) =
       let ts = o : IMap.elems mt
@@ -313,7 +315,7 @@ isDFAFrontAnchored = isDTFrontAnchored . d_dt
       transLoses (Transition {trans_single=dfa,trans_how=dtrans}) = isDTLose dfa || onlySpawns dtrans
        where
         isDTLose :: DFA -> Bool
-        isDTLose dfa = ISet.null (d_id dfa)
+        isDTLose dfa' = ISet.null (d_id dfa')
         onlySpawns :: DTrans -> Bool
         onlySpawns t = case IMap.elems t of
                          [m] -> IMap.null m

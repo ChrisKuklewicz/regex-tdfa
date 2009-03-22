@@ -6,7 +6,6 @@
 -- specialized to produce the needed variants.
 module Text.Regex.TDFA.NewDFA.Engine_FA(execMatch) where
 
-import Control.Monad(when,unless,forM,forM_,liftM2,foldM,join,MonadPlus(..),filterM)
 import Data.Array.Base(unsafeRead,unsafeWrite,STUArray(..))
 -- #ifdef __GLASGOW_HASKELL__
 import GHC.Arr(STArray(..))
@@ -18,35 +17,30 @@ import Control.Monad.ST(ST)
 import Data.Array.ST(STArray)
 -- #endif
 -}
-import Prelude hiding ((!!))
 
-import Data.Array.MArray(MArray(..),unsafeFreeze,getAssocs)
-import Data.Array.IArray(Array,bounds,assocs)
---import qualified Data.Foldable as F
-import qualified Data.IntMap.CharMap2 as CMap(lookup,findWithDefault)
+import Prelude hiding ((!!))
+import Control.Monad(when,unless,forM,forM_,liftM2,foldM)
+import Data.Array.MArray(MArray(..),unsafeFreeze)
+import Data.Array.IArray(Array,bounds,assocs,Ix(range))
+import qualified Data.IntMap.CharMap2 as CMap(findWithDefault)
 import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap(null,toList,lookup,insert)
-import Data.Ix(Ix,rangeSize,range)
-import Data.Maybe(catMaybes,listToMaybe)
+import Data.Maybe(catMaybes)
 import Data.Monoid(Monoid(..))
---import Data.IntSet(IntSet)
 import qualified Data.IntSet as ISet(toAscList,null)
-import qualified Data.Array.ST
 import Data.Array.IArray((!))
-import qualified Data.Array.MArray
-import Data.List(partition,sort,foldl',sortBy,groupBy)
-import Data.STRef
-import qualified Control.Monad.ST.Lazy as L
-import qualified Control.Monad.ST.Strict as S
+import Data.List(sortBy,groupBy)
+import Data.STRef(STRef,newSTRef,readSTRef,writeSTRef)
+import qualified Control.Monad.ST.Strict as S(ST,runST)
 import Data.Sequence(Seq,ViewL(..),viewl)
-import qualified Data.Sequence as Seq
-import qualified Data.ByteString.Char8 as SBS
-import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.Sequence as Seq(null)
+import qualified Data.ByteString.Char8 as SBS(ByteString)
+import qualified Data.ByteString.Lazy.Char8 as LBS(ByteString)
 
 import Text.Regex.Base(MatchArray,MatchOffset,MatchLength)
-import qualified Text.Regex.TDFA.IntArrTrieSet as Trie
 import Text.Regex.TDFA.Common hiding (indent)
 import Text.Regex.TDFA.NewDFA.Uncons(Uncons(uncons))
+import Text.Regex.TDFA.NewDFA.MakeTest(test_singleline,test_multiline)
 
 --import Debug.Trace
 
@@ -71,16 +65,13 @@ noSource = ((-1,err "noSource"),err "noSource",err "noSource")
 {-# SPECIALIZE execMatch :: Regex -> Position -> Char -> SBS.ByteString -> [MatchArray] #-}
 {-# SPECIALIZE execMatch :: Regex -> Position -> Char -> LBS.ByteString -> [MatchArray] #-}
 execMatch :: Uncons text => Regex -> Position -> Char -> text -> [MatchArray]
-execMatch r@(Regex { regex_dfa =  DFA {d_id=didIn,d_dt=dtIn}
-                   , regex_init = startState
-                   , regex_b_index = b_index
-                   , regex_b_tags = b_tags_all
-                   , regex_trie = trie
-                   , regex_tags = aTags
-                   , regex_groups = aGroups
-                   , regex_compOptions = CompOption { multiline = newline }
-                   , regex_execOptions = ExecOption { captureGroups = capture
-                                                    , testMatch = _checkMatch }})
+execMatch (Regex { regex_dfa =  DFA {d_id=didIn,d_dt=dtIn}
+                 , regex_init = startState
+                 , regex_b_index = b_index
+                 , regex_b_tags = b_tags_all
+                 , regex_tags = aTags
+                 , regex_groups = aGroups
+                 , regex_compOptions = CompOption { multiline = newline } } )
           offsetIn prevIn inputIn = S.runST goNext where
 
   b_tags :: (Tag,Tag)
@@ -246,7 +237,7 @@ execMatch r@(Regex { regex_dfa =  DFA {d_id=didIn,d_dt=dtIn}
           let performTransTo (destIndex,_sources) = {-# SCC "goNext.findTrans.performTransTo" #-} do
                 x@((sourceIndex,_instructions),_pos,_orbit') <- which !! destIndex
                 unless (sourceIndex == (-1)) $
-                  (updateCopy doActions x offset s2 destIndex)
+                  (updateCopy x offset s2 destIndex)
           mapM_ performTransTo dl
           -- findTrans part 3
           let offset' = succ offset in seq offset' $ next s2 s1 did' dt' offset' prev' input'
@@ -276,9 +267,7 @@ execMatch r@(Regex { regex_dfa =  DFA {d_id=didIn,d_dt=dtIn}
           prep'd <- mapM prep (IMap.toList w)
           case map snd prep'd of
             [] -> return ()
-            (first:rest) -> do
-              best@((_sourceIndex,_instructions),bp,_orbit') <- foldM challenge first rest
-              newWinner offset best
+            (first:rest) -> newWinner offset =<< foldM challenge first rest
 
         newWinner preTag ((_sourceIndex,winInstructions),oldPos,_newOrbit) = {-# SCC "goNext.newWinner" #-} do
           newerPos <- newA_ b_tags
@@ -308,14 +297,6 @@ doActions preTag pos ins = mapM_ doAction ins where
 {-# INLINE mkTest #-}
 mkTest :: Uncons text => Bool -> WhichTest -> Index -> Char -> text -> Bool
 mkTest isMultiline = if isMultiline then test_multiline else test_singleline
-  where test_multiline Test_BOL _off prev _input = prev == '\n'
-        test_multiline Test_EOL _off _prev input = case uncons input of
-                                                     Nothing -> True
-                                                     Just (next,_) -> next == '\n'
-        test_singleline Test_BOL off _prev _input = off == 0
-        test_singleline Test_EOL _off _prev input = case uncons input of
-                                                      Nothing -> True
-                                                      _ -> False
 
 ----
 
@@ -348,7 +329,7 @@ data SScratch s = SScratch { _s_1 :: !(MScratch s)
 data MScratch s = MScratch { m_pos :: !(STArray s Index (Maybe (STUArray s Tag Position)))
                            , m_orbit :: !(STArray s Index OrbitLog)
                            }
-newtype BlankScratch s = BlankScratch { blank_pos :: (STUArray s Tag Position)
+newtype BlankScratch s = BlankScratch { _blank_pos :: (STUArray s Tag Position)
                                       }
 newtype WScratch s = WScratch { w_pos :: (STUArray s Tag Position)
                               }
@@ -422,40 +403,6 @@ orderOf post1 post2 =
     (SetPost,SetPre) -> GT
     (SetVal v1,SetVal v2) -> compare v1 v2
     _ -> err $ "bestTrans.compareWith.choose sees incomparable "++show (post1,post2)
-
-comp01 :: C s
-comp01 preTag (_state1,pos1,_orbit1') np1 (_state2,pos2,_orbit2') np2 = do
-  c <- liftM2 compare (pos2!!0) (pos1!!0) -- reversed since Minimize
-  case c of
-    EQ -> challenge1
-    answer -> return answer
- where
-  challenge1 = do
-    case np1 of
-      ((t1,b1):_rest1) | t1==1 -> do
-        let p1 = case b1 of SetPre -> preTag
-                            SetPost -> succ preTag
-                            SetVal v -> v
-        case np2 of
-          ((t2,b2):_rest2) | t2==1 -> do
-            let p2 = case b2 of SetPre -> preTag
-                                SetPost -> succ preTag
-                                SetVal v -> v
-            return (compare p1 p2)
-          _ -> do
-            p2 <- pos2 !! 1
-            return (compare p1 p2)
-      _ -> do
-        p1 <- pos1 !! 1
-        case np2 of
-          ((t2,b2):_rest2) | t2==1 -> do
-            let p2 = case b2 of SetPre -> preTag
-                                SetPost -> succ preTag
-                                SetVal v -> v
-            return (compare p1 p2)
-          _ -> do
-            p2 <- pos2 !! 1
-            return (compare p1 p2)
 
 ditzyComp'3 :: forall s. Array Tag OP -> C s
 ditzyComp'3 aTagOP = comp0 where
@@ -545,14 +492,6 @@ comparePos (p1 :< ps1) (p2 :< ps2) =
 
 {- CONVERT WINNERS TO MATCHARRAY -}
 
-tagsToGroup0ST :: forall s. Array GroupIndex [GroupInfo] -> WScratch s -> S.ST s MatchArray
-tagsToGroup0ST _aGroups (WScratch {w_pos=pos})= do
-  ma <- newArray (0,0) (-1,0) :: ST s (STArray s Int (MatchOffset,MatchLength))
-  startPos0 <- pos !! 0
-  stopPos0 <- pos !! 1
-  set ma 0 (startPos0,stopPos0-startPos0)
-  unsafeFreeze ma
-
 tagsToGroupsST :: forall s. Array GroupIndex [GroupInfo] -> WScratch s -> S.ST s MatchArray
 tagsToGroupsST aGroups (WScratch {w_pos=pos})= do
   let b_max = snd (bounds (aGroups))
@@ -597,13 +536,12 @@ spawnAt b_tags (BlankScratch blankPos) i s1 thisPos = do
   return thisPos
 
 {-# INLINE updateCopy #-}
-updateCopy :: (Index -> STUArray s Tag Position -> [(Tag, Action)] -> ST s a)
-           -> ((Index, Instructions), STUArray s Tag Position, OrbitLog)
+updateCopy :: ((Index, Instructions), STUArray s Tag Position, OrbitLog)
            -> Index
            -> MScratch s
            -> Int
            -> ST s ()
-updateCopy doActions ((_i1,instructions),oldPos,newOrbit) preTag s2 i2 = do
+updateCopy ((_i1,instructions),oldPos,newOrbit) preTag s2 i2 = do
   b_tags <- getBounds oldPos
   newerPos <- maybe (do
     a <- newA_ b_tags

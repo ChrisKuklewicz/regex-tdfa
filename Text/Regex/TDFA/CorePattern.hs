@@ -417,6 +417,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                                  ,preReset=[],postSet=[],preTag=apply m1,postTag=apply m2
                                  ,tagged=False,childGroups=False,wants=WantsQT
                                  ,unQ=Test myTest }
+        xtra = newSyntax compOpt
     in case pIn of
          PEmpty -> nil
          POr [] -> nil
@@ -501,6 +502,14 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
          PDot {} -> one
          PAny {} -> one
          PAnyNot {} -> one
+         -- CompOption's newSyntax enables these escaped anchors
+         PEscape dopa '`'  | xtra -> test (Test_BOB,dopa)
+         PEscape dopa '\'' | xtra -> test (Test_EOB,dopa)
+         PEscape dopa '<'  | xtra -> test (Test_BOW,dopa)
+         PEscape dopa '>'  | xtra -> test (Test_EOW,dopa)
+         PEscape dopa 'b'  | xtra -> test (Test_EdgeWord,dopa)
+         PEscape dopa 'B'  | xtra -> test (Test_NotEdgeWord,dopa)
+         -- otherwise escape codes are just the escaped character
          PEscape {} -> one
 
          -- A PGroup node in the Pattern tree does not become a node

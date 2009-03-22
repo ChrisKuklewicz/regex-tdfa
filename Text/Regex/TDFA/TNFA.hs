@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 -- XXX design uncertainty:  should preResets be inserted into nullView?
 -- if not, why not? ADDED
 
@@ -35,12 +34,13 @@ module Text.Regex.TDFA.TNFA(patternToNFA
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
-import Control.Monad.State
+import Control.Monad(when)
+import Control.Monad.State(State,runState,execState,get,put,modify)
 import Data.Array.IArray(Array,array)
 import Data.Char(toLower,toUpper,isAlpha,ord)
 import Data.List(foldl')
 import Data.IntMap (IntMap)
-import qualified Data.IntMap as IMap(size,toAscList,null,unionWith,singleton,fromList,fromDistinctAscList)
+import qualified Data.IntMap as IMap(toAscList,null,unionWith,singleton,fromList,fromDistinctAscList)
 import Data.IntMap.CharMap2(CharMap(..))
 import qualified Data.IntMap.CharMap2 as Map(null,singleton,map)
 import qualified Data.IntMap.EnumMap2 as EMap(null,keysSet,assocs)
@@ -48,14 +48,16 @@ import Data.IntSet.EnumSet2(EnumSet)
 import qualified Data.IntSet.EnumSet2 as Set(singleton,toList,insert)
 import Data.Maybe(catMaybes,isNothing)
 import Data.Monoid(mempty,mappend)
-import qualified Data.Set(insert,toAscList)
+import qualified Data.Set as S(Set,insert,toAscList,empty)
 
-import Text.Regex.TDFA.Common
+import Text.Regex.TDFA.Common(QT(..),QNFA(..),QTrans,TagTask(..),TagUpdate(..),DoPa(..)
+                             ,CompOption(..)
+                             ,Tag,TagTasks,TagList,Index,WinTags,GroupIndex,GroupInfo(..)
+                             ,common_error,noWin,snd3,mapSnd)
 import Text.Regex.TDFA.CorePattern(Q(..),P(..),OP(..),WhichTest,cleanNullView,NullView
                                   ,SetTestInfo(..),Wanted(..),TestInfo
                                   ,mustAccept,cannotAccept,patternToQ)
-import Text.Regex.TDFA.Pattern(Pattern(..))
-import Text.Regex.TDFA.ReadRegex(decodePatternSet)
+import Text.Regex.TDFA.Pattern(Pattern(..),PatternSet(..),unSEC,PatternSetCharacterClass(..))
 --import Debug.Trace
 
 ecart :: String -> a -> a
@@ -66,19 +68,6 @@ err t = common_error "Text.Regex.TDFA.TNFA" t
 
 debug :: (Show a) => a -> s -> s
 debug _ s = s
-
-instance Eq QT where
-  t1@(Testing {}) == t2@(Testing {}) =
-    (qt_test t1) == (qt_test t2) && (qt_a t1) == (qt_a t2) && (qt_b t1) == (qt_b t2)
-  (Simple w1 (CharMap t1) o1) == (Simple w2 (CharMap t2) o2) =
-    w1 == w2 && eqTrans && eqQTrans o1 o2
-    where eqTrans :: Bool
-          eqTrans = (IMap.size t1 == IMap.size t2)
-                    && and (zipWith together (IMap.toAscList t1) (IMap.toAscList t2))
-            where together (c1,qtrans1) (c2,qtrans2) = (c1 == c2) && eqQTrans qtrans1 qtrans2
-          eqQTrans :: QTrans -> QTrans -> Bool
-          eqQTrans = (==)
-  _ == _ = False
 
 qtwin,qtlose :: QT
 -- qtwin is the continuation after matching the whole pattern.  It has
@@ -761,10 +750,10 @@ qToNFA compOpt qTop = (q_id startingQNFA
            in Simple { qt_win = mempty, qt_trans = trans, qt_other = mempty }
          PDot _ -> Simple { qt_win = mempty, qt_trans = dotTrans, qt_other = target }
          PAny _ ps ->
-           let trans = toMap target . Data.Set.toAscList . decodePatternSet $ ps
+           let trans = toMap target . S.toAscList . decodePatternSet $ ps
            in Simple { qt_win = mempty, qt_trans = trans, qt_other = mempty }
          PAnyNot _ ps ->
-           let trans = toMap mempty . Data.Set.toAscList . addNewline . decodePatternSet $ ps
+           let trans = toMap mempty . S.toAscList . addNewline . decodePatternSet $ ps
            in Simple { qt_win = mempty, qt_trans = trans, qt_other = target }
          _ -> err ("Cannot acceptTrans pattern "++show (qTop,pIn))
     where  -- Take a common destination and a sorted list of unique chraceters
@@ -779,7 +768,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                                                         )
                                                    else (dl.((ord c,dest):))
                                        ) id 
-      addNewline | multiline compOpt = Data.Set.insert '\n'
+      addNewline | multiline compOpt = S.insert '\n'
                  | otherwise = id
       dotTrans | multiline compOpt = Map.singleton '\n' mempty
                | otherwise = mempty
@@ -794,5 +783,44 @@ qt_win seems to only allow PreUpdate so why keep the same type?
 
 
 ADD ORPHAN ID check and make this a fatal error while testing
+
+-}
+
+-- | decodePatternSet cannot handle collating element and treats
+-- equivalence classes as just their definition and nothing more.
+decodePatternSet :: PatternSet -> S.Set Char
+decodePatternSet (PatternSet msc mscc _ msec) =
+  let baseMSC = maybe S.empty id msc
+      withMSCC = foldl (flip S.insert) baseMSC  (maybe [] (concatMap decodeCharacterClass . S.toAscList) mscc)
+      withMSEC = foldl (flip S.insert) withMSCC (maybe [] (concatMap unSEC . S.toAscList) msec)
+  in withMSEC
+
+-- | This returns the disctince ascending list of characters
+-- represented by [: :] values in legalCharacterClasses; unrecognized
+-- class names return an empty string
+decodeCharacterClass :: PatternSetCharacterClass -> String
+decodeCharacterClass (PatternSetCharacterClass s) =
+  case s of
+    "alnum" -> ['0'..'9']++['a'..'z']++['A'..'Z']
+    "digit" -> ['0'..'9']
+    "punct" -> ['\33'..'\47']++['\58'..'\64']++['\91'..'\95']++"\96"++['\123'..'\126']
+    "alpha" -> ['a'..'z']++['A'..'Z']
+    "graph" -> ['\41'..'\126']
+    "space" -> "\t\n\v\f\r "
+    "blank" -> "\t "
+    "lower" -> ['a'..'z']
+    "upper" -> ['A'..'Z']
+    "cntrl" -> ['\0'..'\31']++"\127" -- with NUL
+    "print" -> ['\32'..'\126']
+    "xdigit" -> ['0'..'9']++['a'..'f']++['A'..'F']
+    "word" -> ['0'..'9']++['a'..'z']++['A'..'Z']++"_"
+    _ -> []
+
+{-
+-- | This is the list of recognized [: :] character classes, others
+-- are decoded as empty.
+legalCharacterClasses :: [String]
+legalCharacterClasses = ["alnum","digit","punct","alpha","graph"
+  ,"space","blank","lower","upper","cntrl","print","xdigit","word"]
 
 -}

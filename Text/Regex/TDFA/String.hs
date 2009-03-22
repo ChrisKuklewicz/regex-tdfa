@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 {- | 
 This modules provides 'RegexMaker' and 'RegexLike' instances for using
 'String' with the TDFA backend.
@@ -20,16 +19,13 @@ module Text.Regex.TDFA.String(
  ,regexec
  ) where
 
-import Data.Array.IArray((!),amap)
-
 import Text.Regex.Base.Impl(polymatch,polymatchM)
 import Text.Regex.Base.RegexLike(RegexMaker(..),RegexLike(..),RegexContext(..),MatchOffset,MatchLength,MatchArray)
 import Text.Regex.TDFA.Common(common_error,Regex(..),CompOption,ExecOption(captureGroups))
 import Text.Regex.TDFA.ReadRegex(parseRegex)
 import Text.Regex.TDFA.TDFA(patternToRegex)
-import Text.Regex.TDFA.Wrap()
 
-import Data.Array.IArray((!),listArray,elems,bounds)
+import Data.Array.IArray((!),elems,amap)
 import Data.Maybe(listToMaybe)
 import Text.Regex.TDFA.NewDFA.Engine(execMatch)
 import Text.Regex.TDFA.NewDFA.Tester as Tester(matchTest)
@@ -80,11 +76,11 @@ instance RegexLike Regex String where
   -- matchOnceText
   matchAllText r s =
     let go i _ _ | i `seq` False = undefined
-        go i t [] = []
+        go _i _t [] = []
         go i t (x:xs) = let (off0,len0) = x!0
                             trans pair@(off,len) = (take len (drop (off-i) t),pair)
                             t' = drop (off0+len0-i) t
-                        in amap trans x : seq t' (go (i+off0+len0) t' xs)
+                        in amap trans x : seq t' (go (off0+len0) t' xs)
     in go 0 s (matchAll r s)
 
 instance RegexContext Regex String String where

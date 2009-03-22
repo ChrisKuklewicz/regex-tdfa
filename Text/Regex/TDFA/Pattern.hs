@@ -160,7 +160,7 @@ unCapture = dfsPattern unCapture' where
   unCapture' (PGroup (Just _) p) = PGroup Nothing p
   unCapture' x = x
 -}
-
+reGroup :: Pattern -> Pattern
 reGroup p@(PConcat xs) | 2 <= length xs = PGroup Nothing p
 reGroup p@(POr xs)     | 2 <= length xs = PGroup Nothing p
 reGroup p = p

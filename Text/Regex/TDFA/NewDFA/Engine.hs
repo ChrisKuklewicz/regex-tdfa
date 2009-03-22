@@ -5,7 +5,7 @@
 -- variants.
 module Text.Regex.TDFA.NewDFA.Engine(execMatch) where
 
-import Control.Monad(when,forM,forM_,liftM2,foldM,join,MonadPlus(..),filterM)
+import Control.Monad(when,forM,forM_,liftM2,foldM,join,filterM)
 import Data.Array.Base(unsafeRead,unsafeWrite,STUArray(..))
 -- #ifdef __GLASGOW_HASKELL__
 import GHC.Arr(STArray(..))
@@ -19,33 +19,29 @@ import Data.Array.ST(STArray)
 -}
 import Prelude hiding ((!!))
 
-import Data.Array.MArray(MArray(..),unsafeFreeze,getAssocs)
-import Data.Array.IArray(Array,bounds,assocs)
---import qualified Data.Foldable as F
-import qualified Data.IntMap.CharMap2 as CMap(lookup,findWithDefault)
+import Data.Array.MArray(MArray(..),unsafeFreeze)
+import Data.Array.IArray(Array,bounds,assocs,Ix(rangeSize,range))
+import qualified Data.IntMap.CharMap2 as CMap(findWithDefault)
 import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap(null,toList,lookup,insert)
-import Data.Ix(Ix,rangeSize,range)
-import Data.Maybe(catMaybes,listToMaybe)
+import Data.Maybe(catMaybes)
 import Data.Monoid(Monoid(..))
---import Data.IntSet(IntSet)
-import qualified Data.IntSet as ISet(toAscList,null)
-import qualified Data.Array.ST
+import qualified Data.IntSet as ISet(toAscList)
 import Data.Array.IArray((!))
-import qualified Data.Array.MArray
 import Data.List(partition,sort,foldl',sortBy,groupBy)
-import Data.STRef
-import qualified Control.Monad.ST.Lazy as L
-import qualified Control.Monad.ST.Strict as S
+import Data.STRef(STRef,newSTRef,readSTRef,writeSTRef)
+import qualified Control.Monad.ST.Lazy as L(ST,runST,strictToLazyST)
+import qualified Control.Monad.ST.Strict as S(ST)
 import Data.Sequence(Seq,ViewL(..),viewl)
-import qualified Data.Sequence as Seq
-import qualified Data.ByteString.Char8 as SBS
-import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.Sequence as Seq(null)
+import qualified Data.ByteString.Char8 as SBS(ByteString)
+import qualified Data.ByteString.Lazy.Char8 as LBS(ByteString)
 
 import Text.Regex.Base(MatchArray,MatchOffset,MatchLength)
-import qualified Text.Regex.TDFA.IntArrTrieSet as Trie
+import qualified Text.Regex.TDFA.IntArrTrieSet as Trie(lookupAsc)
 import Text.Regex.TDFA.Common hiding (indent)
 import Text.Regex.TDFA.NewDFA.Uncons(Uncons(uncons))
+import Text.Regex.TDFA.NewDFA.MakeTest(test_singleline,test_multiline)
 import qualified Text.Regex.TDFA.NewDFA.Engine_FA as FA(execMatch)
 import qualified Text.Regex.TDFA.NewDFA.Engine_NC as NC(execMatch)
 import qualified Text.Regex.TDFA.NewDFA.Engine_NC_FA as NC_FA(execMatch)
@@ -79,8 +75,7 @@ execMatch r@(Regex { regex_dfa = DFA {d_id=didIn,d_dt=dtIn}
                    , regex_groups = aGroups
                    , regex_isFrontAnchored = frontAnchored
                    , regex_compOptions = CompOption { multiline = newline }
-                   , regex_execOptions = ExecOption { captureGroups = capture
-                                                    , testMatch = _checkMatch }})
+                   , regex_execOptions = ExecOption { captureGroups = capture }})
           offsetIn prevIn inputIn = case (subCapture,frontAnchored) of
                                       (True  ,False) -> L.runST runCaptureGroup
                                       (True  ,True)  -> FA.execMatch r offsetIn prevIn inputIn
@@ -147,7 +142,7 @@ execMatch r@(Regex { regex_dfa = DFA {d_id=didIn,d_dt=dtIn}
               if test wt offset prev input
                 then next' s1 s2 did a offset prev input
                 else next' s1 s2 did b offset prev input
-            Simple' {dt_win=w,dt_trans=t, dt_other=o} ->
+            Simple' {dt_trans=t, dt_other=o} ->
               case uncons input of
                 Nothing -> finalizeWinners
                 Just (c,input') ->
@@ -289,7 +284,7 @@ execMatch r@(Regex { regex_dfa = DFA {d_id=didIn,d_dt=dtIn}
                 x@((sourceIndex,_instructions),_pos,_orbit') <- which !! destIndex
                 if sourceIndex == (-1)
                   then spawnStart b_tags blank destIndex s2 (succ offset)
-                  else updateCopy doActions x offset s2 destIndex
+                  else updateCopy x offset s2 destIndex
           earlyStart <- fmap minimum $ mapM performTransTo dl
           -- findTrans part 3
           earlyWin <- readSTRef (mq_earliest winQ)
@@ -401,14 +396,6 @@ doActions preTag pos ins = mapM_ doAction ins where
 {-# INLINE mkTest #-}
 mkTest :: Uncons text => Bool -> WhichTest -> Index -> Char -> text -> Bool
 mkTest isMultiline = if isMultiline then test_multiline else test_singleline
-  where test_multiline Test_BOL _off prev _input = prev == '\n'
-        test_multiline Test_EOL _off _prev input = case uncons input of
-                                                     Nothing -> True
-                                                     Just (next,_) -> next == '\n'
-        test_singleline Test_BOL off _prev _input = off == 0
-        test_singleline Test_EOL _off _prev input = case uncons input of
-                                                      Nothing -> True
-                                                      _ -> False
 
 ----
 
@@ -544,40 +531,6 @@ orderOf post1 post2 =
     (SetVal v1,SetVal v2) -> compare v1 v2
     _ -> err $ "bestTrans.compareWith.choose sees incomparable "++show (post1,post2)
 
-comp01 :: C s
-comp01 preTag (_state1,pos1,_orbit1') np1 (_state2,pos2,_orbit2') np2 = do
-  c <- liftM2 compare (pos2!!0) (pos1!!0) -- reversed since Minimize
-  case c of
-    EQ -> challenge1
-    answer -> return answer
- where
-  challenge1 = do
-    case np1 of
-      ((t1,b1):_rest1) | t1==1 -> do
-        let p1 = case b1 of SetPre -> preTag
-                            SetPost -> succ preTag
-                            SetVal v -> v
-        case np2 of
-          ((t2,b2):_rest2) | t2==1 -> do
-            let p2 = case b2 of SetPre -> preTag
-                                SetPost -> succ preTag
-                                SetVal v -> v
-            return (compare p1 p2)
-          _ -> do
-            p2 <- pos2 !! 1
-            return (compare p1 p2)
-      _ -> do
-        p1 <- pos1 !! 1
-        case np2 of
-          ((t2,b2):_rest2) | t2==1 -> do
-            let p2 = case b2 of SetPre -> preTag
-                                SetPost -> succ preTag
-                                SetVal v -> v
-            return (compare p1 p2)
-          _ -> do
-            p2 <- pos2 !! 1
-            return (compare p1 p2)
-
 ditzyComp'3 :: forall s. Array Tag OP -> C s
 ditzyComp'3 aTagOP = comp0 where
   (F comp1:compsRest) = allcomps 1
@@ -665,15 +618,6 @@ comparePos (p1 :< ps1) (p2 :< ps2) =
   compare p1 p2 `mappend` comparePos (viewl ps1) (viewl ps2)
 
 {- CONVERT WINNERS TO MATCHARRAY -}
-
-tagsToGroup0ST :: forall s. Array GroupIndex [GroupInfo] -> WScratch s -> S.ST s MatchArray
-tagsToGroup0ST _aGroups (WScratch {w_pos=pos})= do
-  ma <- newArray (0,0) (-1,0) :: ST s (STArray s Int (MatchOffset,MatchLength))
-  startPos0 <- pos !! 0
-  stopPos0 <- pos !! 1
-  set ma 0 (startPos0,stopPos0-startPos0)
-  unsafeFreeze ma
-
 tagsToGroupsST :: forall s. Array GroupIndex [GroupInfo] -> WScratch s -> S.ST s MatchArray
 tagsToGroupsST aGroups (WScratch {w_pos=pos})= do
   let b_max = snd (bounds (aGroups))
@@ -718,13 +662,12 @@ spawnStart b_tags (BlankScratch blankPos) i s1 thisPos = do
   return thisPos
 
 {-# INLINE updateCopy #-}
-updateCopy :: (Index -> STUArray s Tag Position -> [(Tag, Action)] -> ST s a)
-           -> ((Index, Instructions), STUArray s Tag Position, OrbitLog)
+updateCopy :: ((Index, Instructions), STUArray s Tag Position, OrbitLog)
            -> Index
            -> MScratch s
            -> Int
            -> ST s Position
-updateCopy doActions ((_i1,instructions),oldPos,newOrbit) preTag s2 i2 = do
+updateCopy ((_i1,instructions),oldPos,newOrbit) preTag s2 i2 = do
   b_tags <- getBounds oldPos
   newerPos <- maybe (do
     a <- newA_ b_tags

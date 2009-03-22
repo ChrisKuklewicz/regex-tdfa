@@ -5,9 +5,7 @@
 --
 -- The PGroup returned always have (Maybe GroupIndex) set to (Just _)
 -- and never to Nothing.
-module Text.Regex.TDFA.ReadRegex (parseRegex
-                                 ,decodePatternSet
-                                 ,legalCharacterClasses) where
+module Text.Regex.TDFA.ReadRegex (parseRegex) where
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
 
@@ -17,7 +15,7 @@ import Text.ParserCombinators.Parsec((<|>), (<?>),
   sepBy1, option, notFollowedBy, many1, lookAhead, eof, between,
   string, noneOf, digit, char, anyChar)
 import Control.Monad(liftM, when, guard)
-import qualified Data.Set as Set(Set,fromList, toList, insert,empty)
+import qualified Data.Set as Set(fromList)
 
 -- | BracketElement is internal to this module
 data BracketElement = BEChar Char | BEChars String | BEColl String | BEEquiv String | BEClass String
@@ -141,40 +139,4 @@ p_set_elem_char = do
     atEnd <- (lookAhead (char ']') >> return True) <|> (return False)
     when (not atEnd) (unexpected "A dash is in the wrong place in a bracket")
   return (BEChar c)
-
--- | decodePatternSet cannot handle collating element and treats
--- equivalence classes as just their definition and nothing more.
-decodePatternSet :: PatternSet -> Set.Set Char
-decodePatternSet (PatternSet msc mscc _ msec) =
-  let baseMSC = maybe Set.empty id msc
-      withMSCC = foldl (flip Set.insert) baseMSC  (maybe [] (concatMap decodeCharacterClass . Set.toList) mscc)
-      withMSEC = foldl (flip Set.insert) withMSCC (maybe [] (concatMap unSEC . Set.toList) msec)
-  in withMSEC
-
--- | This is the list of recognized [: :] character classes, others
--- are decoded as empty.
-legalCharacterClasses :: [String]
-legalCharacterClasses = ["alnum","digit","punct","alpha","graph"
-  ,"space","blank","lower","upper","cntrl","print","xdigit","word"]
-
--- | This returns the disctince ascending list of characters
--- represented by [: :] values in legalCharacterClasses; unrecognized
--- class names return an empty string
-decodeCharacterClass :: PatternSetCharacterClass -> String
-decodeCharacterClass (PatternSetCharacterClass s) =
-  case s of
-    "alnum" -> ['0'..'9']++['a'..'z']++['A'..'Z']
-    "digit" -> ['0'..'9']
-    "punct" -> ['\33'..'\47']++['\58'..'\64']++['\91'..'\95']++"\96"++['\123'..'\126']
-    "alpha" -> ['a'..'z']++['A'..'Z']
-    "graph" -> ['\41'..'\126']
-    "space" -> "\t\n\v\f\r "
-    "blank" -> "\t "
-    "lower" -> ['a'..'z']
-    "upper" -> ['A'..'Z']
-    "cntrl" -> ['\0'..'\31']++"\127" -- with NUL
-    "print" -> ['\32'..'\126']
-    "xdigit" -> ['0'..'9']++['a'..'f']++['A'..'F']
-    "word" -> ['0'..'9']++['a'..'z']++['A'..'Z']++"_"
-    _ -> []
 

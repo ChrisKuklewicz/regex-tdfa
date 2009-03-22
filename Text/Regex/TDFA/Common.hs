@@ -2,23 +2,21 @@
 -- | Common provides simple functions to the backend.  It defines most
 -- of the data types.  All modules should call error via the
 -- common_error function below.
-module Text.Regex.TDFA.Common {- export everything -} where
+module Text.Regex.TDFA.Common where
 
-{- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
+import Text.Regex.Base(RegexOptions(..))
 
+{- By Chris Kuklewicz, 2007-2009. BSD License, see the LICENSE file. -}
 import Text.Show.Functions()
---import Control.Monad.State(State)
-import Data.Monoid(mempty,mappend)
-import Data.Foldable(Foldable(..))
 import Data.Array.IArray(Array)
 import Data.IntSet.EnumSet2(EnumSet)
 import qualified Data.IntSet.EnumSet2 as Set(toList)
+import Data.IntMap.CharMap2(CharMap(..))
 import Data.IntMap (IntMap)
-import qualified Data.IntMap as IMap (findWithDefault,assocs,toList,null)
+import qualified Data.IntMap as IMap (findWithDefault,assocs,toList,null,size,toAscList)
 import Data.IntSet(IntSet)
-import Data.IntMap.CharMap2(CharMap)
 import qualified Data.IntMap.CharMap2 as Map (assocs,toAscList,null)
-import Data.Sequence(Seq)
+import Data.Sequence as S(Seq)
 --import Debug.Trace
 
 import Text.Regex.TDFA.IntArrTrieSet(TrieSet)
@@ -82,19 +80,27 @@ instance Enum DoPa where
 instance Show DoPa where
   showsPrec p (DoPa {dopaIndex=i}) = ('#':) . showsPrec p i
 
--- | Control whether the pattern is multiline or
--- case-sensitive like Text.Regex and whether to capture the subgroups
--- (\1, \2, etc).
-data CompOption = CompOption { caseSensitive :: Bool    -- ^ True by default
-                             , multiline :: Bool        -- ^ True by default, implies "." and "[^a]" will not match '\n'
-                             , rightAssoc :: Bool       -- ^ False (and therefore left associative) by default
-                             , lastStarGreedy ::  Bool  -- ^ False by default.  This is POSIX correct but it takes space and is slower.
-                                                        -- Setting this to true will improve performance, and should be done
-                                                        -- if you plan to set the captureGroups execoption to False.
-                             } deriving (Read,Show)
-data ExecOption = ExecOption { captureGroups :: Bool    -- ^ True by default.  Set to False to improve speed (and space).
-                             , testMatch :: Bool        -- ^ False by default. Set to True to quickly return shortest match (w/o groups). [ UNUSED ]
-                             } deriving (Read,Show)
+-- | Control whether the pattern is multiline or case-sensitive like Text.Regex and whether to
+-- capture the subgroups (\1, \2, etc).  Controls enabling extra anchor syntax.
+data CompOption = CompOption {
+    caseSensitive :: Bool    -- ^ True in blankCompOpt and defaultCompOpt
+  , multiline :: Bool {- ^ False in blankCompOpt, True in defaultCompOpt. Compile for
+                      newline-sensitive matching.  "By default, newline is a completely ordinary
+                      character with no special meaning in either REs or strings.  With this flag,
+                      `[^' bracket expressions and `.' never match newline, a `^' anchor matches the
+                      null string after any newline in the string in addition to its normal
+                      function, and the `$' anchor matches the null string before any newline in the
+                      string in addition to its normal function." -}
+  , rightAssoc :: Bool       -- ^ True (and therefore Right associative) in blankCompOpt and defaultCompOpt
+  , newSyntax :: Bool        -- ^ False in blankCompOpt, True in defaultCompOpt. Add the extended non-POSIX syntax described in "Text.Regex.TDFA" haddock documentation.
+  , lastStarGreedy ::  Bool  -- ^ False by default.  This is POSIX correct but it takes space and is slower.
+                            -- Setting this to true will improve performance, and should be done
+                            -- if you plan to set the captureGroups execoption to False.
+  } deriving (Read,Show)
+
+data ExecOption = ExecOption {
+    captureGroups :: Bool    -- ^ True by default.  Set to False to improve speed (and space).
+  } deriving (Read,Show)
 
 -- | Used by implementation to name certain Postions during matching
 type Tag = Int           -- ^ identity of Position tag to set during a transition
@@ -109,37 +115,60 @@ type Position = Int      -- ^ Index into the text being searched
 type GroupIndex = Int
 -- | GroupInfo collects the parent and tag information for an instance 
 -- of a group
-data GroupInfo = GroupInfo {thisIndex,parentIndex::GroupIndex
-                           ,startTag,stopTag,flagTag::Tag
-                           } deriving Show
+data GroupInfo = GroupInfo {
+    thisIndex, parentIndex :: GroupIndex
+  , startTag, stopTag, flagTag :: Tag
+  } deriving Show
 
 -- | The TDFA backend specific 'Regex' type, used by this module's RegexOptions and RegexMaker
-data Regex = Regex {regex_dfa :: DFA                             -- ^ starting DFA state
-                   ,regex_init :: Index                          -- ^ index of starting state
-                   ,regex_b_index :: (Index,Index)               -- ^ indexes of smallest and largest states
-                   ,regex_b_tags :: (Tag,Tag)                    -- ^ indexes of smallest and largest tags
-                   ,regex_trie :: TrieSet DFA                    -- ^ All DFA states
-                   ,regex_tags :: Array Tag OP                   -- ^ information about each tag
-                   ,regex_groups :: Array GroupIndex [GroupInfo] -- ^ information about each group
-                   ,regex_isFrontAnchored :: Bool                -- ^ used for optimizing execution
-                   ,regex_compOptions :: CompOption              -- 
-                   ,regex_execOptions :: ExecOption}
+data Regex = Regex {
+    regex_dfa :: DFA                             -- ^ starting DFA state
+  , regex_init :: Index                          -- ^ index of starting state
+  , regex_b_index :: (Index,Index)               -- ^ indexes of smallest and largest states
+  , regex_b_tags :: (Tag,Tag)                    -- ^ indexes of smallest and largest tags
+  , regex_trie :: TrieSet DFA                    -- ^ All DFA states
+  , regex_tags :: Array Tag OP                   -- ^ information about each tag
+  , regex_groups :: Array GroupIndex [GroupInfo] -- ^ information about each group
+  , regex_isFrontAnchored :: Bool                -- ^ used for optimizing execution
+  , regex_compOptions :: CompOption
+  , regex_execOptions :: ExecOption
+  } -- no deriving at all, the DFA may be too big to ever traverse!
+
+
+instance RegexOptions Regex CompOption ExecOption where
+  blankCompOpt =  CompOption { caseSensitive = True
+                             , multiline = False
+                             , rightAssoc = True
+                             , newSyntax = False
+                             , lastStarGreedy = False
+                             }
+  blankExecOpt =  ExecOption { captureGroups = True }
+  defaultCompOpt = CompOption { caseSensitive = True
+                              , multiline = True
+                              , rightAssoc = True
+                              , newSyntax = True
+                              , lastStarGreedy = False
+                              }
+  defaultExecOpt =  ExecOption { captureGroups = True }
+  setExecOpts e r = r {regex_execOptions=e}
+  getExecOpts r = regex_execOptions r
+
 
 data WinEmpty = WinEmpty Instructions
               | WinTest WhichTest (Maybe WinEmpty) (Maybe WinEmpty)
   deriving Show
 
 -- | Internal NFA node type
-data QNFA = QNFA {q_id :: Index
-                 ,q_qt :: QT}
+data QNFA = QNFA {q_id :: Index, q_qt :: QT}
+
 -- | Internal to QNFA type.
-data QT = Simple {qt_win :: WinTags -- ^ empty transitions to the virtual winning state
-                 ,qt_trans :: CharMap QTrans -- ^ all ways to leave this QNFA to other or the same QNFA
-                 ,qt_other :: QTrans -- ^ default ways to leave this QNFA to other or the same QNFA
+data QT = Simple { qt_win :: WinTags -- ^ empty transitions to the virtual winning state
+                 , qt_trans :: CharMap QTrans -- ^ all ways to leave this QNFA to other or the same QNFA
+                 , qt_other :: QTrans -- ^ default ways to leave this QNFA to other or the same QNFA
                  }
-        | Testing {qt_test :: WhichTest -- ^ The test to perform
-                  ,qt_dopas :: EnumSet DoPa  -- ^ location(s) of the anchor(s) in the original regexp
-                  ,qt_a,qt_b :: QT -- ^ use qt_a if test is True, else use qt_b
+        | Testing { qt_test :: WhichTest -- ^ The test to perform
+                  , qt_dopas :: EnumSet DoPa  -- ^ location(s) of the anchor(s) in the original regexp
+                  , qt_a, qt_b :: QT -- ^ use qt_a if test is True, else use qt_b
                   }
 
 -- | Internal type to represent the tagged transition from one QNFA to
@@ -147,7 +176,14 @@ data QT = Simple {qt_win :: WinTags -- ^ empty transitions to the virtual winnin
 type QTrans = IntMap {- Destination Index -} [TagCommand]
 
 -- | Known predicates, just Beginning of Line (^) and End of Line ($).
-data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord,Enum)
+-- Also support for GNU extensions is being added: \` beginning of
+-- buffer, \' end of buffer, \< and \> for begin and end of words, \b
+-- and \B for word boundary and not word boundary.
+data WhichTest = Test_BOL | Test_EOL -- '^' and '$' (affected by multiline option)
+               | Test_BOB | Test_EOB -- \` and \' begin and end buffer
+               | Test_BOW | Test_EOW -- \< and \> begin and end word
+               | Test_EdgeWord | Test_NotEdgeWord -- \b and \B word boundaries
+  deriving (Show,Eq,Ord,Enum)
 
 -- | The things that can be done with a Tag.  TagTask and
 -- ResetGroupStopTask are for tags with Maximize or Minimize OP
@@ -155,6 +191,7 @@ data WhichTest = Test_BOL | Test_EOL deriving (Show,Eq,Ord,Enum)
 -- for tags with Orbit OP value.
 data TagTask = TagTask | ResetGroupStopTask | SetGroupStopTask
              | ResetOrbitTask | EnterOrbitTask | LeaveOrbitTask deriving (Show,Eq)
+
 -- | Ordered list of tags and their associated Task
 type TagTasks = [(Tag,TagTask)]
 -- | When attached to a QTrans the TagTask can be done before or after
@@ -300,27 +337,16 @@ seeDTrans x = concatMap seeSource (IMap.assocs x)
                                 | otherwise = indent . map (\(source,ins) -> show (dest,source,ins) ) . IMap.assocs $ srcMap
 --        spawnIns = Instructions { newPos = [(0,SetPost)], newOrbits = Nothing }
 
-data SList a = !a :! !(SList a) | SEnd
 
-infixr :!
-
-instance Functor SList where
-  fmap f = go where go SEnd = SEnd
-                    go (a :! b) = f a :! go b
-
-instance Foldable SList where
-  fold SEnd = mempty
-  fold (a :! b) = a `mappend` fold b
-  foldMap f = go where go SEnd = mempty
-                       go (a :! b) = f a `mappend` go b
-  foldr f x = go where go (a :! b) = f a (go b)
-                       go SEnd = x
-  foldr1 f = go where go (a :! SEnd) = a
-                      go (a :! b) = f a (go b)
-                      go SEnd = error "foldr1 on SEnd"
-  foldl f x = go x where go c (a :! b) = go (f c a) b
-                         go c SEnd = c
-  foldl1 f = start where start SEnd = error "foldl1 on SEnd"
-                         start (a :! b) = go a b
-                         go c (a :! b) = go (f c a) b
-                         go c SEnd = c
+instance Eq QT where
+  t1@(Testing {}) == t2@(Testing {}) =
+    (qt_test t1) == (qt_test t2) && (qt_a t1) == (qt_a t2) && (qt_b t1) == (qt_b t2)
+  (Simple w1 (CharMap t1) o1) == (Simple w2 (CharMap t2) o2) =
+    w1 == w2 && eqTrans && eqQTrans o1 o2
+    where eqTrans :: Bool
+          eqTrans = (IMap.size t1 == IMap.size t2)
+                    && and (zipWith together (IMap.toAscList t1) (IMap.toAscList t2))
+            where together (c1,qtrans1) (c2,qtrans2) = (c1 == c2) && eqQTrans qtrans1 qtrans2
+          eqQTrans :: QTrans -> QTrans -> Bool
+          eqQTrans = (==)
+  _ == _ = False

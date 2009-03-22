@@ -2,19 +2,18 @@
 -- 
 module Text.Regex.TDFA.NewDFA.Tester(matchTest) where
 
-import Control.Monad(MonadPlus(..))
 import qualified Data.IntMap.CharMap2 as CMap(findWithDefault)
-import qualified Data.IntMap as IMap
+import qualified Data.IntMap as IMap(null)
 import qualified Data.IntSet as ISet(null)
 
-import Data.Sequence(Seq,ViewL(..),viewl)
-import qualified Data.Sequence as Seq
-import qualified Data.ByteString.Char8 as SBS
-import qualified Data.ByteString.Lazy.Char8 as LBS
+import Data.Sequence(Seq)
+import qualified Data.ByteString.Char8 as SBS(ByteString)
+import qualified Data.ByteString.Lazy.Char8 as LBS(ByteString)
 
 import Text.Regex.Base()
 import Text.Regex.TDFA.Common hiding (indent)
 import Text.Regex.TDFA.NewDFA.Uncons (Uncons(uncons))
+import Text.Regex.TDFA.NewDFA.MakeTest(test_singleline,test_multiline)
 
 {-# SPECIALIZE matchTest :: Regex -> ([] Char) -> Bool #-}
 {-# SPECIALIZE matchTest :: Regex -> (Seq Char) -> Bool #-}
@@ -22,18 +21,12 @@ import Text.Regex.TDFA.NewDFA.Uncons (Uncons(uncons))
 {-# SPECIALIZE matchTest :: Regex -> LBS.ByteString -> Bool #-}
 matchTest :: Uncons text => Regex -> text -> Bool
 matchTest (Regex { regex_dfa = dfaIn
-                 , regex_isFrontAnchored = ifa
-                 , regex_compOptions = CompOption { multiline = newline } } )
+                 , regex_isFrontAnchored = ifa } )
           inputIn = ans where
 
   ans = case ifa of
           True -> single0 (d_dt dfaIn) inputIn
           False -> multi0 (d_dt dfaIn) inputIn
-
-  {-# NOINLINE test0 #-}
-  {-# NOINLINE test #-}
-  !test0 = mkTest0 newline
-  !test = mkTest newline         
 
   multi0 (Testing' {dt_test=wt,dt_a=a,dt_b=b}) input =
     if test0 wt input
@@ -73,14 +66,14 @@ matchTest (Regex { regex_dfa = dfaIn
                case CMap.findWithDefault o c t of
                  Transition {trans_single=DFA {d_id=did',d_dt=dt'}}
                    | ISet.null did' -> False
-                   | otherwise -> single dt' input'
+                   | otherwise -> single dt' c input'
     | otherwise = True
 
-  single (Testing' {dt_test=wt,dt_a=a,dt_b=b}) input =
-    if testFA wt input
-      then single a input
-      else single b input
-  single (Simple' {dt_win=w,dt_trans=t, dt_other=o}) input
+  single (Testing' {dt_test=wt,dt_a=a,dt_b=b}) prev input =
+    if testFA wt prev input
+      then single a prev input
+      else single b prev input
+  single (Simple' {dt_win=w,dt_trans=t, dt_other=o}) _prev input
     | IMap.null w =
         case uncons input of
              Nothing -> False
@@ -88,39 +81,21 @@ matchTest (Regex { regex_dfa = dfaIn
                case CMap.findWithDefault o c t of
                  Transition {trans_single=DFA {d_id=did',d_dt=dt'}}
                    | ISet.null did' -> False
-                   | otherwise -> single dt' input'
+                   | otherwise -> single dt' c input'
     | otherwise = True
 
-testFA0,testFA :: Uncons text => WhichTest -> text -> Bool
-testFA0 Test_BOL _input = True
-testFA0 Test_EOL input = case uncons input of
-                           Nothing -> True
-                           _ -> False
-testFA Test_BOL _input = False
-testFA Test_EOL input = case uncons input of
-                          Nothing -> True
-                          _ -> False
+{-# INLINE testFA0 #-}
+testFA0 :: Uncons text => WhichTest -> text -> Bool
+testFA0 wt text = test_singleline wt 0 '\n' text
 
-{-# INLINE mkTest0 #-}
-mkTest0 :: Uncons text => Bool -> WhichTest -> text -> Bool
-mkTest0 isMultiline = if isMultiline then test_multiline else test_singleline
-  where test_multiline Test_BOL _input = True
-        test_multiline Test_EOL input = case uncons input of
-                                          Nothing -> True
-                                          Just (next,_) -> next == '\n'
-        test_singleline Test_BOL _input = True
-        test_singleline Test_EOL input = case uncons input of
-                                           Nothing -> True
-                                           _ -> False
+{-# INLINE testFA #-}
+testFA :: Uncons text => WhichTest -> Char -> text -> Bool
+testFA wt prev text = test_singleline wt 1 prev text
 
-{-# INLINE mkTest #-}
-mkTest :: Uncons text => Bool -> WhichTest -> Char -> text -> Bool
-mkTest isMultiline = if isMultiline then test_multiline else test_singleline
-  where test_multiline Test_BOL prev _input = prev == '\n'
-        test_multiline Test_EOL _prev input = case uncons input of
-                                                Nothing -> True
-                                                Just (next,_) -> next == '\n'
-        test_singleline Test_BOL _prev _input = False
-        test_singleline Test_EOL _prev input = case uncons input of
-                                                Nothing -> True
-                                                _ -> False
+{-# INLINE test0 #-}
+test0 :: Uncons text => WhichTest -> text -> Bool
+test0 wt input = test_multiline wt 0 '\n' input
+
+{-# INLINE test #-}
+test :: Uncons text => WhichTest -> Char -> text -> Bool
+test wt prev input = test_multiline wt 1 prev input

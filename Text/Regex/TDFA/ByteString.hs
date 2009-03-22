@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fglasgow-exts -fno-warn-orphans #-}
 {-| 
 This modules provides 'RegexMaker' and 'RegexLike' instances for using
 'ByteString' with the DFA backend ("Text.Regex.Lib.WrapDFAEngine" and
@@ -19,7 +18,7 @@ module Text.Regex.TDFA.ByteString(
  ) where
 
 import Data.Array((!),elems)
-import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Char8 as B(ByteString,take,drop,unpack)
 
 import Text.Regex.Base(MatchArray,RegexContext(..),RegexMaker(..),RegexLike(..))
 import Text.Regex.Base.Impl(polymatch,polymatchM)
@@ -27,7 +26,6 @@ import Text.Regex.TDFA.ReadRegex(parseRegex)
 import Text.Regex.TDFA.String() -- piggyback on RegexMaker for String
 import Text.Regex.TDFA.TDFA(patternToRegex)
 import Text.Regex.TDFA.Common(Regex(..),CompOption,ExecOption(captureGroups))
-import Text.Regex.TDFA.Wrap()
 
 import Data.Maybe(listToMaybe)
 import Text.Regex.TDFA.NewDFA.Engine(execMatch)
