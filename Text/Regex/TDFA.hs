@@ -23,17 +23,19 @@ regex-tdfa-utf8 packages together  (required the utf8-string package).
 As of version 1.1.1 the following GNU extensions are recognized, all
 anchors:
 
-\` at beginning of entire text
+\\\` at beginning of entire text
 
-\' at end of entire text
+\\\' at end of entire text
 
-\< at beginning of word
+\\< at beginning of word
 
-\> at end of word
+\\> at end of word
 
-\b at either beginning or end of word
+\\b at either beginning or end of word
 
-\B at neither beginning nor end of word
+\\B at neither beginning nor end of word
+
+The above are controlled by the 'newSyntax' Bool in 'CompOption'.
 
 Where the "word" boundaries means between characters that are and are
 not in the [:word:] character class which contains [a-zA-Z0-9_].  Note
