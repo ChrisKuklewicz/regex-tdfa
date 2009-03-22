@@ -1,0 +1,393 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!--Rendered using the Haskell Html Library v0.2-->
+<HTML
+><HEAD
+><META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"
+><TITLE
+>regex-tdfa-1.1.1: Replaces/Enhances Text.Regex</TITLE
+><LINK HREF="haddock.css" REL="stylesheet" TYPE="text/css"
+><SCRIPT SRC="haddock-util.js" TYPE="text/javascript"
+></SCRIPT
+></HEAD
+><BODY
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="topbar"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD
+><IMG SRC="haskell_icon.gif" WIDTH="16" HEIGHT="16" ALT=" "
+></TD
+><TD CLASS="title"
+>regex-tdfa-1.1.1: Replaces/Enhances Text.Regex</TD
+><TD CLASS="topbut"
+><A HREF="index.html"
+>Contents</A
+></TD
+><TD CLASS="topbut"
+><A HREF="doc-index.html"
+>Index</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>regex-tdfa-1.1.1: Replaces/Enhances Text.Regex</TD
+></TR
+><TR
+><TD CLASS="doc"
+>A new all Haskell <A HREF="tagged.html"
+>tagged</A
+> DFA regex engine, inspired by libtre
+</TD
+></TR
+><TR
+><TD CLASS="section1"
+>Modules</TD
+></TR
+><TR
+><TD
+><TABLE CLASS="vanilla2" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD STYLE="width: 50em"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'n:0')" ALT="show/hide"
+>Data</TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding: 0; padding-left: 2em" COLSPAN="3"
+><TABLE CLASS="vanilla2" CELLSPACING="0" CELLPADDING="0" ID="n:0" STYLE="display:block;"
+><TR
+><TD STYLE="width: 48em"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'n:1')" ALT="show/hide"
+>IntMap</TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding: 0; padding-left: 2em" COLSPAN="3"
+><TABLE CLASS="vanilla2" CELLSPACING="0" CELLPADDING="0" ID="n:1" STYLE="display:block;"
+><TR
+><TD STYLE="padding-left: 1.25em;width: 46em"
+><A HREF="Data-IntMap-CharMap2.html"
+>Data.IntMap.CharMap2</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 46em"
+><A HREF="Data-IntMap-EnumMap2.html"
+>Data.IntMap.EnumMap2</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD STYLE="width: 48em"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'n:2')" ALT="show/hide"
+>IntSet</TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding: 0; padding-left: 2em" COLSPAN="3"
+><TABLE CLASS="vanilla2" CELLSPACING="0" CELLPADDING="0" ID="n:2" STYLE="display:block;"
+><TR
+><TD STYLE="padding-left: 1.25em;width: 46em"
+><A HREF="Data-IntSet-EnumSet2.html"
+>Data.IntSet.EnumSet2</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD STYLE="width: 50em"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'n:3')" ALT="show/hide"
+>Text</TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding: 0; padding-left: 2em" COLSPAN="3"
+><TABLE CLASS="vanilla2" CELLSPACING="0" CELLPADDING="0" ID="n:3" STYLE="display:block;"
+><TR
+><TD STYLE="width: 48em"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'n:4')" ALT="show/hide"
+>Regex</TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding: 0; padding-left: 2em" COLSPAN="3"
+><TABLE CLASS="vanilla2" CELLSPACING="0" CELLPADDING="0" ID="n:4" STYLE="display:block;"
+><TR
+><TD STYLE="width: 46em"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'n:5')" ALT="show/hide"
+><A HREF="Text-Regex-TDFA.html"
+>Text.Regex.TDFA</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding: 0; padding-left: 2em" COLSPAN="3"
+><TABLE CLASS="vanilla2" CELLSPACING="0" CELLPADDING="0" ID="n:5" STYLE="display:block;"
+><TR
+><TD STYLE="width: 44em"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'n:6')" ALT="show/hide"
+><A HREF="Text-Regex-TDFA-ByteString.html"
+>Text.Regex.TDFA.ByteString</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding: 0; padding-left: 2em" COLSPAN="3"
+><TABLE CLASS="vanilla2" CELLSPACING="0" CELLPADDING="0" ID="n:6" STYLE="display:block;"
+><TR
+><TD STYLE="padding-left: 1.25em;width: 42em"
+><A HREF="Text-Regex-TDFA-ByteString-Lazy.html"
+>Text.Regex.TDFA.ByteString.Lazy</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 44em"
+><A HREF="Text-Regex-TDFA-Common.html"
+>Text.Regex.TDFA.Common</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 44em"
+><A HREF="Text-Regex-TDFA-CorePattern.html"
+>Text.Regex.TDFA.CorePattern</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 44em"
+><A HREF="Text-Regex-TDFA-IntArrTrieSet.html"
+>Text.Regex.TDFA.IntArrTrieSet</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="width: 44em"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'n:7')" ALT="show/hide"
+>NewDFA</TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding: 0; padding-left: 2em" COLSPAN="3"
+><TABLE CLASS="vanilla2" CELLSPACING="0" CELLPADDING="0" ID="n:7" STYLE="display:block;"
+><TR
+><TD STYLE="padding-left: 1.25em;width: 42em"
+><A HREF="Text-Regex-TDFA-NewDFA-Engine.html"
+>Text.Regex.TDFA.NewDFA.Engine</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 42em"
+><A HREF="Text-Regex-TDFA-NewDFA-Engine_FA.html"
+>Text.Regex.TDFA.NewDFA.Engine_FA</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 42em"
+><A HREF="Text-Regex-TDFA-NewDFA-Engine_NC.html"
+>Text.Regex.TDFA.NewDFA.Engine_NC</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 42em"
+><A HREF="Text-Regex-TDFA-NewDFA-Engine_NC_FA.html"
+>Text.Regex.TDFA.NewDFA.Engine_NC_FA</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 42em"
+><A HREF="Text-Regex-TDFA-NewDFA-MakeTest.html"
+>Text.Regex.TDFA.NewDFA.MakeTest</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 42em"
+><A HREF="Text-Regex-TDFA-NewDFA-Tester.html"
+>Text.Regex.TDFA.NewDFA.Tester</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 42em"
+><A HREF="Text-Regex-TDFA-NewDFA-Uncons.html"
+>Text.Regex.TDFA.NewDFA.Uncons</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 44em"
+><A HREF="Text-Regex-TDFA-Pattern.html"
+>Text.Regex.TDFA.Pattern</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 44em"
+><A HREF="Text-Regex-TDFA-ReadRegex.html"
+>Text.Regex.TDFA.ReadRegex</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 44em"
+><A HREF="Text-Regex-TDFA-Sequence.html"
+>Text.Regex.TDFA.Sequence</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 44em"
+><A HREF="Text-Regex-TDFA-String.html"
+>Text.Regex.TDFA.String</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 44em"
+><A HREF="Text-Regex-TDFA-TDFA.html"
+>Text.Regex.TDFA.TDFA</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+><TR
+><TD STYLE="padding-left: 1.25em;width: 44em"
+><A HREF="Text-Regex-TDFA-TNFA.html"
+>Text.Regex.TDFA.TNFA</A
+></TD
+><TD
+></TD
+><TD
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="botbar"
+>Produced by <A HREF="http://www.haskell.org/haddock/"
+>Haddock</A
+> version 2.3.0</TD
+></TR
+></TABLE
+></BODY
+></HTML
+>

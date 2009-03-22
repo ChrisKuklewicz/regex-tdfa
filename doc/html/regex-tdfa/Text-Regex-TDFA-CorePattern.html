@@ -1,0 +1,1640 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!--Rendered using the Haskell Html Library v0.2-->
+<HTML
+><HEAD
+><META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"
+><TITLE
+>Text.Regex.TDFA.CorePattern</TITLE
+><LINK HREF="haddock.css" REL="stylesheet" TYPE="text/css"
+><SCRIPT SRC="haddock-util.js" TYPE="text/javascript"
+></SCRIPT
+></HEAD
+><BODY
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="topbar"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD
+><IMG SRC="haskell_icon.gif" WIDTH="16" HEIGHT="16" ALT=" "
+></TD
+><TD CLASS="title"
+>regex-tdfa-1.1.1: Replaces/Enhances Text.Regex</TD
+><TD CLASS="topbut"
+><A HREF="index.html"
+>Contents</A
+></TD
+><TD CLASS="topbut"
+><A HREF="doc-index.html"
+>Index</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="modulebar"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD
+><FONT SIZE="6"
+>Text.Regex.TDFA.CorePattern</FONT
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Description</TD
+></TR
+><TR
+><TD CLASS="doc"
+><P
+>The CorePattern module deconstructs the Pattern tree created by
+ ReadRegex.parseRegex and returns a simpler Q/P tree with
+ annotations at each Q node.  This will be converted by the TNFA
+ module into a QNFA finite automata.
+</P
+><P
+>Of particular note, this Pattern to Q/P conversion creates and
+ assigns all the internal Tags that will be used during the matching
+ process, and associates the captures groups with the tags that
+ represent their starting and ending locations and with their
+ immediate parent group.
+</P
+><P
+>Each Maximize and Minimize tag is held as either a preTag or a
+ postTag by one and only one location in the Q/P tree.  The Orbit
+ tags are each held by one and only one Star node.  Tags that stop a
+ Group are also held in perhaps numerous preReset lists.
+</P
+><P
+>The additional nullQ::nullView field of Q records the potentially
+ complex information about what tests and tags must be used if the
+ pattern unQ::P matches 0 zero characters.  There can be redundancy
+ in nullView, which is eliminated by cleanNullView.
+</P
+><P
+>Uses recursive do notation.
+</P
+><P
+>2009 XXX TODO: we can avoid needing tags in the part of the pattern
+ after the last capturing group (when right-associative).  This is
+ flipped for left-associative where the front of the pattern before
+ the first capturing group needs no tags.  The edge of these regions
+ is subtle: both case needs a Maximize tag.  One ought to be able to
+ check the Pattern: if the root is PConcat then a scan from the end
+ (start) looking for the first with an embedded PGroup can be found
+ and the PGroup free elements can be wrapped in some new PNOTAG
+ semantic indicator.
+</P
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Synopsis</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AQ"
+>Q</A
+>  = <A HREF="#v%3AQ"
+>Q</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AnullQ"
+>nullQ</A
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3ANullView"
+>NullView</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Atakes"
+>takes</A
+> :: (<A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+>, <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+>)</TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3ApreReset"
+>preReset</A
+> :: [<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>]</TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3ApostSet"
+>postSet</A
+> :: [<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>]</TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3ApreTag"
+>preTag</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3ApostTag"
+>postTag</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Atagged"
+>tagged</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AchildGroups"
+>childGroups</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Awants"
+>wants</A
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWanted"
+>Wanted</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AunQ"
+>unQ</A
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AP"
+>P</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AP"
+>P</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3AEmpty"
+>Empty</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AOr"
+>Or</A
+> [<A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+>]</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ASeq"
+>Seq</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AStar"
+>Star</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetOrbit"
+>getOrbit</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AresetOrbits"
+>resetOrbits</A
+> :: [<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>]</TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AfirstNull"
+>firstNull</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AunStar"
+>unStar</A
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest"
+>Test</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3ATestInfo"
+>TestInfo</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AOneChar"
+>OneChar</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ANonEmpty"
+>NonEmpty</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AWhichTest"
+>WhichTest</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3ATest_BOL"
+>Test_BOL</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_EOL"
+>Test_EOL</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_BOB"
+>Test_BOB</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_EOB"
+>Test_EOB</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_BOW"
+>Test_BOW</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_EOW"
+>Test_EOW</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_EdgeWord"
+>Test_EdgeWord</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_NotEdgeWord"
+>Test_NotEdgeWord</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AWanted"
+>Wanted</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3AWantsQNFA"
+>WantsQNFA</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AWantsQT"
+>WantsQT</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AWantsBoth"
+>WantsBoth</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AWantsEither"
+>WantsEither</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3ATestInfo"
+>TestInfo</A
+> = (<A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWhichTest"
+>WhichTest</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>)</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AOP"
+>OP</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3AMaximize"
+>Maximize</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AMinimize"
+>Minimize</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AOrbit"
+>Orbit</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AIgnore"
+>Ignore</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A HREF="#t%3ASetTestInfo"
+>SetTestInfo</A
+>  = <A HREF="#v%3ASetTestInfo"
+>SetTestInfo</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetTests"
+>getTests</A
+> :: <A HREF="Data-IntMap-EnumMap2.html#t%3AEnumMap"
+>EnumMap</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWhichTest"
+>WhichTest</A
+> (<A HREF="Data-IntSet-EnumSet2.html#t%3AEnumSet"
+>EnumSet</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>)</TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3ANullView"
+>NullView</A
+> = [(<A HREF="Text-Regex-TDFA-CorePattern.html#t%3ASetTestInfo"
+>SetTestInfo</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ATagList"
+>TagList</A
+>)]</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3ApatternToQ"
+>patternToQ</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> -&gt; (<A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+>, (<A HREF="Text-Regex-TDFA-Common.html#t%3AGroupIndex"
+>GroupIndex</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>)) -&gt; (<A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+>, <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/GHC-Arr.html#t%3AArray"
+>Array</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AOP"
+>OP</A
+>, <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/GHC-Arr.html#t%3AArray"
+>Array</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AGroupIndex"
+>GroupIndex</A
+> [<A HREF="Text-Regex-TDFA-Common.html#t%3AGroupInfo"
+>GroupInfo</A
+>])</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AcleanNullView"
+>cleanNullView</A
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3ANullView"
+>NullView</A
+> -&gt; <A HREF="Text-Regex-TDFA-CorePattern.html#t%3ANullView"
+>NullView</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AcannotAccept"
+>cannotAccept</A
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AmustAccept"
+>mustAccept</A
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Documentation</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AQ"
+></A
+><B
+>Q</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AQ"
+></A
+><B
+>Q</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AnullQ"
+></A
+><B
+>nullQ</B
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3ANullView"
+>NullView</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Atakes"
+></A
+><B
+>takes</B
+> :: (<A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+>, <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+>)</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ApreReset"
+></A
+><B
+>preReset</B
+> :: [<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>]</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ApostSet"
+></A
+><B
+>postSet</B
+> :: [<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>]</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ApreTag"
+></A
+><B
+>preTag</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ApostTag"
+></A
+><B
+>postTag</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Atagged"
+></A
+><B
+>tagged</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AchildGroups"
+></A
+><B
+>childGroups</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Awants"
+></A
+><B
+>wants</B
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWanted"
+>Wanted</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AunQ"
+></A
+><B
+>unQ</B
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AP"
+>P</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:Q')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:Q" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AP"
+></A
+><B
+>P</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AEmpty"
+></A
+><B
+>Empty</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AOr"
+></A
+><B
+>Or</B
+> [<A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+>]</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ASeq"
+></A
+><B
+>Seq</B
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AStar"
+></A
+><B
+>Star</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetOrbit"
+></A
+><B
+>getOrbit</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AresetOrbits"
+></A
+><B
+>resetOrbits</B
+> :: [<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>]</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AfirstNull"
+></A
+><B
+>firstNull</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AunStar"
+></A
+><B
+>unStar</B
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest"
+></A
+><B
+>Test</B
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3ATestInfo"
+>TestInfo</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AOneChar"
+></A
+><B
+>OneChar</B
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ANonEmpty"
+></A
+><B
+>NonEmpty</B
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:P')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:P" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AP"
+>P</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AP"
+>P</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AWhichTest"
+></A
+><B
+>WhichTest</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Known predicates, just Beginning of Line (^) and End of Line ($).
+ Also support for GNU extensions is being added: ` beginning of
+ buffer, ' end of buffer, &lt; and &gt; for begin and end of words, b
+ and B for word boundary and not word boundary.
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_BOL"
+></A
+><B
+>Test_BOL</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_EOL"
+></A
+><B
+>Test_EOL</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_BOB"
+></A
+><B
+>Test_BOB</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_EOB"
+></A
+><B
+>Test_EOB</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_BOW"
+></A
+><B
+>Test_BOW</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_EOW"
+></A
+><B
+>Test_EOW</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_EdgeWord"
+></A
+><B
+>Test_EdgeWord</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_NotEdgeWord"
+></A
+><B
+>Test_NotEdgeWord</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:WhichTest')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:WhichTest" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Prelude.html#t%3AEnum"
+>Enum</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Ord.html#t%3AOrd"
+>Ord</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AWanted"
+></A
+><B
+>Wanted</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AWantsQNFA"
+></A
+><B
+>WantsQNFA</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AWantsQT"
+></A
+><B
+>WantsQT</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AWantsBoth"
+></A
+><B
+>WantsBoth</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AWantsEither"
+></A
+><B
+>WantsEither</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:Wanted')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:Wanted" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWanted"
+>Wanted</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWanted"
+>Wanted</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3ATestInfo"
+></A
+><B
+>TestInfo</B
+> = (<A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWhichTest"
+>WhichTest</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>)</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AOP"
+></A
+><B
+>OP</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Internal use to indicate type of tag and preference for larger or smaller Positions
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AMaximize"
+></A
+><B
+>Maximize</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AMinimize"
+></A
+><B
+>Minimize</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AOrbit"
+></A
+><B
+>Orbit</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AIgnore"
+></A
+><B
+>Ignore</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:OP')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:OP" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AOP"
+>OP</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AOP"
+>OP</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A NAME="t%3ASetTestInfo"
+></A
+><B
+>SetTestInfo</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ASetTestInfo"
+></A
+><B
+>SetTestInfo</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetTests"
+></A
+><B
+>getTests</B
+> :: <A HREF="Data-IntMap-EnumMap2.html#t%3AEnumMap"
+>EnumMap</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AWhichTest"
+>WhichTest</A
+> (<A HREF="Data-IntSet-EnumSet2.html#t%3AEnumSet"
+>EnumSet</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>)</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:SetTestInfo')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:SetTestInfo" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3ASetTestInfo"
+>SetTestInfo</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3ASetTestInfo"
+>SetTestInfo</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Monoid.html#t%3AMonoid"
+>Monoid</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3ASetTestInfo"
+>SetTestInfo</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3ANullView"
+></A
+><B
+>NullView</B
+> = [(<A HREF="Text-Regex-TDFA-CorePattern.html#t%3ASetTestInfo"
+>SetTestInfo</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ATagList"
+>TagList</A
+>)]</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3ApatternToQ"
+></A
+><B
+>patternToQ</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> -&gt; (<A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+>, (<A HREF="Text-Regex-TDFA-Common.html#t%3AGroupIndex"
+>GroupIndex</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>)) -&gt; (<A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+>, <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/GHC-Arr.html#t%3AArray"
+>Array</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+> <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AOP"
+>OP</A
+>, <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/GHC-Arr.html#t%3AArray"
+>Array</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AGroupIndex"
+>GroupIndex</A
+> [<A HREF="Text-Regex-TDFA-Common.html#t%3AGroupInfo"
+>GroupInfo</A
+>])</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AcleanNullView"
+></A
+><B
+>cleanNullView</B
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3ANullView"
+>NullView</A
+> -&gt; <A HREF="Text-Regex-TDFA-CorePattern.html#t%3ANullView"
+>NullView</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AcannotAccept"
+></A
+><B
+>cannotAccept</B
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AmustAccept"
+></A
+><B
+>mustAccept</B
+> :: <A HREF="Text-Regex-TDFA-CorePattern.html#t%3AQ"
+>Q</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="botbar"
+>Produced by <A HREF="http://www.haskell.org/haddock/"
+>Haddock</A
+> version 2.3.0</TD
+></TR
+></TABLE
+></BODY
+></HTML
+>

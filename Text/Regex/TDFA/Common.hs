@@ -87,9 +87,9 @@ data CompOption = CompOption {
   , multiline :: Bool {- ^ False in blankCompOpt, True in defaultCompOpt. Compile for
                       newline-sensitive matching.  "By default, newline is a completely ordinary
                       character with no special meaning in either REs or strings.  With this flag,
-                      `[^' bracket expressions and `.' never match newline, a `^' anchor matches the
+                      inverted bracket expressions and . never match newline, a ^ anchor matches the
                       null string after any newline in the string in addition to its normal
-                      function, and the `$' anchor matches the null string before any newline in the
+                      function, and the $ anchor matches the null string before any newline in the
                       string in addition to its normal function." -}
   , rightAssoc :: Bool       -- ^ True (and therefore Right associative) in blankCompOpt and defaultCompOpt
   , newSyntax :: Bool        -- ^ False in blankCompOpt, True in defaultCompOpt. Add the extended non-POSIX syntax described in "Text.Regex.TDFA" haddock documentation.
@@ -102,13 +102,17 @@ data ExecOption = ExecOption {
     captureGroups :: Bool    -- ^ True by default.  Set to False to improve speed (and space).
   } deriving (Read,Show)
 
--- | Used by implementation to name certain Postions during matching
-type Tag = Int           -- ^ identity of Position tag to set during a transition
+-- | Used by implementation to name certain Postions during
+-- matching. Identity of Position tag to set during a transition
+type Tag = Int
 -- | Internal use to indicate type of tag and preference for larger or smaller Positions
 data OP = Maximize | Minimize | Orbit | Ignore deriving (Eq,Show)
-type Index = Int         -- ^ Internal NFA node identity number
-type SetIndex = IntSet {- Index -} -- ^ Internal DFA identity is this Set of NFA Index
-type Position = Int      -- ^ Index into the text being searched
+-- | Internal NFA node identity number
+type Index = Int
+-- | Internal DFA identity is this Set of NFA Index
+type SetIndex = IntSet {- Index -}
+-- | Index into the text being searched
+type Position = Int
 
 -- | GroupIndex is for indexing submatches from capturing
 -- parenthesized groups (PGroup/Group)

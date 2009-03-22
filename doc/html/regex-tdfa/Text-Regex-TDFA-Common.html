@@ -1,0 +1,4588 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!--Rendered using the Haskell Html Library v0.2-->
+<HTML
+><HEAD
+><META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"
+><TITLE
+>Text.Regex.TDFA.Common</TITLE
+><LINK HREF="haddock.css" REL="stylesheet" TYPE="text/css"
+><SCRIPT SRC="haddock-util.js" TYPE="text/javascript"
+></SCRIPT
+></HEAD
+><BODY
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="topbar"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD
+><IMG SRC="haskell_icon.gif" WIDTH="16" HEIGHT="16" ALT=" "
+></TD
+><TD CLASS="title"
+>regex-tdfa-1.1.1: Replaces/Enhances Text.Regex</TD
+><TD CLASS="topbut"
+><A HREF="index.html"
+>Contents</A
+></TD
+><TD CLASS="topbut"
+><A HREF="doc-index.html"
+>Index</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="modulebar"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD
+><FONT SIZE="6"
+>Text.Regex.TDFA.Common</FONT
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Description</TD
+></TR
+><TR
+><TD CLASS="doc"
+>Common provides simple functions to the backend.  It defines most
+ of the data types.  All modules should call error via the
+ common_error function below.
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Synopsis</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3Alook"
+>look</A
+> ::  <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> a -&gt; a</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3Acommon_error"
+>common_error</A
+> ::  <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+> -&gt; a</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3Aon"
+>on</A
+> ::  (t1 -&gt; t1 -&gt; t2) -&gt; (t -&gt; t1) -&gt; t -&gt; t -&gt; t2</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3Anorep"
+>norep</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> a =&gt; [a] -&gt; [a]</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AnorepBy"
+>norepBy</A
+> ::  (a -&gt; a -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+>) -&gt; [a] -&gt; [a]</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AmapFst"
+>mapFst</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Control-Monad.html#t%3AFunctor"
+>Functor</A
+> f =&gt; (t -&gt; t2) -&gt; f (t, t1) -&gt; f (t2, t1)</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AmapSnd"
+>mapSnd</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Control-Monad.html#t%3AFunctor"
+>Functor</A
+> f =&gt; (t1 -&gt; t2) -&gt; f (t, t1) -&gt; f (t, t2)</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3Afst3"
+>fst3</A
+> ::  (a, b, c) -&gt; a</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3Asnd3"
+>snd3</A
+> ::  (a, b, c) -&gt; b</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3Athd3"
+>thd3</A
+> ::  (a, b, c) -&gt; c</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AflipOrder"
+>flipOrder</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Ordering.html#t%3AOrdering"
+>Ordering</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Ordering.html#t%3AOrdering"
+>Ordering</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AnoWin"
+>noWin</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AWinTags"
+>WinTags</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A HREF="#t%3ADoPa"
+>DoPa</A
+>  = <A HREF="#v%3ADoPa"
+>DoPa</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AdopaIndex"
+>dopaIndex</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3ACompOption"
+>CompOption</A
+>  = <A HREF="#v%3ACompOption"
+>CompOption</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AcaseSensitive"
+>caseSensitive</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Amultiline"
+>multiline</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3ArightAssoc"
+>rightAssoc</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AnewSyntax"
+>newSyntax</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AlastStarGreedy"
+>lastStarGreedy</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AExecOption"
+>ExecOption</A
+>  = <A HREF="#v%3AExecOption"
+>ExecOption</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AcaptureGroups"
+>captureGroups</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3ATag"
+>Tag</A
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AOP"
+>OP</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3AMaximize"
+>Maximize</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AMinimize"
+>Minimize</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AOrbit"
+>Orbit</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AIgnore"
+>Ignore</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3AIndex"
+>Index</A
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3ASetIndex"
+>SetIndex</A
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntSet.html#t%3AIntSet"
+>IntSet</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3APosition"
+>Position</A
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3AGroupIndex"
+>GroupIndex</A
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AGroupInfo"
+>GroupInfo</A
+>  = <A HREF="#v%3AGroupInfo"
+>GroupInfo</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AthisIndex"
+>thisIndex</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AGroupIndex"
+>GroupIndex</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AparentIndex"
+>parentIndex</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AGroupIndex"
+>GroupIndex</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AstartTag"
+>startTag</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AstopTag"
+>stopTag</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AflagTag"
+>flagTag</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3ARegex"
+>Regex</A
+>  = <A HREF="#v%3ARegex"
+>Regex</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aregex_dfa"
+>regex_dfa</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADFA"
+>DFA</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aregex_init"
+>regex_init</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aregex_b_index"
+>regex_b_index</A
+> :: (<A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+>)</TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aregex_b_tags"
+>regex_b_tags</A
+> :: (<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>)</TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aregex_trie"
+>regex_trie</A
+> :: <A HREF="Text-Regex-TDFA-IntArrTrieSet.html#t%3ATrieSet"
+>TrieSet</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADFA"
+>DFA</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aregex_tags"
+>regex_tags</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/GHC-Arr.html#t%3AArray"
+>Array</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AOP"
+>OP</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aregex_groups"
+>regex_groups</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/GHC-Arr.html#t%3AArray"
+>Array</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AGroupIndex"
+>GroupIndex</A
+> [<A HREF="Text-Regex-TDFA-Common.html#t%3AGroupInfo"
+>GroupInfo</A
+>]</TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aregex_isFrontAnchored"
+>regex_isFrontAnchored</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aregex_compOptions"
+>regex_compOptions</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aregex_execOptions"
+>regex_execOptions</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AWinEmpty"
+>WinEmpty</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3AWinEmpty"
+>WinEmpty</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AInstructions"
+>Instructions</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AWinTest"
+>WinTest</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AWhichTest"
+>WhichTest</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AWinEmpty"
+>WinEmpty</A
+>) (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AWinEmpty"
+>WinEmpty</A
+>)</TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AQNFA"
+>QNFA</A
+>  = <A HREF="#v%3AQNFA"
+>QNFA</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aq_id"
+>q_id</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aq_qt"
+>q_qt</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AQT"
+>QT</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AQT"
+>QT</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3ASimple"
+>Simple</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aqt_win"
+>qt_win</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AWinTags"
+>WinTags</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aqt_trans"
+>qt_trans</A
+> :: <A HREF="Data-IntMap-CharMap2.html#t%3ACharMap"
+>CharMap</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AQTrans"
+>QTrans</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aqt_other"
+>qt_other</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AQTrans"
+>QTrans</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATesting"
+>Testing</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aqt_test"
+>qt_test</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aqt_dopas"
+>qt_dopas</A
+> :: <A HREF="Data-IntSet-EnumSet2.html#t%3AEnumSet"
+>EnumSet</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aqt_a"
+>qt_a</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AQT"
+>QT</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aqt_b"
+>qt_b</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AQT"
+>QT</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3AQTrans"
+>QTrans</A
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> [<A HREF="Text-Regex-TDFA-Common.html#t%3ATagCommand"
+>TagCommand</A
+>]</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AWhichTest"
+>WhichTest</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3ATest_BOL"
+>Test_BOL</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_EOL"
+>Test_EOL</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_BOB"
+>Test_BOB</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_EOB"
+>Test_EOB</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_BOW"
+>Test_BOW</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_EOW"
+>Test_EOW</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_EdgeWord"
+>Test_EdgeWord</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATest_NotEdgeWord"
+>Test_NotEdgeWord</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3ATagTask"
+>TagTask</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3ATagTask"
+>TagTask</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AResetGroupStopTask"
+>ResetGroupStopTask</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ASetGroupStopTask"
+>SetGroupStopTask</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AResetOrbitTask"
+>ResetOrbitTask</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3AEnterOrbitTask"
+>EnterOrbitTask</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ALeaveOrbitTask"
+>LeaveOrbitTask</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3ATagTasks"
+>TagTasks</A
+> = [(<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ATagTask"
+>TagTask</A
+>)]</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3ATagUpdate"
+>TagUpdate</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3APreUpdate"
+>PreUpdate</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATagTask"
+>TagTask</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APostUpdate"
+>PostUpdate</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATagTask"
+>TagTask</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3ATagList"
+>TagList</A
+> = [(<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ATagUpdate"
+>TagUpdate</A
+>)]</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3ATagCommand"
+>TagCommand</A
+> = (<A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ATagList"
+>TagList</A
+>)</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3AWinTags"
+>WinTags</A
+> = <A HREF="Text-Regex-TDFA-Common.html#t%3ATagList"
+>TagList</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3ADFA"
+>DFA</A
+>  = <A HREF="#v%3ADFA"
+>DFA</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Ad_id"
+>d_id</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ASetIndex"
+>SetIndex</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Ad_dt"
+>d_dt</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADT"
+>DT</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3ATransition"
+>Transition</A
+>  = <A HREF="#v%3ATransition"
+>Transition</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Atrans_many"
+>trans_many</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADFA"
+>DFA</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Atrans_single"
+>trans_single</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADFA"
+>DFA</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Atrans_how"
+>trans_how</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADTrans"
+>DTrans</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3ADT"
+>DT</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3ASimple%27"
+>Simple'</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Adt_win"
+>dt_win</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AInstructions"
+>Instructions</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Adt_trans"
+>dt_trans</A
+> :: <A HREF="Data-IntMap-CharMap2.html#t%3ACharMap"
+>CharMap</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATransition"
+>Transition</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Adt_other"
+>dt_other</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ATransition"
+>Transition</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ATesting%27"
+>Testing'</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Adt_test"
+>dt_test</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Adt_dopas"
+>dt_dopas</A
+> :: <A HREF="Data-IntSet-EnumSet2.html#t%3AEnumSet"
+>EnumSet</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Adt_a"
+>dt_a</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADT"
+>DT</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Adt_b"
+>dt_b</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADT"
+>DT</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3ADTrans"
+>DTrans</A
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> (<A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3AInstructions"
+>Instructions</A
+>))</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3ADTrans%27"
+>DTrans'</A
+> = [(<A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+>, [(<A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+>, (<A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>, ([(<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>, (<A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+>, <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+>))], [<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+>])))])]</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AOrbits"
+>Orbits</A
+>  = <A HREF="#v%3AOrbits"
+>Orbits</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AinOrbit"
+>inOrbit</A
+> :: !<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AbasePos"
+>basePos</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3Aordinal"
+>ordinal</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetOrbits"
+>getOrbits</A
+> :: !(<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Sequence.html#t%3ASeq"
+>Seq</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+>)</TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AInstructions"
+>Instructions</A
+>  = <A HREF="#v%3AInstructions"
+>Instructions</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AnewPos"
+>newPos</A
+> :: ![(<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3AAction"
+>Action</A
+>)]</TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AnewOrbits"
+>newOrbits</A
+> :: !(<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> (<A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+> -&gt; <A HREF="Text-Regex-TDFA-Common.html#t%3AOrbitTransformer"
+>OrbitTransformer</A
+>))</TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3AAction"
+>Action</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3ASetPre"
+>SetPre</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ASetPost"
+>SetPost</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3ASetVal"
+>SetVal</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3AOrbitTransformer"
+>OrbitTransformer</A
+> = <A HREF="Text-Regex-TDFA-Common.html#t%3AOrbitLog"
+>OrbitLog</A
+> -&gt; <A HREF="Text-Regex-TDFA-Common.html#t%3AOrbitLog"
+>OrbitLog</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3AOrbitLog"
+>OrbitLog</A
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AOrbits"
+>Orbits</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AshowQT"
+>showQT</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AQT"
+>QT</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3Aindent"
+>indent</A
+> :: [<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+>] -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AshowDT"
+>showDT</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADT"
+>DT</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AseeDTrans"
+>seeDTrans</A
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADTrans"
+>DTrans</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Documentation</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3Alook"
+></A
+><B
+>look</B
+> ::  <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> a -&gt; a</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3Acommon_error"
+></A
+><B
+>common_error</B
+> ::  <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+> -&gt; a</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3Aon"
+></A
+><B
+>on</B
+> ::  (t1 -&gt; t1 -&gt; t2) -&gt; (t -&gt; t1) -&gt; t -&gt; t -&gt; t2</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3Anorep"
+></A
+><B
+>norep</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> a =&gt; [a] -&gt; [a]</TD
+></TR
+><TR
+><TD CLASS="doc"
+>after sort or sortBy the use of nub<EM
+>nubBy can be replaced by norep</EM
+>norepBy
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AnorepBy"
+></A
+><B
+>norepBy</B
+> ::  (a -&gt; a -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+>) -&gt; [a] -&gt; [a]</TD
+></TR
+><TR
+><TD CLASS="doc"
+>after sort or sortBy the use of nub<EM
+>nubBy can be replaced by norep</EM
+>norepBy
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AmapFst"
+></A
+><B
+>mapFst</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Control-Monad.html#t%3AFunctor"
+>Functor</A
+> f =&gt; (t -&gt; t2) -&gt; f (t, t1) -&gt; f (t2, t1)</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AmapSnd"
+></A
+><B
+>mapSnd</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Control-Monad.html#t%3AFunctor"
+>Functor</A
+> f =&gt; (t1 -&gt; t2) -&gt; f (t, t1) -&gt; f (t, t2)</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3Afst3"
+></A
+><B
+>fst3</B
+> ::  (a, b, c) -&gt; a</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3Asnd3"
+></A
+><B
+>snd3</B
+> ::  (a, b, c) -&gt; b</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3Athd3"
+></A
+><B
+>thd3</B
+> ::  (a, b, c) -&gt; c</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AflipOrder"
+></A
+><B
+>flipOrder</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Ordering.html#t%3AOrdering"
+>Ordering</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Ordering.html#t%3AOrdering"
+>Ordering</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AnoWin"
+></A
+><B
+>noWin</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AWinTags"
+>WinTags</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A NAME="t%3ADoPa"
+></A
+><B
+>DoPa</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Used to track elements of the pattern that accept characters or 
+ are anchors
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ADoPa"
+></A
+><B
+>DoPa</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AdopaIndex"
+></A
+><B
+>dopaIndex</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:DoPa')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:DoPa" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Prelude.html#t%3AEnum"
+>Enum</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Ord.html#t%3AOrd"
+>Ord</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3ACompOption"
+></A
+><B
+>CompOption</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Control whether the pattern is multiline or case-sensitive like Text.Regex and whether to
+ capture the subgroups (1, 2, etc).  Controls enabling extra anchor syntax.
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ACompOption"
+></A
+><B
+>CompOption</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AcaseSensitive"
+></A
+><B
+>caseSensitive</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+><TD CLASS="rdoc"
+>True in blankCompOpt and defaultCompOpt
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Amultiline"
+></A
+><B
+>multiline</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+><TD CLASS="rdoc"
+>False in blankCompOpt, True in defaultCompOpt. Compile for
+                      newline-sensitive matching.  <A HREF="By default, newline is a completely ordinary
+                      character with no special meaning in either REs or strings-  With this flag,
+                      inverted bracket expressions and - never match newline, a ^ anchor matches the
+                      null string after any newline in the string in addition to its normal
+                      function, and the $ anchor matches the null string before any newline in the
+                      string in addition to its normal function-.html"
+>By default, newline is a completely ordinary
+                      character with no special meaning in either REs or strings.  With this flag,
+                      inverted bracket expressions and . never match newline, a ^ anchor matches the
+                      null string after any newline in the string in addition to its normal
+                      function, and the $ anchor matches the null string before any newline in the
+                      string in addition to its normal function.</A
+> 
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ArightAssoc"
+></A
+><B
+>rightAssoc</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+><TD CLASS="rdoc"
+>True (and therefore Right associative) in blankCompOpt and defaultCompOpt
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AnewSyntax"
+></A
+><B
+>newSyntax</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+><TD CLASS="rdoc"
+>False in blankCompOpt, True in defaultCompOpt. Add the extended non-POSIX syntax described in <A HREF="Text-Regex-TDFA.html"
+>Text.Regex.TDFA</A
+> haddock documentation.
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AlastStarGreedy"
+></A
+><B
+>lastStarGreedy</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+><TD CLASS="rdoc"
+>False by default.  This is POSIX correct but it takes space and is slower.
+ Setting this to true will improve performance, and should be done
+ if you plan to set the captureGroups execoption to False.
+</TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:CompOption')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:CompOption" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Read.html#t%3ARead"
+>Read</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexOptions <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Lazy-Internal.html#t%3AByteString"
+>ByteString</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Internal.html#t%3AByteString"
+>ByteString</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Sequence.html#t%3ASeq"
+>Seq</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+>)</TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AExecOption"
+></A
+><B
+>ExecOption</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AExecOption"
+></A
+><B
+>ExecOption</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AcaptureGroups"
+></A
+><B
+>captureGroups</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+><TD CLASS="rdoc"
+>True by default.  Set to False to improve speed (and space).
+</TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:ExecOption')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:ExecOption" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Read.html#t%3ARead"
+>Read</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexOptions <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Lazy-Internal.html#t%3AByteString"
+>ByteString</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Internal.html#t%3AByteString"
+>ByteString</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Sequence.html#t%3ASeq"
+>Seq</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+>)</TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3ATag"
+></A
+><B
+>Tag</B
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+><TR
+><TD CLASS="doc"
+>Used by implementation to name certain Postions during
+ matching. Identity of Position tag to set during a transition
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AOP"
+></A
+><B
+>OP</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Internal use to indicate type of tag and preference for larger or smaller Positions
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AMaximize"
+></A
+><B
+>Maximize</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AMinimize"
+></A
+><B
+>Minimize</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AOrbit"
+></A
+><B
+>Orbit</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AIgnore"
+></A
+><B
+>Ignore</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:OP')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:OP" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AOP"
+>OP</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AOP"
+>OP</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3AIndex"
+></A
+><B
+>Index</B
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+><TR
+><TD CLASS="doc"
+>Internal NFA node identity number
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3ASetIndex"
+></A
+><B
+>SetIndex</B
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntSet.html#t%3AIntSet"
+>IntSet</A
+></TD
+></TR
+><TR
+><TD CLASS="doc"
+>Internal DFA identity is this Set of NFA Index
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3APosition"
+></A
+><B
+>Position</B
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+><TR
+><TD CLASS="doc"
+>Index into the text being searched
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3AGroupIndex"
+></A
+><B
+>GroupIndex</B
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+><TR
+><TD CLASS="doc"
+>GroupIndex is for indexing submatches from capturing
+ parenthesized groups (PGroup/Group)
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AGroupInfo"
+></A
+><B
+>GroupInfo</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>GroupInfo collects the parent and tag information for an instance 
+ of a group
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AGroupInfo"
+></A
+><B
+>GroupInfo</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AthisIndex"
+></A
+><B
+>thisIndex</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AGroupIndex"
+>GroupIndex</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AparentIndex"
+></A
+><B
+>parentIndex</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AGroupIndex"
+>GroupIndex</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AstartTag"
+></A
+><B
+>startTag</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AstopTag"
+></A
+><B
+>stopTag</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AflagTag"
+></A
+><B
+>flagTag</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:GroupInfo')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:GroupInfo" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AGroupInfo"
+>GroupInfo</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3ARegex"
+></A
+><B
+>Regex</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>The TDFA backend specific <TT
+><A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+></TT
+> type, used by this module's RegexOptions and RegexMaker
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ARegex"
+></A
+><B
+>Regex</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aregex_dfa"
+></A
+><B
+>regex_dfa</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADFA"
+>DFA</A
+></TD
+><TD CLASS="rdoc"
+>starting DFA state
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aregex_init"
+></A
+><B
+>regex_init</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+></TD
+><TD CLASS="rdoc"
+>index of starting state
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aregex_b_index"
+></A
+><B
+>regex_b_index</B
+> :: (<A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+>)</TD
+><TD CLASS="rdoc"
+>indexes of smallest and largest states
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aregex_b_tags"
+></A
+><B
+>regex_b_tags</B
+> :: (<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>)</TD
+><TD CLASS="rdoc"
+>indexes of smallest and largest tags
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aregex_trie"
+></A
+><B
+>regex_trie</B
+> :: <A HREF="Text-Regex-TDFA-IntArrTrieSet.html#t%3ATrieSet"
+>TrieSet</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADFA"
+>DFA</A
+></TD
+><TD CLASS="rdoc"
+>All DFA states
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aregex_tags"
+></A
+><B
+>regex_tags</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/GHC-Arr.html#t%3AArray"
+>Array</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AOP"
+>OP</A
+></TD
+><TD CLASS="rdoc"
+>information about each tag
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aregex_groups"
+></A
+><B
+>regex_groups</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/GHC-Arr.html#t%3AArray"
+>Array</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AGroupIndex"
+>GroupIndex</A
+> [<A HREF="Text-Regex-TDFA-Common.html#t%3AGroupInfo"
+>GroupInfo</A
+>]</TD
+><TD CLASS="rdoc"
+>information about each group
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aregex_isFrontAnchored"
+></A
+><B
+>regex_isFrontAnchored</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+><TD CLASS="rdoc"
+>used for optimizing execution
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aregex_compOptions"
+></A
+><B
+>regex_compOptions</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aregex_execOptions"
+></A
+><B
+>regex_execOptions</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:Regex')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:Regex" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>RegexLike <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexLike <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Lazy-Internal.html#t%3AByteString"
+>ByteString</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexLike <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Internal.html#t%3AByteString"
+>ByteString</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexContext <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexContext <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Lazy-Internal.html#t%3AByteString"
+>ByteString</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Lazy-Internal.html#t%3AByteString"
+>ByteString</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexContext <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Internal.html#t%3AByteString"
+>ByteString</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Internal.html#t%3AByteString"
+>ByteString</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexOptions <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Lazy-Internal.html#t%3AByteString"
+>ByteString</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/bytestring/Data-ByteString-Internal.html#t%3AByteString"
+>ByteString</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Sequence.html#t%3ASeq"
+>Seq</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+>)</TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexLike <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Sequence.html#t%3ASeq"
+>Seq</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+>)</TD
+></TR
+><TR
+><TD CLASS="decl"
+>RegexContext <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Sequence.html#t%3ASeq"
+>Seq</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+>) (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Sequence.html#t%3ASeq"
+>Seq</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+>)</TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AWinEmpty"
+></A
+><B
+>WinEmpty</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AWinEmpty"
+></A
+><B
+>WinEmpty</B
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AInstructions"
+>Instructions</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AWinTest"
+></A
+><B
+>WinTest</B
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AWhichTest"
+>WhichTest</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AWinEmpty"
+>WinEmpty</A
+>) (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AWinEmpty"
+>WinEmpty</A
+>)</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:WinEmpty')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:WinEmpty" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AWinEmpty"
+>WinEmpty</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AQNFA"
+></A
+><B
+>QNFA</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Internal NFA node type
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AQNFA"
+></A
+><B
+>QNFA</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aq_id"
+></A
+><B
+>q_id</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aq_qt"
+></A
+><B
+>q_qt</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AQT"
+>QT</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:QNFA')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:QNFA" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AQNFA"
+>QNFA</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AQT"
+></A
+><B
+>QT</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Internal to QNFA type.
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ASimple"
+></A
+><B
+>Simple</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aqt_win"
+></A
+><B
+>qt_win</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AWinTags"
+>WinTags</A
+></TD
+><TD CLASS="rdoc"
+>empty transitions to the virtual winning state
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aqt_trans"
+></A
+><B
+>qt_trans</B
+> :: <A HREF="Data-IntMap-CharMap2.html#t%3ACharMap"
+>CharMap</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AQTrans"
+>QTrans</A
+></TD
+><TD CLASS="rdoc"
+>all ways to leave this QNFA to other or the same QNFA
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aqt_other"
+></A
+><B
+>qt_other</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AQTrans"
+>QTrans</A
+></TD
+><TD CLASS="rdoc"
+>default ways to leave this QNFA to other or the same QNFA
+</TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATesting"
+></A
+><B
+>Testing</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aqt_test"
+></A
+><B
+>qt_test</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+><TD CLASS="rdoc"
+>The test to perform
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aqt_dopas"
+></A
+><B
+>qt_dopas</B
+> :: <A HREF="Data-IntSet-EnumSet2.html#t%3AEnumSet"
+>EnumSet</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+></TD
+><TD CLASS="rdoc"
+>location(s) of the anchor(s) in the original regexp
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aqt_a"
+></A
+><B
+>qt_a</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AQT"
+>QT</A
+></TD
+><TD CLASS="rdoc"
+>use qt_a if test is True, else use qt_b
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aqt_b"
+></A
+><B
+>qt_b</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AQT"
+>QT</A
+></TD
+><TD CLASS="rdoc"
+>use qt_a if test is True, else use qt_b
+</TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:QT')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:QT" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AQT"
+>QT</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AQT"
+>QT</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3AQTrans"
+></A
+><B
+>QTrans</B
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> [<A HREF="Text-Regex-TDFA-Common.html#t%3ATagCommand"
+>TagCommand</A
+>]</TD
+></TR
+><TR
+><TD CLASS="doc"
+>Internal type to represent the tagged transition from one QNFA to
+ another (or itself).  The key is the Index of the destination QNFA.
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AWhichTest"
+></A
+><B
+>WhichTest</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Known predicates, just Beginning of Line (^) and End of Line ($).
+ Also support for GNU extensions is being added: ` beginning of
+ buffer, ' end of buffer, &lt; and &gt; for begin and end of words, b
+ and B for word boundary and not word boundary.
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_BOL"
+></A
+><B
+>Test_BOL</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_EOL"
+></A
+><B
+>Test_EOL</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_BOB"
+></A
+><B
+>Test_BOB</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_EOB"
+></A
+><B
+>Test_EOB</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_BOW"
+></A
+><B
+>Test_BOW</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_EOW"
+></A
+><B
+>Test_EOW</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_EdgeWord"
+></A
+><B
+>Test_EdgeWord</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATest_NotEdgeWord"
+></A
+><B
+>Test_NotEdgeWord</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:WhichTest')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:WhichTest" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Prelude.html#t%3AEnum"
+>Enum</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Ord.html#t%3AOrd"
+>Ord</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3ATagTask"
+></A
+><B
+>TagTask</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>The things that can be done with a Tag.  TagTask and
+ ResetGroupStopTask are for tags with Maximize or Minimize OP
+ values.  ResetOrbitTask and EnterOrbitTask and LeaveOrbitTask are
+ for tags with Orbit OP value.
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATagTask"
+></A
+><B
+>TagTask</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AResetGroupStopTask"
+></A
+><B
+>ResetGroupStopTask</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ASetGroupStopTask"
+></A
+><B
+>SetGroupStopTask</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AResetOrbitTask"
+></A
+><B
+>ResetOrbitTask</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AEnterOrbitTask"
+></A
+><B
+>EnterOrbitTask</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ALeaveOrbitTask"
+></A
+><B
+>LeaveOrbitTask</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:TagTask')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:TagTask" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATagTask"
+>TagTask</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATagTask"
+>TagTask</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3ATagTasks"
+></A
+><B
+>TagTasks</B
+> = [(<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ATagTask"
+>TagTask</A
+>)]</TD
+></TR
+><TR
+><TD CLASS="doc"
+>Ordered list of tags and their associated Task
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3ATagUpdate"
+></A
+><B
+>TagUpdate</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>When attached to a QTrans the TagTask can be done before or after
+ accepting the character.
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APreUpdate"
+></A
+><B
+>PreUpdate</B
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATagTask"
+>TagTask</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APostUpdate"
+></A
+><B
+>PostUpdate</B
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATagTask"
+>TagTask</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:TagUpdate')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:TagUpdate" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATagUpdate"
+>TagUpdate</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATagUpdate"
+>TagUpdate</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3ATagList"
+></A
+><B
+>TagList</B
+> = [(<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ATagUpdate"
+>TagUpdate</A
+>)]</TD
+></TR
+><TR
+><TD CLASS="doc"
+>Ordered list of tags and their associated update operation.
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3ATagCommand"
+></A
+><B
+>TagCommand</B
+> = (<A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3ATagList"
+>TagList</A
+>)</TD
+></TR
+><TR
+><TD CLASS="doc"
+>A TagList and the location of the item in the original pattern
+ that is being accepted.
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3AWinTags"
+></A
+><B
+>WinTags</B
+> = <A HREF="Text-Regex-TDFA-Common.html#t%3ATagList"
+>TagList</A
+></TD
+></TR
+><TR
+><TD CLASS="doc"
+>Ordered list of tags and their associated update operation to
+ perform on an empty transition to the virtual winning state.
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3ADFA"
+></A
+><B
+>DFA</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Internal DFA node, identified by the Set of indices of the QNFA
+ nodes it represents.
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ADFA"
+></A
+><B
+>DFA</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Ad_id"
+></A
+><B
+>d_id</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ASetIndex"
+>SetIndex</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Ad_dt"
+></A
+><B
+>d_dt</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADT"
+>DT</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:DFA')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:DFA" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADFA"
+>DFA</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3ATransition"
+></A
+><B
+>Transition</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATransition"
+></A
+><B
+>Transition</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Atrans_many"
+></A
+><B
+>trans_many</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADFA"
+>DFA</A
+></TD
+><TD CLASS="rdoc"
+>where to go (maximal), including respawning
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Atrans_single"
+></A
+><B
+>trans_single</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADFA"
+>DFA</A
+></TD
+><TD CLASS="rdoc"
+>where to go, not including respawning
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Atrans_how"
+></A
+><B
+>trans_how</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADTrans"
+>DTrans</A
+></TD
+><TD CLASS="rdoc"
+>how to go, including respawning
+</TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3ADT"
+></A
+><B
+>DT</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Internal to the DFA node
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ASimple%27"
+></A
+><B
+>Simple'</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Adt_win"
+></A
+><B
+>dt_win</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AInstructions"
+>Instructions</A
+></TD
+><TD CLASS="rdoc"
+>Actions to perform to win
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Adt_trans"
+></A
+><B
+>dt_trans</B
+> :: <A HREF="Data-IntMap-CharMap2.html#t%3ACharMap"
+>CharMap</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ATransition"
+>Transition</A
+></TD
+><TD CLASS="rdoc"
+>Transition to accept Char
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Adt_other"
+></A
+><B
+>dt_other</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ATransition"
+>Transition</A
+></TD
+><TD CLASS="rdoc"
+>default accepting transition
+</TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ATesting%27"
+></A
+><B
+>Testing'</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Adt_test"
+></A
+><B
+>dt_test</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AWhichTest"
+>WhichTest</A
+></TD
+><TD CLASS="rdoc"
+>The test to perform
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Adt_dopas"
+></A
+><B
+>dt_dopas</B
+> :: <A HREF="Data-IntSet-EnumSet2.html#t%3AEnumSet"
+>EnumSet</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+></TD
+><TD CLASS="rdoc"
+>location(s) of the anchor(s) in the original regexp
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Adt_a"
+></A
+><B
+>dt_a</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADT"
+>DT</A
+></TD
+><TD CLASS="rdoc"
+>use dt_a if test is True else use dt_b
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Adt_b"
+></A
+><B
+>dt_b</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADT"
+>DT</A
+></TD
+><TD CLASS="rdoc"
+>use dt_a if test is True else use dt_b
+</TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:DT')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:DT" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ADT"
+>DT</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3ADTrans"
+></A
+><B
+>DTrans</B
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> (<A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3AInstructions"
+>Instructions</A
+>))</TD
+></TR
+><TR
+><TD CLASS="doc"
+><P
+>Internal type to repesent the commands for the tagged transition.
+ The outer IntMap is for the destination Index and the inner IntMap
+ is for the Source Index.  This is convenient since all runtime data
+ going to the same destination must be compared to find the best.
+</P
+><P
+>A Destination IntMap entry may have an empty Source IntMap if and
+ only if the destination is the starting index and the NFA/DFA.
+ This instructs the matching engine to spawn a new entry starting at
+ the post-update position.
+</P
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3ADTrans%27"
+></A
+><B
+>DTrans'</B
+> = [(<A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+>, [(<A HREF="Text-Regex-TDFA-Common.html#t%3AIndex"
+>Index</A
+>, (<A HREF="Text-Regex-TDFA-Common.html#t%3ADoPa"
+>DoPa</A
+>, ([(<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>, (<A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+>, <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+>))], [<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+>])))])]</TD
+></TR
+><TR
+><TD CLASS="doc"
+>Internal convenience type for the text display code
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AOrbits"
+></A
+><B
+>Orbits</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+><P
+>Positions for which a * was re-started while looping.  Need to
+ append locations at back but compare starting with front, so use
+ Seq as a Queue.  The initial position is saved in basePos (and a
+ Maximize Tag), the middle positions in the Seq, and the final
+ position is NOT saved in the Orbits (only in a Maximize Tag).
+</P
+><P
+>The orderinal code is being written XXX TODO document it.
+</P
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AOrbits"
+></A
+><B
+>Orbits</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AinOrbit"
+></A
+><B
+>inOrbit</B
+> :: !<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AbasePos"
+></A
+><B
+>basePos</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3Aordinal"
+></A
+><B
+>ordinal</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetOrbits"
+></A
+><B
+>getOrbits</B
+> :: !(<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Sequence.html#t%3ASeq"
+>Seq</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+>)</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:Orbits')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:Orbits" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AOrbits"
+>Orbits</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AInstructions"
+></A
+><B
+>Instructions</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>The <TT
+><A HREF="Text-Regex-TDFA-Common.html#v%3AnewPos"
+>newPos</A
+></TT
+> and newFlags lists in Instructions are sorted by, and unique in, the Tag values
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AInstructions"
+></A
+><B
+>Instructions</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AnewPos"
+></A
+><B
+>newPos</B
+> :: ![(<A HREF="Text-Regex-TDFA-Common.html#t%3ATag"
+>Tag</A
+>, <A HREF="Text-Regex-TDFA-Common.html#t%3AAction"
+>Action</A
+>)]</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AnewOrbits"
+></A
+><B
+>newOrbits</B
+> :: !(<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> (<A HREF="Text-Regex-TDFA-Common.html#t%3APosition"
+>Position</A
+> -&gt; <A HREF="Text-Regex-TDFA-Common.html#t%3AOrbitTransformer"
+>OrbitTransformer</A
+>))</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:Instructions')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:Instructions" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AInstructions"
+>Instructions</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3AAction"
+></A
+><B
+>Action</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ASetPre"
+></A
+><B
+>SetPre</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ASetPost"
+></A
+><B
+>SetPost</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ASetVal"
+></A
+><B
+>SetVal</B
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:Action')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:Action" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AAction"
+>Action</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AAction"
+>Action</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3AOrbitTransformer"
+></A
+><B
+>OrbitTransformer</B
+> = <A HREF="Text-Regex-TDFA-Common.html#t%3AOrbitLog"
+>OrbitLog</A
+> -&gt; <A HREF="Text-Regex-TDFA-Common.html#t%3AOrbitLog"
+>OrbitLog</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3AOrbitLog"
+></A
+><B
+>OrbitLog</B
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-IntMap.html#t%3AIntMap"
+>IntMap</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AOrbits"
+>Orbits</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AshowQT"
+></A
+><B
+>showQT</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3AQT"
+>QT</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3Aindent"
+></A
+><B
+>indent</B
+> :: [<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+>] -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AshowDT"
+></A
+><B
+>showDT</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADT"
+>DT</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AseeDTrans"
+></A
+><B
+>seeDTrans</B
+> :: <A HREF="Text-Regex-TDFA-Common.html#t%3ADTrans"
+>DTrans</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="botbar"
+>Produced by <A HREF="http://www.haskell.org/haddock/"
+>Haddock</A
+> version 2.3.0</TD
+></TR
+></TABLE
+></BODY
+></HTML
+>

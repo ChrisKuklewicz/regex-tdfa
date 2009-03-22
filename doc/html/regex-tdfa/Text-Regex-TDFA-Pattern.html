@@ -1,0 +1,1742 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!--Rendered using the Haskell Html Library v0.2-->
+<HTML
+><HEAD
+><META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"
+><TITLE
+>Text.Regex.TDFA.Pattern</TITLE
+><LINK HREF="haddock.css" REL="stylesheet" TYPE="text/css"
+><SCRIPT SRC="haddock-util.js" TYPE="text/javascript"
+></SCRIPT
+></HEAD
+><BODY
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="topbar"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD
+><IMG SRC="haskell_icon.gif" WIDTH="16" HEIGHT="16" ALT=" "
+></TD
+><TD CLASS="title"
+>regex-tdfa-1.1.1: Replaces/Enhances Text.Regex</TD
+><TD CLASS="topbut"
+><A HREF="index.html"
+>Contents</A
+></TD
+><TD CLASS="topbut"
+><A HREF="doc-index.html"
+>Index</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="modulebar"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD
+><FONT SIZE="6"
+>Text.Regex.TDFA.Pattern</FONT
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+><B
+>Contents</B
+></TD
+></TR
+><TR
+><TD
+><DL
+><DT
+><A HREF="#1"
+>Internal use
+</A
+></DT
+><DT
+><A HREF="#2"
+>Internal use, Operations to support debugging under ghci
+</A
+></DT
+></DL
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Description</TD
+></TR
+><TR
+><TD CLASS="doc"
+>This <A HREF="Text-Regex-TDFA-Pattern.html"
+>Text.Regex.TDFA.Pattern</A
+> module provides the <TT
+><A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TT
+> data
+ type and its subtypes.  This <TT
+><A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TT
+> type is used to represent
+ the parsed form of a Regular Expression.  
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Synopsis</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3APattern"
+>Pattern</A
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+>= <A HREF="#v%3APEmpty"
+>PEmpty</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APGroup"
+>PGroup</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3AGroupIndex"
+>GroupIndex</A
+>) <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APOr"
+>POr</A
+> [<A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+>]</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APConcat"
+>PConcat</A
+> [<A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+>]</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APQuest"
+>PQuest</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APPlus"
+>PPlus</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APStar"
+>PStar</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APBound"
+>PBound</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+>) <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APCarat"
+>PCarat</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetDoPa"
+>getDoPa</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APDollar"
+>PDollar</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetDoPa"
+>getDoPa</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APDot"
+>PDot</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetDoPa"
+>getDoPa</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APAny"
+>PAny</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetDoPa"
+>getDoPa</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetPatternSet"
+>getPatternSet</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSet"
+>PatternSet</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APAnyNot"
+>PAnyNot</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetDoPa"
+>getDoPa</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetPatternSet"
+>getPatternSet</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSet"
+>PatternSet</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APEscape"
+>PEscape</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetDoPa"
+>getDoPa</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetPatternChar"
+>getPatternChar</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APChar"
+>PChar</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetDoPa"
+>getDoPa</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AgetPatternChar"
+>getPatternChar</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APNonCapture"
+>PNonCapture</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>| <A HREF="#v%3APNonEmpty"
+>PNonEmpty</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A HREF="#t%3APatternSet"
+>PatternSet</A
+>  = <A HREF="#v%3APatternSet"
+>PatternSet</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Set.html#t%3ASet"
+>Set</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+>)) (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Set.html#t%3ASet"
+>Set</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetCharacterClass"
+>PatternSetCharacterClass</A
+>)) (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Set.html#t%3ASet"
+>Set</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetCollatingElement"
+>PatternSetCollatingElement</A
+>)) (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Set.html#t%3ASet"
+>Set</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetEquivalenceClass"
+>PatternSetEquivalenceClass</A
+>))</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A HREF="#t%3APatternSetCharacterClass"
+>PatternSetCharacterClass</A
+>  = <A HREF="#v%3APatternSetCharacterClass"
+>PatternSetCharacterClass</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AunSCC"
+>unSCC</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A HREF="#t%3APatternSetCollatingElement"
+>PatternSetCollatingElement</A
+>  = <A HREF="#v%3APatternSetCollatingElement"
+>PatternSetCollatingElement</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AunSCE"
+>unSCE</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A HREF="#t%3APatternSetEquivalenceClass"
+>PatternSetEquivalenceClass</A
+>  = <A HREF="#v%3APatternSetEquivalenceClass"
+>PatternSetEquivalenceClass</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AunSEC"
+>unSEC</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A HREF="#t%3AGroupIndex"
+>GroupIndex</A
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A HREF="#t%3ADoPa"
+>DoPa</A
+>  = <A HREF="#v%3ADoPa"
+>DoPa</A
+> {<TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="recfield"
+><A HREF="#v%3AdopaIndex"
+>dopaIndex</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+></TABLE
+>}</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AshowPattern"
+>showPattern</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AstarTrans"
+>starTrans</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+> -&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AstarTrans%27"
+>starTrans'</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+> -&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3Asimplify%27"
+>simplify'</A
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+> -&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AdfsPattern"
+>dfsPattern</A
+> :: (<A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+> -&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+>) -&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+> -&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Documentation</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3APattern"
+></A
+><B
+>Pattern</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Pattern is the type returned by the regular expression parser.
+ This is consumed by the CorePattern module and the tender leaves
+ are nibbled by the TNFA module.
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APEmpty"
+></A
+><B
+>PEmpty</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APGroup"
+></A
+><B
+>PGroup</B
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3AGroupIndex"
+>GroupIndex</A
+>) <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APOr"
+></A
+><B
+>POr</B
+> [<A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+>]</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APConcat"
+></A
+><B
+>PConcat</B
+> [<A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+>]</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APQuest"
+></A
+><B
+>PQuest</B
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APPlus"
+></A
+><B
+>PPlus</B
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APStar"
+></A
+><B
+>PStar</B
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Bool.html#t%3ABool"
+>Bool</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APBound"
+></A
+><B
+>PBound</B
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+>) <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APCarat"
+></A
+><B
+>PCarat</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetDoPa"
+></A
+><B
+>getDoPa</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APDollar"
+></A
+><B
+>PDollar</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetDoPa"
+></A
+><B
+>getDoPa</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APDot"
+></A
+><B
+>PDot</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetDoPa"
+></A
+><B
+>getDoPa</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APAny"
+></A
+><B
+>PAny</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetDoPa"
+></A
+><B
+>getDoPa</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetPatternSet"
+></A
+><B
+>getPatternSet</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSet"
+>PatternSet</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APAnyNot"
+></A
+><B
+>PAnyNot</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetDoPa"
+></A
+><B
+>getDoPa</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetPatternSet"
+></A
+><B
+>getPatternSet</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSet"
+>PatternSet</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APEscape"
+></A
+><B
+>PEscape</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetDoPa"
+></A
+><B
+>getDoPa</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetPatternChar"
+></A
+><B
+>getPatternChar</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APChar"
+></A
+><B
+>PChar</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetDoPa"
+></A
+><B
+>getDoPa</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AgetPatternChar"
+></A
+><B
+>getPatternChar</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APNonCapture"
+></A
+><B
+>PNonCapture</B
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APNonEmpty"
+></A
+><B
+>PNonEmpty</B
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:Pattern')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:Pattern" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>data</SPAN
+>  <A NAME="t%3APatternSet"
+></A
+><B
+>PatternSet</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APatternSet"
+></A
+><B
+>PatternSet</B
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Set.html#t%3ASet"
+>Set</A
+> <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AChar"
+>Char</A
+>)) (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Set.html#t%3ASet"
+>Set</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetCharacterClass"
+>PatternSetCharacterClass</A
+>)) (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Set.html#t%3ASet"
+>Set</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetCollatingElement"
+>PatternSetCollatingElement</A
+>)) (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Maybe.html#t%3AMaybe"
+>Maybe</A
+> (<A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/containers/Data-Set.html#t%3ASet"
+>Set</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetEquivalenceClass"
+>PatternSetEquivalenceClass</A
+>))</TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:PatternSet')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:PatternSet" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSet"
+>PatternSet</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSet"
+>PatternSet</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A NAME="t%3APatternSetCharacterClass"
+></A
+><B
+>PatternSetCharacterClass</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APatternSetCharacterClass"
+></A
+><B
+>PatternSetCharacterClass</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AunSCC"
+></A
+><B
+>unSCC</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:PatternSetCharacterClass')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:PatternSetCharacterClass" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetCharacterClass"
+>PatternSetCharacterClass</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Ord.html#t%3AOrd"
+>Ord</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetCharacterClass"
+>PatternSetCharacterClass</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetCharacterClass"
+>PatternSetCharacterClass</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A NAME="t%3APatternSetCollatingElement"
+></A
+><B
+>PatternSetCollatingElement</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APatternSetCollatingElement"
+></A
+><B
+>PatternSetCollatingElement</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AunSCE"
+></A
+><B
+>unSCE</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:PatternSetCollatingElement')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:PatternSetCollatingElement" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetCollatingElement"
+>PatternSetCollatingElement</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Ord.html#t%3AOrd"
+>Ord</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetCollatingElement"
+>PatternSetCollatingElement</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetCollatingElement"
+>PatternSetCollatingElement</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A NAME="t%3APatternSetEquivalenceClass"
+></A
+><B
+>PatternSetEquivalenceClass</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3APatternSetEquivalenceClass"
+></A
+><B
+>PatternSetEquivalenceClass</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AunSEC"
+></A
+><B
+>unSEC</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:PatternSetEquivalenceClass')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:PatternSetEquivalenceClass" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetEquivalenceClass"
+>PatternSetEquivalenceClass</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Ord.html#t%3AOrd"
+>Ord</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetEquivalenceClass"
+>PatternSetEquivalenceClass</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3APatternSetEquivalenceClass"
+>PatternSetEquivalenceClass</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>type</SPAN
+> <A NAME="t%3AGroupIndex"
+></A
+><B
+>GroupIndex</B
+> = <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+></TR
+><TR
+><TD CLASS="doc"
+>GroupIndex is for indexing submatches from capturing
+ parenthesized groups (PGroup/Group)
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><SPAN CLASS="keyword"
+>newtype</SPAN
+>  <A NAME="t%3ADoPa"
+></A
+><B
+>DoPa</B
+>  </TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="ndoc"
+>Used to track elements of the pattern that accept characters or 
+ are anchors
+</TD
+></TR
+><TR
+><TD CLASS="section4"
+>Constructors</TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="5" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3ADoPa"
+></A
+><B
+>DoPa</B
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+><TR
+><TD CLASS="body" COLSPAN="2"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+><A NAME="v%3AdopaIndex"
+></A
+><B
+>dopaIndex</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/ghc-prim/GHC-Types.html#t%3AInt"
+>Int</A
+></TD
+><TD CLASS="rdoc"
+></TD
+></TR
+></TABLE
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="section4"
+><IMG SRC="minus.gif" CLASS="coll" ONCLICK="toggle(this,'i:DoPa')" ALT="show/hide"
+> Instances</TD
+></TR
+><TR
+><TD CLASS="body"
+><DIV ID="i:DoPa" STYLE="display:block;"
+><TABLE CLASS="vanilla" CELLSPACING="1" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Prelude.html#t%3AEnum"
+>Enum</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Eq.html#t%3AEq"
+>Eq</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Ord.html#t%3AOrd"
+>Ord</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Text-Show.html#t%3AShow"
+>Show</A
+> <A HREF="Text-Regex-TDFA-Pattern.html#t%3ADoPa"
+>DoPa</A
+></TD
+></TR
+></TABLE
+></DIV
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AshowPattern"
+></A
+><B
+>showPattern</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+> -&gt; <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Char.html#t%3AString"
+>String</A
+></TD
+></TR
+><TR
+><TD CLASS="doc"
+>I have not been checking, but this should have the property that
+ parsing the resulting string should result in an identical Pattern.
+ This is not true if starTrans has created PNonCapture and PNonEmpty
+ values or a (PStar False).  The contents of a <A HREF="[ ].html"
+>[ ]</A
+> grouping are
+ always shown in a sorted canonical order.
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section2"
+><A NAME="1"
+>Internal use
+</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AstarTrans"
+></A
+><B
+>starTrans</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+> -&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="doc"
+>Do the transformation and simplification in a single traversal.
+ This removes the PPlus, PQuest, and PBound values, changing to POr
+ and PEmpty and PStar True/False.  For some PBound values it adds
+ PNonEmpty and PNonCapture semantic marker.  It also simplifies to
+ flatten out nested POr and PConcat instances and eliminate some
+ uneeded PEmpty values.
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section2"
+><A NAME="2"
+>Internal use, Operations to support debugging under ghci
+</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AstarTrans%27"
+></A
+><B
+>starTrans'</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+> -&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3Asimplify%27"
+></A
+><B
+>simplify'</B
+> :: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+> -&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+></TR
+><TR
+><TD CLASS="doc"
+>Function to transform a pattern into an equivalent, but less
+ redundant form.  Nested <TT
+><A HREF="Text-Regex-TDFA-Pattern.html#v%3APOr"
+>POr</A
+></TT
+> and <TT
+><A HREF="Text-Regex-TDFA-Pattern.html#v%3APConcat"
+>PConcat</A
+></TT
+> are flattened. PEmpty
+ is propagated.
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AdfsPattern"
+></A
+><B
+>dfsPattern</B
+></TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="arg"
+>:: <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+> -&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+><TD CLASS="rdoc"
+>The transformation function
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+>-&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+><TD CLASS="rdoc"
+>The Pattern to transform
+</TD
+></TR
+><TR
+><TD CLASS="arg"
+>-&gt; <A HREF="Text-Regex-TDFA-Pattern.html#t%3APattern"
+>Pattern</A
+></TD
+><TD CLASS="rdoc"
+>The transformed Pattern
+</TD
+></TR
+><TR
+><TD CLASS="ndoc" COLSPAN="2"
+>Apply a Pattern transfomation function depth first
+</TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="botbar"
+>Produced by <A HREF="http://www.haskell.org/haddock/"
+>Haddock</A
+> version 2.3.0</TD
+></TR
+></TABLE
+></BODY
+></HTML
+>

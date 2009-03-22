@@ -1,0 +1,320 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!--Rendered using the Haskell Html Library v0.2-->
+<HTML
+><HEAD
+><META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"
+><TITLE
+>Text.Regex.TDFA</TITLE
+><LINK HREF="haddock.css" REL="stylesheet" TYPE="text/css"
+><SCRIPT SRC="haddock-util.js" TYPE="text/javascript"
+></SCRIPT
+></HEAD
+><BODY
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="topbar"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD
+><IMG SRC="haskell_icon.gif" WIDTH="16" HEIGHT="16" ALT=" "
+></TD
+><TD CLASS="title"
+>regex-tdfa-1.1.1: Replaces/Enhances Text.Regex</TD
+><TD CLASS="topbut"
+><A HREF="index.html"
+>Contents</A
+></TD
+><TD CLASS="topbut"
+><A HREF="doc-index.html"
+>Index</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="modulebar"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD
+><FONT SIZE="6"
+>Text.Regex.TDFA</FONT
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Description</TD
+></TR
+><TR
+><TD CLASS="doc"
+><P
+>The <A HREF="Text-Regex-TDFA.html"
+>Text.Regex.TDFA</A
+> module provides a backend for regular
+expressions. It provides instances for the classes defined and
+documented in <A HREF="Text-Regex-Base.html"
+>Text.Regex.Base</A
+> and re-exported by this module.  If
+you import this along with other backends then you should do so with
+qualified imports (with renaming for convenience).
+</P
+><P
+>This regex-tdfa package implements, correctly, POSIX extended regular
+expressions.  It is highly unlikely that the regex-posix package on
+your operating system is correct, see
+http:<EM
+></EM
+>www.haskell.org<EM
+>haskellwiki</EM
+>Regex_Posix for examples of your
+OS's bugs.
+</P
+><P
+>This package does provide captured parenthesized subexpressions.
+</P
+><P
+>Depending on the text being searched this package supports Unicode.
+The [Char] and (Seq Char) text types support Unicode.  The ByteString
+and ByteString.Lazy text types only support ASCII.  It is possible to
+support utf8 encoded ByteString.Lazy by using regex-tdfa and
+regex-tdfa-utf8 packages together  (required the utf8-string package).
+</P
+><P
+>As of version 1.1.1 the following GNU extensions are recognized, all
+anchors:
+</P
+><P
+>` at beginning of entire text
+</P
+><P
+>' at end of entire text
+</P
+><P
+>&lt; at beginning of word
+</P
+><P
+>&gt; at end of word
+</P
+><P
+>b at either beginning or end of word
+</P
+><P
+>B at neither beginning nor end of word
+</P
+><P
+>Where the <A HREF="word.html"
+>word</A
+> boundaries means between characters that are and are
+not in the [:word:] character class which contains [a-zA-Z0-9_].  Note
+that &lt; and b may match before the entire text and &gt; and b may
+match at the end of the entire text.
+</P
+><P
+>There is no locale support, so collating elements like [.ch.] are
+simply ignored and equivalence classes like [=a=] are converted to
+just [a].  The character classes like [:alnum:] are supported over
+ASCII only, valid classes are alnum, digit, punct, alpha, graph,
+space, blank, lower, upper, cntrl, print, xdigit, word.
+</P
+><P
+>This package does not provide <A HREF="basic.html"
+>basic</A
+> regular expressions.  This
+package does not provide back references inside regular expressions.
+</P
+><P
+>The package does not provide Perl style regular expressions.  Please
+look at the regex-pcre and pcre-light packages instead.
+</P
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Synopsis</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="body"
+><TABLE CLASS="vanilla" CELLSPACING="0" CELLPADDING="0"
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3AgetVersion_Text_Regex_TDFA"
+>getVersion_Text_Regex_TDFA</A
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Version.html#t%3AVersion"
+>Version</A
+></TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3A%3D~"
+>(=~)</A
+> :: (RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> source, RegexContext <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> source1 target) =&gt; source1 -&gt; source -&gt; target</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A HREF="#v%3A%3D~~"
+>(=~~)</A
+> :: (RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> source, RegexContext <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> source1 target, <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Control-Monad.html#t%3AMonad"
+>Monad</A
+> m) =&gt; source1 -&gt; source -&gt; m target</TD
+></TR
+><TR
+><TD CLASS="s8"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>module <A HREF="Text-Regex-TDFA-Common.html"
+>Text.Regex.TDFA.Common</A
+></TD
+></TR
+></TABLE
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="section1"
+>Documentation</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3AgetVersion_Text_Regex_TDFA"
+></A
+><B
+>getVersion_Text_Regex_TDFA</B
+> :: <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Data-Version.html#t%3AVersion"
+>Version</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3A%3D~"
+></A
+><B
+>(=~)</B
+> :: (RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> source, RegexContext <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> source1 target) =&gt; source1 -&gt; source -&gt; target</TD
+></TR
+><TR
+><TD CLASS="doc"
+>This is the pure functional matching operator.  If the target
+ cannot be produced then some empty result will be returned.  If
+ there is an error in processing, then <TT
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/GHC-Err.html#v%3Aerror"
+>error</A
+></TT
+> will be called.
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+><A NAME="v%3A%3D~~"
+></A
+><B
+>(=~~)</B
+> :: (RegexMaker <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3ACompOption"
+>CompOption</A
+> <A HREF="Text-Regex-TDFA-Common.html#t%3AExecOption"
+>ExecOption</A
+> source, RegexContext <A HREF="Text-Regex-TDFA-Common.html#t%3ARegex"
+>Regex</A
+> source1 target, <A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Control-Monad.html#t%3AMonad"
+>Monad</A
+> m) =&gt; source1 -&gt; source -&gt; m target</TD
+></TR
+><TR
+><TD CLASS="doc"
+>This is the monadic matching operator.  If a single match fails,
+ then <TT
+><A HREF="/opt/ghc-6.10.1-src//share/doc/ghc/libraries/base/Control-Monad.html#v%3Afail"
+>fail</A
+></TT
+> will be called.
+</TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="decl"
+>module <A HREF="Text-Regex-TDFA-Common.html"
+>Text.Regex.TDFA.Common</A
+></TD
+></TR
+><TR
+><TD CLASS="s15"
+></TD
+></TR
+><TR
+><TD CLASS="botbar"
+>Produced by <A HREF="http://www.haskell.org/haddock/"
+>Haddock</A
+> version 2.3.0</TD
+></TR
+></TABLE
+></BODY
+></HTML
+>
