@@ -115,7 +115,7 @@ execMatch r@(Regex { regex_dfa = DFA {d_id=didIn,d_dt=dtIn}
 
   goNext storeNext = {-# SCC "goNext" #-} do
     (SScratch s1In s2In (winQ,blank,which)) <- newScratch b_index b_tags
-    spawnStart b_tags blank startState s1In offsetIn
+    _ <- spawnStart b_tags blank startState s1In offsetIn
     eliminatedStateFlag <- newSTRef False
     eliminatedRespawnFlag <- newSTRef False
     let next s1 s2 did dt offset prev input = {-# SCC "goNext.next" #-}
@@ -355,7 +355,7 @@ execMatch r@(Regex { regex_dfa = DFA {d_id=didIn,d_dt=dtIn}
                 if respawn
                   then do
                     writeSTRef eliminatedRespawnFlag False
-                    spawnStart b_tags blank startState s1 (succ offset)
+                    _ <- spawnStart b_tags blank startState s1 (succ offset)
                     return (Trie.lookupAsc trie (sort (states'++[startState])))
                   else return (Trie.lookupAsc trie states')
               return (did',dt')
@@ -692,15 +692,15 @@ data STUArray s i e
 -}
 -- This has been updated for ghc 6.8.3 and still works with ghc 6.10.1
 {-# INLINE copySTU #-}
-copySTU :: (Show i,Ix i,MArray (STUArray s) e (S.ST s)) => STUArray s i e -> STUArray s i e -> S.ST s (STUArray s i e)
-copySTU _souce@(STUArray _ _ _ msource) destination@(STUArray _ _ _ mdest) =
+copySTU :: (Show i,Ix i,MArray (STUArray s) e (S.ST s)) => STUArray s i e -> STUArray s i e -> S.ST s () -- (STUArray s i e)
+copySTU _souce@(STUArray _ _ _ msource) _destination@(STUArray _ _ _ mdest) =
 -- do b1 <- getBounds s1
 --  b2 <- getBounds s2
 --  when (b1/=b2) (error ("\n\nWTF copySTU: "++show (b1,b2)))
   ST $ \s1# ->
     case sizeofMutableByteArray# msource        of { n# ->
     case unsafeCoerce# memcpy mdest msource n# s1# of { (# s2#, () #) ->
-    (# s2#, destination #) }}
+    (# s2#, () #) }}
 {-
 #else /* !__GLASGOW_HASKELL__ */
 

@@ -521,7 +521,7 @@ tagsToGroupsST aGroups (WScratch {w_pos=pos})= do
 {-# INLINE spawnAt #-}
 -- Reset the entry at "Index", or allocate such an entry.
 -- set tag 0 to the "Position"
-spawnAt :: (Tag,Tag) -> BlankScratch s -> Index -> MScratch s -> Position -> S.ST s Position
+spawnAt :: (Tag,Tag) -> BlankScratch s -> Index -> MScratch s -> Position -> S.ST s ()
 spawnAt b_tags (BlankScratch blankPos) i s1 thisPos = do
   oldPos <- m_pos s1 !! i
   pos <- case oldPos of
@@ -533,7 +533,6 @@ spawnAt b_tags (BlankScratch blankPos) i s1 thisPos = do
   copySTU blankPos pos
   set (m_orbit s1) i $! mempty
   set pos 0 thisPos
-  return thisPos
 
 {-# INLINE updateCopy #-}
 updateCopy :: ((Index, Instructions), STUArray s Tag Position, OrbitLog)
@@ -565,15 +564,15 @@ data STUArray s i e
 -}
 -- This has been updated for ghc 6.8.3 and still works with ghc 6.10.1
 {-# INLINE copySTU #-}
-copySTU :: (Show i,Ix i,MArray (STUArray s) e (S.ST s)) => STUArray s i e -> STUArray s i e -> S.ST s (STUArray s i e)
-copySTU _souce@(STUArray _ _ _ msource) destination@(STUArray _ _ _ mdest) =
+copySTU :: (Show i,Ix i,MArray (STUArray s) e (S.ST s)) => STUArray s i e -> STUArray s i e -> S.ST s () -- (STUArray s i e)
+copySTU _souce@(STUArray _ _ _ msource) _destination@(STUArray _ _ _ mdest) =
 -- do b1 <- getBounds s1
 --  b2 <- getBounds s2
 --  when (b1/=b2) (error ("\n\nWTF copySTU: "++show (b1,b2)))
   ST $ \s1# ->
     case sizeofMutableByteArray# msource        of { n# ->
     case unsafeCoerce# memcpy mdest msource n# s1# of { (# s2#, () #) ->
-    (# s2#, destination #) }}
+    (# s2#, () #) }}
 {-
 #else /* !__GLASGOW_HASKELL__ */
 

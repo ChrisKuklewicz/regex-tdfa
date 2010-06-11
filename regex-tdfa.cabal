@@ -1,5 +1,5 @@
 Name:                   regex-tdfa
-Version:                1.1.1
+Version:                1.1.3
 -- 0.99.4 tests pnonempty' = \ p -> POr [ PEmpty, p ] instead of PNonEmpty
 -- 0.99.5 remove PNonEmpty constructor
 -- 0.99.6 change to nested nonEmpty calls for PBound

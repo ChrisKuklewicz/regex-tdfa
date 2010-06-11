@@ -64,7 +64,7 @@ p_bound atom = try $ between (char '{') (char '}') (p_bound_spec atom)
 p_bound_spec atom = do lowS <- many1 digit
                        let lowI = read lowS
                        highMI <- option (Just lowI) $ try $ do 
-                                   char ','
+                                   _ <- char ','
   -- parsec note: if 'many digits' fails below then the 'try' ensures
   -- that the ',' will not match the closing '}' in p_bound, same goes
   -- for any non '}' garbage after the 'many digits'.
@@ -78,7 +78,7 @@ p_bound_spec atom = do lowS <- many1 digit
 -- An anchor cannot be modified by a repetition specifier
 p_anchor = (char '^' >> liftM PCarat char_index)
        <|> (char '$' >> liftM PDollar char_index)
-       <|> try (do string "()" 
+       <|> try (do _ <- string "()" 
                    index <- group_index
                    return $ PGroup index PEmpty) 
        <?> "empty () or anchor ^ or $"
@@ -101,7 +101,7 @@ p_bracket = (char '[') >> ( (char '^' >> p_set True) <|> (p_set False) )
 -- p_set :: Bool -> GenParser Char st Pattern
 p_set invert = do initial <- (option "" ((char ']' >> return "]") <|> (char '-' >> return "-")))
                   values <- many1 p_set_elem
-                  char ']'
+                  _ <- char ']'
                   ci <- char_index
                   let chars = maybe'set $ initial
                                           ++ [c | BEChar c <- values ]
@@ -129,7 +129,7 @@ p_set_elem_coll =  liftM BEColl $
 
 p_set_elem_range = try $ do 
   start <- noneOf "]-"
-  char '-'
+  _  <- char '-'
   end <- noneOf "]"
   return (BEChars [start..end])
 

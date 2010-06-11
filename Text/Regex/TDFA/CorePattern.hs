@@ -385,19 +385,19 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                      (False,False,_,_) -> return (toAdvice a)
                      (_,_,False,False) -> return (toAdvice b)
                      _ -> if tagged qFront || tagged qEnd then uniq "combineSeq mid" else return NoTag
---            qFront <- pFront a mid
---            qEnd <- pEnd (toAdvice mid) b
+      --      qFront <- pFront a mid
+      --      qEnd <- pEnd (toAdvice mid) b
             (qFront,qEnd) <- front'end (pFront a mid) (pEnd (toAdvice mid) b)
             -- XXX: Perhaps a "produces" should be created to compliment "wants",
             -- then "produces qEnd" could be compared to "wants qFront"
             let wanted = if WantsEither == wants qEnd then wants qFront else wants qEnd
             return $ Q { nullQ = mergeNullViews (nullQ qFront) (nullQ qEnd)
-                       , takes = seqTake (takes qFront) (takes qEnd)
-                       , preReset = [], postSet = [], preTag = Nothing, postTag = Nothing
-                       , tagged = bothVary
-                       , childGroups = childGroups qFront || childGroups qEnd
-                       , wants = wanted
-                       , unQ = Seq qFront qEnd }
+                             , takes = seqTake (takes qFront) (takes qEnd)
+                             , preReset = [], postSet = [], preTag = Nothing, postTag = Nothing
+                             , tagged = bothVary
+                             , childGroups = childGroups qFront || childGroups qEnd
+                             , wants = wanted
+                             , unQ = Seq qFront qEnd }
                                    )
   go :: Pattern -> HHQ
   go pIn m1 m2 =
