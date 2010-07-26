@@ -50,9 +50,17 @@ import qualified Text.Regex.TDFA.NewDFA.Engine_NC_FA as NC_FA(execMatch)
 
 -- trace :: String -> a -> a
 -- trace _ a = a
+{-
+see :: (Show x, Monad m) => String ->  x -> m a -> m a
+see _ _ m = m
+--see msg s m = trace ("\nsee: "++msg++" : "++show s) m
 
+sees :: (Monad m) => String ->  String -> m a -> m a
+sees _ _ m = m
+--sees msg s m = trace ("\nsee: "++msg++" :\n"++s) m
+-}
 err :: String -> a
-err s = common_error "Text.Regex.TDFA.NewDFA"  s
+err s = common_error "Text.Regex.TDFA.NewDFA.Engine"  s
 
 {-# INLINE (!!) #-}
 (!!) :: (MArray a e (S.ST s),Ix i) => a i e -> Int -> S.ST s e
@@ -131,7 +139,7 @@ execMatch r@(Regex { regex_dfa = DFA {d_id=didIn,d_dt=dtIn}
                     Just (c,input') ->
                       case CMap.findWithDefault o c t of
                         Transition {trans_many=DFA {d_id=did',d_dt=dt'},trans_how=dtrans} ->
-                          findTrans s1 s2 did' dt' dtrans offset c input'
+                          findTrans s1 s2 did did' dt' dtrans offset c input'
               | otherwise -> do
                   (did',dt') <- processWinner s1 did dt w offset
                   next' s1 s2 did' dt' offset prev input
@@ -148,7 +156,7 @@ execMatch r@(Regex { regex_dfa = DFA {d_id=didIn,d_dt=dtIn}
                 Just (c,input') ->
                   case CMap.findWithDefault o c t of
                     Transition {trans_many=DFA {d_id=did',d_dt=dt'},trans_how=dtrans} ->
-                      findTrans s1 s2 did' dt' dtrans offset c input'
+                      findTrans s1 s2 did did' dt' dtrans offset c input'
 
 -- compressOrbits gets all the current Tag-0 start information from
 -- the NFA states; then it loops through all the Orbit tags with
@@ -257,10 +265,10 @@ execMatch r@(Regex { regex_dfa = DFA {d_id=didIn,d_dt=dtIn}
 -- "storeNext".  If no winners are ready to be released then the
 -- computation continues immediately.
 
-        findTrans s1 s2 did' dt' dtrans offset prev' input' =  {-# SCC "goNext.findTrans" #-} do
+        findTrans s1 s2 did did' dt' dtrans offset prev' input' =  {-# SCC "goNext.findTrans" #-} do
           -- findTrans part 0
           -- MAGIC TUNABLE CONSTANT 100 (and 100-1). TODO: (offset .&. 127 == 127) instead?
-          when (not (null orbitTags) && (offset `rem` 100 == 99)) (compressOrbits s1 did' offset)
+          when (not (null orbitTags) && (offset `rem` 100 == 99)) (compressOrbits s1 did offset)
           -- findTrans part 1
           let findTransTo (destIndex,sources) | IMap.null sources =
                 set which destIndex ((-1,Instructions { newPos = [(0,SetPost)], newOrbits = Nothing })
@@ -478,6 +486,12 @@ showMS s i = do
   return $ unlines [ "MScratch, index = "++show i
                    , indent a
                    , indent c]
+
+showMS2 :: MScratch s -> ST s String
+showMS2 s = do
+  (lo,hi) <- getBounds (m_pos s)
+  strings <- forM [lo..hi] (showMS s)
+  return (unlines strings)
 
 showWS :: WScratch s -> ST s String
 showWS (WScratch pos) = do

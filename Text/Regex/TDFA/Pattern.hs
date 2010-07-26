@@ -135,7 +135,7 @@ instance Show PatternSetEquivalenceClass where
 -- and PEmpty and PStar True/False.  For some PBound values it adds
 -- PNonEmpty and PNonCapture semantic marker.  It also simplifies to
 -- flatten out nested POr and PConcat instances and eliminate some
--- uneeded PEmpty values.
+-- unneeded PEmpty values.
 starTrans :: Pattern -> Pattern
 starTrans = dfsPattern (simplify' . starTrans')
 

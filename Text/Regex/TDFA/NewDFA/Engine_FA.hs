@@ -48,7 +48,7 @@ import Text.Regex.TDFA.NewDFA.MakeTest(test_singleline,test_multiline)
 -- trace _ a = a
 
 err :: String -> a
-err s = common_error "Text.Regex.TDFA.NewDFA"  s
+err s = common_error "Text.Regex.TDFA.NewDFA.Engine_FA"  s
 
 {-# INLINE (!!) #-}
 (!!) :: (MArray a e (S.ST s),Ix i) => a i e -> Int -> S.ST s e
@@ -103,7 +103,7 @@ execMatch (Regex { regex_dfa =  DFA {d_id=didIn,d_dt=dtIn}
                   case CMap.findWithDefault o c t of
                     Transition {trans_single=DFA {d_id=did',d_dt=dt'},trans_how=dtrans}
                       | ISet.null did' -> finalizeWinner
-                      | otherwise -> findTrans s1 s2 did' dt' dtrans offset c input'
+                      | otherwise -> findTrans s1 s2 did did' dt' dtrans offset c input'
 
 -- compressOrbits gets all the current Tag-0 start information from
 -- the NFA states; then it loops through all the Orbit tags with
@@ -212,10 +212,10 @@ execMatch (Regex { regex_dfa =  DFA {d_id=didIn,d_dt=dtIn}
 -- "storeNext".  If no winners are ready to be released then the
 -- computation continues immediately.
 
-        findTrans s1 s2 did' dt' dtrans offset prev' input' =  {-# SCC "goNext.findTrans" #-} do
+        findTrans s1 s2 did did' dt' dtrans offset prev' input' =  {-# SCC "goNext.findTrans" #-} do
           -- findTrans part 0
           -- MAGIC TUNABLE CONSTANT 100 (and 100-1). TODO: (offset .&. 127 == 127) instead?
-          when (not (null orbitTags) && (offset `rem` 100 == 99)) (compressOrbits s1 did' offset)
+          when (not (null orbitTags) && (offset `rem` 100 == 99)) (compressOrbits s1 did offset)
           -- findTrans part 1
           let findTransTo (destIndex,sources) | IMap.null sources =
                 set which destIndex noSource

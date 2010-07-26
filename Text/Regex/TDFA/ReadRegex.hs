@@ -131,7 +131,10 @@ p_set_elem_range = try $ do
   start <- noneOf "]-"
   _  <- char '-'
   end <- noneOf "]"
-  return (BEChars [start..end])
+  -- bug fix: check start <= end before "return (BEChars [start..end])"
+  if start <= end
+    then return (BEChars [start..end])
+    else unexpected "End point of dashed character range is less than starting point"
 
 p_set_elem_char = do 
   c <- noneOf "]"

@@ -44,9 +44,10 @@ import Data.IntSet.EnumSet2(EnumSet)
 import qualified Data.IntSet.EnumSet2 as Set(singleton,toList,isSubsetOf)
 import Text.Regex.TDFA.Common {- all -}
 import Text.Regex.TDFA.Pattern(Pattern(..),starTrans)
---import Debug.Trace
+-- import Debug.Trace
 
 {- By Chris Kuklewicz, 2007. BSD License, see the LICENSE file. -}
+
 
 --err :: String -> a
 --err = common_error "Text.Regex.TDFA.CorePattern"
@@ -283,6 +284,16 @@ partitionEither = helper id id where
   helper ls rs ((Left  x):xs) = helper (ls.(x:)) rs       xs
 
 -- Partial function: assumes starTrans has been run on the Pattern
+-- Note that the lazy dependency chain for this very zigzag:
+--   varies information is sent up the tree
+--   handle tags depend on that and sends m1 m2 down the tree
+--     makeGroup sends some tags to the writer (Right _)
+--     withParent listens to children send group info to writer
+--       and lazily looks resetGroupTags from aGroups, the result of all writer (Right _)
+--       preReset stores the resetGroupTags result of the lookup in the tree
+--     makeOrbit sends some tags to the writer (Left _)
+--     withOrbit listens to children send orbit info to writer for resetOrbitTags 
+--   nullQ depends m1 m2 and resetOrbitTags and resetGroupTags and is sent up the tree
 patternToQ :: CompOption -> (Pattern,(GroupIndex,DoPa)) -> (Q,Array Tag OP,Array GroupIndex [GroupInfo])
 patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
   (tnfa,(tag_dlist,nextTag),groups) = runRWS monad startReader startState
@@ -296,21 +307,23 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
   startReader = Just 0                           -- start inside group 0, capturing enabled
   -- The startState is only acted upon in the "uniq" command
   -- Tag 0 is Minimized and Tag 1 is maximized, next tag has value of 2
-  -- This is regarless of right or left associativity
+  -- This is regardless of right or left associativity
   startState :: ([OP]->[OP],Tag)
   startState = ( (Minimize:) . (Maximize:) , 2)
 
   -- uniq uses MonadState and always returns an "Apply _" tag
   {-# INLINE uniq #-}
   uniq :: String -> PM HandleTag
-  uniq _msg = do x <- fmap Apply (uniq' Maximize)
---                 trace (_msg ++ " Maximize "++show x) $ return x
-                 return x
+  uniq _msg = fmap Apply (uniq' Maximize)
+--  uniq _msg = do x <- fmap Apply (uniq' Maximize)
+--                trace ('\n':msg ++ " Maximize "++show x) $ return x
+--                return x
 
   ignore :: String -> PM Tag
-  ignore _msg = do x <- uniq' Ignore
---                   trace (_msg ++ " Ignore "++show x) $ return x
-                   return x
+  ignore _msg = uniq' Ignore
+--  ignore _msg = do x <- uniq' Ignore
+--                  trace ('\n':msg ++ " Ignore "++show x) $ return x
+--                  return x
 
   {-# NOINLINE uniq' #-}
   uniq' :: OP -> PM Tag
@@ -326,7 +339,7 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
   -- makeOrbit uses MonadState(uniq) and MonadWriter(tell/Left)
   makeOrbit :: PM (Maybe Tag)
   makeOrbit = do x <- uniq' Orbit
---                 trace ("PStar Orbit "++show x) $ do
+--                 trace ('\n':"PStar Orbit "++show x) $ do
                  tell [Left x]
                  return (Just x)
 
@@ -355,6 +368,8 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
   -- withParent uses MonadReader(local) to set getParentIndex to return (Just this)
   -- withParent uses MonadWriter(listens to makeGroup/Right) to return contained group indices (stopTag)
   -- withParent is only safe if getParentIndex has been checked to be not equal to Nothing (see PGroup below)
+  -- Note use of laziness: the immediate children's group index is used to look up all copies of the 
+  -- group in aGroups, including copies that are not immediate children.
   withParent :: GroupIndex -> PM a -> PM (a,[Tag])
   withParent this = local (const (Just this)) . listens childGroupInfo
     where childGroupInfo x =
@@ -440,11 +455,12 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
                bAdvice = toAdvice b -- last branch gets 'bAdvice', others may get own tag
                -- Due to the recursive-do, it seems that I have to put the if needTags into the op'
                newUniq = if needTags then uniq "POr branch" else return bAdvice
+--           trace ("\nPOr sub "++show aAdvice++" "++show bAdvice++"needsTags is "++show needTags) $ return ()
            -- The "bs" values are allocated in left-to-right order before the children in "qs"
            -- optimiztion: low priority for last branch is implicit, do not create separate tag here.
            bs <- fmap (++[bAdvice]) $ replicateM (pred $ length branches) newUniq -- 2 <= length ps
            -- create all the child branches in left-to-right order after the "bs"
-           qs <- forM (zip branches bs) (\(branch,bTag) -> go branch aAdvice bTag)
+           qs <- forM (zip branches bs) (\(branch,bTag) ->  (go branch aAdvice bTag))
            let wqs = map wants qs
                wanted = if any (WantsBoth==) wqs then WantsBoth
                           else case (any (WantsQNFA==) wqs,any (WantsQT==) wqs) of
@@ -524,11 +540,12 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
          --
          -- Guarded by the getParentIndex /= Nothing check is the
          -- withParent command.
+         --
          PGroup Nothing p -> go p m1 m2
          PGroup (Just this) p -> do
            mParent <- getParentIndex
            case mParent of
-             Nothing -> go p m1 m2 -- just like PGrop Nothing p
+             Nothing -> go p m1 m2 -- just like PGroup Nothing p
              Just parent -> do
                -- 'a' may be Advice or Apply from parent or Apply created here
                a <- if noTag m1 then uniq "PGroup start" else return m1
