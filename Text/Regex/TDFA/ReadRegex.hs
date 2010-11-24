@@ -100,7 +100,7 @@ p_bracket = (char '[') >> ( (char '^' >> p_set True) <|> (p_set False) )
 
 -- p_set :: Bool -> GenParser Char st Pattern
 p_set invert = do initial <- (option "" ((char ']' >> return "]") <|> (char '-' >> return "-")))
-                  values <- many1 p_set_elem
+                  values <- if null initial then many1 p_set_elem else many p_set_elem
                   _ <- char ']'
                   ci <- char_index
                   let chars = maybe'set $ initial

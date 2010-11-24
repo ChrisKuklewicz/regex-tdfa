@@ -444,17 +444,18 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
            --        Non-accepting possibilities can all commute to the front and
            --        become part of the nullQ.  The accepting bits then need prioritizing.
            --    Does the above require changes in POr handling in TNFA?  Yes.
-           --    Have to always use nullQ instead of recapitulating it.
+           --    Have to always use nullQ instead of "recapitulating" it.
            --    Could also create a constant-writing tag instead of many index tags.
            -- Exasperation: This POr recursive mdo is very easy to make loop and lockup the program
            -- if needTags is False then there is no way to disambiguate branches so fewer tags are needed
+           let needUniqTags = childGroups ans
            let needTags = varies ans || childGroups ans -- childGroups detects that "abc|a(b)c" needs tags
            a <- if noTag m1 && needTags then uniq "POr start" else return m1 -- whole POr
            b <- if noTag m2 && needTags then uniq "POr stop" else return m2 -- whole POr
            let aAdvice = toAdvice a -- all branches share 'aAdvice'
                bAdvice = toAdvice b -- last branch gets 'bAdvice', others may get own tag
                -- Due to the recursive-do, it seems that I have to put the if needTags into the op'
-               newUniq = if needTags then uniq "POr branch" else return bAdvice
+               newUniq = if needUniqTags then uniq "POr branch" else return bAdvice
 --           trace ("\nPOr sub "++show aAdvice++" "++show bAdvice++"needsTags is "++show needTags) $ return ()
            -- The "bs" values are allocated in left-to-right order before the children in "qs"
            -- optimiztion: low priority for last branch is implicit, do not create separate tag here.
@@ -496,7 +497,8 @@ patternToQ compOpt (pOrig,(maxGroupIndex,_)) = (tnfa,aTags,aGroups) where
            b <- if noTag m2 && needsTags then uniq "PStar stop" else return m2
            mOrbit <- if needsOrbit then makeOrbit else return Nothing -- any Orbit tag is created after the pre and post tags
 --           test1 <- if tagged q then uniq "not-TEST1" Minimize else return NoTag
-           (q,resetOrbitTags) <- withOrbit (go p NoTag NoTag) -- all contained orbit tags get listened to (not including this one).
+-- XXX XXX 1.1.5 testing second NoTag replaced with (toAdvice b)
+           (q,resetOrbitTags) <- withOrbit (go p NoTag (toAdvice b)) -- all contained orbit tags get listened to (not including this one).
            let nullView | mayFirstBeNull = cleanNullView $ childViews ++ skipView
                         | otherwise = skipView
                  where childViews = tagWrapNullView a b . orbitWrapNullView mOrbit resetOrbitTags $ nullQ q
