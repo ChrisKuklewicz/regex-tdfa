@@ -1,5 +1,5 @@
 Name:                   regex-tdfa
-Version:                1.1.7
+Version:                1.1.8
 -- 0.99.4 tests pnonempty' = \ p -> POr [ PEmpty, p ] instead of PNonEmpty
 -- 0.99.5 remove PNonEmpty constructor
 -- 0.99.6 change to nested nonEmpty calls for PBound
@@ -45,6 +45,7 @@ Version:                1.1.7
 -- 1.1.5 try needUniqTags in POr in CorePattern.hs, try (toAdvice b) for PStar child
 -- 1.1.6 Fix bug preventing []] [-] [^]] [^-] (thanks to Maxime Henrion)
 -- 1.1.7 fix url below
+-- 1.1.8 Make ghc-7.0.2 on platorm 2011.2.0.0.0 happy
 License:                BSD3
 License-File:           LICENSE
 Copyright:              Copyright (c) 2007, Christopher Kuklewicz
@@ -94,5 +95,5 @@ library
                           Text.Regex.TDFA.TNFA
   Buildable:              True
   Extensions:             MultiParamTypeClasses, FunctionalDependencies, BangPatterns, MagicHash, RecursiveDo, NoMonoPatBinds, ForeignFunctionInterface, UnboxedTuples, TypeOperators, FlexibleContexts, ExistentialQuantification, UnliftedFFITypes, TypeSynonymInstances, FlexibleInstances
-  GHC-Options:            -Wall -O2 -funbox-strict-fields
+  GHC-Options:            -Wall -funbox-strict-fields -fspec-constr-count=10 -O2 -fno-warn-orphans
   GHC-Prof-Options:       -auto-all

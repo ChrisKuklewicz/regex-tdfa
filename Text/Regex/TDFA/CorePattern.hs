@@ -129,7 +129,9 @@ showQ q = "Q { nullQ = "++show (nullQ q)++
         "\n  , tagged = "++show (tagged q)++
         "\n  , wants = "++show (wants q)++
         "\n  , unQ = "++ indent' (unQ q)++" }"
-   where indent' = unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . show
+   where indent' = unlines . (\s -> case s of
+                                      [] -> []
+                                      (h:t) -> h : (map (spaces ++) t)) . lines . show
          spaces = replicate 10 ' '
 
 -- Smart constructors for NullView

@@ -329,7 +329,9 @@ showDT (Testing' wt d a b) = "Testing' { dt_test = " ++ show wt
                           ++ "\n         , dt_a = " ++ indent' a
                           ++ "\n         , dt_b = " ++ indent' b
                           ++ "\n         }"
- where indent' = init . unlines . (\(h:t) -> h : (map (spaces ++) t)) . lines . showDT
+ where indent' = init . unlines . (\s -> case s of
+                                           [] -> []
+                                           (h:t) -> h : (map (spaces ++) t)) . lines . showDT
        spaces = replicate 10 ' '
 
 
