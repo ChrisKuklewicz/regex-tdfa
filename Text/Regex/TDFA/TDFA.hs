@@ -369,6 +369,9 @@ resetGroupTag = modifyPos (SetVal (-1))
 setGroupTag :: Tag -> CompileInstructions ()
 setGroupTag = modifyPos (SetVal 0)
 
+-- The following is ten times more complicated than it ought to be.  Sorry, I was too new, and now
+-- too busy to clean this up.
+
 resetOrbit :: Tag -> CompileInstructions ()
 resetOrbit tag = modifyPos (SetVal (-1)) tag >> modifyOrbit (IMap.insert tag AlterReset)
 

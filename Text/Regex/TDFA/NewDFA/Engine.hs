@@ -19,7 +19,8 @@ import Data.Array.ST(STArray)
 -}
 import Prelude hiding ((!!))
 
-import Data.Array.MArray(MArray(..),unsafeFreeze)
+import Data.Array.MArray(MArray(..))
+import Data.Array.Unsafe(unsafeFreeze)
 import Data.Array.IArray(Array,bounds,assocs,Ix(rangeSize,range))
 import qualified Data.IntMap.CharMap2 as CMap(findWithDefault)
 import Data.IntMap(IntMap)
@@ -163,11 +164,11 @@ execMatch r@(Regex { regex_dfa = DFA {d_id=didIn,d_dt=dtIn}
 -- compressOrbit.
 --
 -- compressOrbit on such a Tag loops through all the NFS states'
--- m_orbit record, discardind ones that are Nothing and discarding
+-- m_orbit record, discarding ones that are Nothing and discarding
 -- ones that are too new to care about (after the cutoff value).
 --
 -- compressOrbit then groups the Orbits records by the Tag-0 start
--- position and the basePos position.  Entried in different groups
+-- position and the basePos position.  Entries in different groups
 -- will never be comparable in the future so they can be processed
 -- separately.  Groups could probably be even more finely
 -- distinguished, as a futher optimization, but the justification will

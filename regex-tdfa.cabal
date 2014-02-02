@@ -1,5 +1,5 @@
 Name:                   regex-tdfa
-Version:                1.1.8
+Version:                1.2.0
 -- 0.99.4 tests pnonempty' = \ p -> POr [ PEmpty, p ] instead of PNonEmpty
 -- 0.99.5 remove PNonEmpty constructor
 -- 0.99.6 change to nested nonEmpty calls for PBound
@@ -46,6 +46,7 @@ Version:                1.1.8
 -- 1.1.6 Fix bug preventing []] [-] [^]] [^-] (thanks to Maxime Henrion)
 -- 1.1.7 fix url below
 -- 1.1.8 Make ghc-7.0.2 on platorm 2011.2.0.0.0 happy
+-- 1.2.0 "Almost ghc-7.8" with the array 0.4 changes for Data.Array.Unsafe
 License:                BSD3
 License-File:           LICENSE
 Copyright:              Copyright (c) 2007, Christopher Kuklewicz
@@ -64,7 +65,7 @@ Cabal-Version:          >= 1.2.3
 flag base4
 
 library 
-  Build-Depends:        regex-base >= 0.93.1, parsec, mtl, containers, array, bytestring
+  Build-Depends:        regex-base >= 0.93.1, parsec, mtl, containers, array >= 0.4, bytestring
   if flag(base4)
     Build-Depends:      base >= 4.0 && < 5, ghc-prim
   else

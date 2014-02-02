@@ -4,7 +4,8 @@ module Text.Regex.TDFA.NewDFA.Engine_NC_FA(execMatch) where
 import Control.Monad(unless)
 import Prelude hiding ((!!))
 
-import Data.Array.MArray(MArray(newArray),unsafeFreeze)
+import Data.Array.MArray(MArray(..))
+import Data.Array.Unsafe(unsafeFreeze)
 import Data.Array.ST(STArray)
 import qualified Data.IntMap.CharMap2 as CMap(findWithDefault)
 import qualified Data.IntMap as IMap(null)
