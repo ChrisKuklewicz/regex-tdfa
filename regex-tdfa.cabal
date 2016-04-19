@@ -59,7 +59,7 @@ Package-URL:            http://code.haskell.org/regex-tdfa/
 Synopsis:               Replaces/Enhances Text.Regex
 Description:            A new all Haskell "tagged" DFA regex engine, inspired by libtre
 Category:               Text
-Tested-With:            GHC
+Tested-With:            GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.1
 Build-Type:             Simple
 Cabal-Version:          >= 1.2.3
 
