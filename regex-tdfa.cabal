@@ -52,7 +52,7 @@ License:                BSD3
 License-File:           LICENSE
 Copyright:              Copyright (c) 2007, Christopher Kuklewicz
 Author:                 Christopher Kuklewicz
-Maintainer:             TextRegexLazy@personal.mightyreason.com
+Maintainer:             Artyom <yom@artyom.me>, Christopher Kuklewicz <TextRegexLazy@personal.mightyreason.com>
 Stability:              Seems to work, but not POSIX yet
 Homepage:               https://github.com/ChrisKuklewicz/regex-tdfa
 Bug-Reports:            https://github.com/ChrisKuklewicz/regex-tdfa/issues
