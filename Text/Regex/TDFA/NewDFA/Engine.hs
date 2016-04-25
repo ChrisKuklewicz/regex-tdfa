@@ -529,11 +529,11 @@ newMScratch b_index = do
 
 newtype F s = F ([F s] -> C s)
 type C s = Position
-	  -> ((Int, Instructions), STUArray s Tag Position, IntMap Orbits)
-	  -> [(Int, Action)]
-	  -> ((Int, Instructions), STUArray s Tag Position, IntMap Orbits)
-	  -> [(Int, Action)]
-	  -> ST s Ordering
+        -> ((Int, Instructions), STUArray s Tag Position, IntMap Orbits)
+        -> [(Int, Action)]
+        -> ((Int, Instructions), STUArray s Tag Position, IntMap Orbits)
+        -> [(Int, Action)]
+        -> ST s Ordering
 
 {-# INLINE orderOf #-}
 orderOf :: Action -> Action -> Ordering
@@ -703,7 +703,7 @@ foreign import ccall unsafe "memcpy"
 Prelude Data.Array.Base> :i STUArray
 data STUArray s i e
   = STUArray !i !i !Int (GHC.Prim.MutableByteArray# s)
-  	-- Defined in Data.Array.Base
+  -- Defined in Data.Array.Base
 -}
 -- This has been updated for ghc 6.8.3 and still works with ghc 6.10.1
 {-# INLINE copySTU #-}
