@@ -67,19 +67,20 @@ source-repository head
   type:                git
   location:            git://github.com/ChrisKuklewicz/regex-tdfa.git
 
-flag base4
-
 flag devel
   description: enable flags that are useful for development
   default: False
   manual: True
 
 library 
-  Build-Depends:        regex-base >= 0.93.1, parsec, mtl, containers, array >= 0.4, bytestring
-  if flag(base4)
-    Build-Depends:      base >= 4 && < 5, base >= 4.4 || < 4.4, ghc-prim
-  else
-    Build-Depends:      base < 4.0
+  Build-Depends:        array >= 0.4
+                      , base >= 4 && < 5
+                      , bytestring
+                      , containers
+                      , ghc-prim
+                      , mtl
+                      , parsec
+                      , regex-base >= 0.93.1
 
   other-modules:          Paths_regex_tdfa
   Exposed-Modules:        Data.IntMap.CharMap2
