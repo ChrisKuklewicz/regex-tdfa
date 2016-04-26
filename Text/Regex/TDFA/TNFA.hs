@@ -6,7 +6,7 @@
 -- TODO : try rewriting whole qToNFA in terms of "act"
 -- (That will require re-organizing the continuation data a bit)
 
--- | "Text.Regex.TDFA.TNFA" converts the CorePattern Q/P data (and its
+-- | "Text.Regex.TDFA.TNFA" converts the CorePattern Q\/P data (and its
 -- Pattern leafs) to a QNFA tagged non-deterministic finite automata.
 -- 
 -- This holds every possible way to follow one state by another, while
@@ -17,7 +17,7 @@
 -- far, keeping all this information has helped fix bugs in both the
 -- design and implementation.
 --
--- The QNFA for a Pattern with a starTraned Q/P form with N one
+-- The QNFA for a Pattern with a starTraned Q\/P form with N one
 -- character accepting leaves has at most N+1 nodes.  These nodes
 -- repesent the future choices after accepting a leaf.  The processing
 -- of Or nodes often reduces this number by sharing at the end of the

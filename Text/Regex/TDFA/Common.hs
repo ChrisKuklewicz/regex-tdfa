@@ -32,14 +32,14 @@ common_error moduleName message =
 on :: (t1 -> t1 -> t2) -> (t -> t1) -> t -> t -> t2
 f `on` g = (\x y -> (g x) `f` (g y))
 
--- | after sort or sortBy the use of nub/nubBy can be replaced by norep/norepBy
+-- | after 'sort' or 'sortBy' the use of 'nub'\/'nubBy' can be replaced by 'norep'\/'norepBy'
 norep :: (Eq a) => [a]->[a]
 norep [] = []
 norep x@[_] = x
 norep (a:bs@(c:cs)) | a==c = norep (a:cs)
                     | otherwise = a:norep bs
 
--- | after sort or sortBy the use of nub/nubBy can be replaced by norep/norepBy
+-- | after 'sort' or 'sortBy' the use of 'nub'\/'nubBy' can be replaced by 'norep'\/'norepBy'
 norepBy :: (a -> a -> Bool) -> [a] -> [a]
 norepBy _ [] = []
 norepBy _ x@[_] = x
@@ -81,7 +81,7 @@ instance Show DoPa where
   showsPrec p (DoPa {dopaIndex=i}) = ('#':) . showsPrec p i
 
 -- | Control whether the pattern is multiline or case-sensitive like Text.Regex and whether to
--- capture the subgroups (\1, \2, etc).  Controls enabling extra anchor syntax.
+-- capture the subgroups (\\1, \\2, etc).  Controls enabling extra anchor syntax.
 data CompOption = CompOption {
     caseSensitive :: Bool    -- ^ True in blankCompOpt and defaultCompOpt
   , multiline :: Bool {- ^ False in blankCompOpt, True in defaultCompOpt. Compile for
@@ -115,7 +115,7 @@ type SetIndex = IntSet {- Index -}
 type Position = Int
 
 -- | GroupIndex is for indexing submatches from capturing
--- parenthesized groups (PGroup/Group)
+-- parenthesized groups (PGroup\/Group)
 type GroupIndex = Int
 -- | GroupInfo collects the parent and tag information for an instance 
 -- of a group
@@ -180,9 +180,9 @@ data QT = Simple { qt_win :: WinTags -- ^ empty transitions to the virtual winni
 type QTrans = IntMap {- Destination Index -} [TagCommand]
 
 -- | Known predicates, just Beginning of Line (^) and End of Line ($).
--- Also support for GNU extensions is being added: \` beginning of
--- buffer, \' end of buffer, \< and \> for begin and end of words, \b
--- and \B for word boundary and not word boundary.
+-- Also support for GNU extensions is being added: \\\` beginning of
+-- buffer, \\\' end of buffer, \\\< and \\\> for begin and end of words, \\b
+-- and \\B for word boundary and not word boundary.
 data WhichTest = Test_BOL | Test_EOL -- '^' and '$' (affected by multiline option)
                | Test_BOB | Test_EOB -- \` and \' begin and end buffer
                | Test_BOW | Test_EOW -- \< and \> begin and end word
@@ -233,7 +233,7 @@ data DT = Simple' { dt_win :: IntMap {- Source Index -} Instructions -- ^ Action
 -- going to the same destination must be compared to find the best.
 --
 -- A Destination IntMap entry may have an empty Source IntMap if and
--- only if the destination is the starting index and the NFA/DFA.
+-- only if the destination is the starting index and the NFA\/DFA.
 -- This instructs the matching engine to spawn a new entry starting at
 -- the post-update position.
 type DTrans = IntMap {- Index of Destination -} (IntMap {- Index of Source -} (DoPa,Instructions))

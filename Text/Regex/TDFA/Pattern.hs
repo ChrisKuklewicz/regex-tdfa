@@ -132,7 +132,7 @@ instance Show PatternSetEquivalenceClass where
 
 -- | Do the transformation and simplification in a single traversal.
 -- This removes the PPlus, PQuest, and PBound values, changing to POr
--- and PEmpty and PStar True/False.  For some PBound values it adds
+-- and PEmpty and PStar True\/False.  For some PBound values it adds
 -- PNonEmpty and PNonCapture semantic marker.  It also simplifies to
 -- flatten out nested POr and PConcat instances and eliminate some
 -- unneeded PEmpty values.

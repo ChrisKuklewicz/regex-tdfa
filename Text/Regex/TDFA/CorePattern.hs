@@ -1,16 +1,16 @@
 -- | The CorePattern module deconstructs the Pattern tree created by
--- ReadRegex.parseRegex and returns a simpler Q/P tree with
+-- ReadRegex.parseRegex and returns a simpler Q\/P tree with
 -- annotations at each Q node.  This will be converted by the TNFA
 -- module into a QNFA finite automata.
 --
--- Of particular note, this Pattern to Q/P conversion creates and
+-- Of particular note, this Pattern to Q\/P conversion creates and
 -- assigns all the internal Tags that will be used during the matching
 -- process, and associates the captures groups with the tags that
 -- represent their starting and ending locations and with their
 -- immediate parent group.
 --
 -- Each Maximize and Minimize tag is held as either a preTag or a
--- postTag by one and only one location in the Q/P tree.  The Orbit
+-- postTag by one and only one location in the Q\/P tree.  The Orbit
 -- tags are each held by one and only one Star node.  Tags that stop a
 -- Group are also held in perhaps numerous preReset lists.
 --

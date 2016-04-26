@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 -- | This is a POSIX version of parseRegex that allows NUL characters.
--- Lazy/Possessive/Backrefs are not recognized.  Anchors ^ and $ are
+-- Lazy\/Possessive\/Backrefs are not recognized.  Anchors \^ and \$ are
 -- recognized.
 --
 -- The PGroup returned always have (Maybe GroupIndex) set to (Just _)
@@ -23,7 +23,7 @@ data BracketElement = BEChar Char | BEChars String | BEColl String | BEEquiv Str
 -- | Return either an error message or a tuple of the Pattern and the
 -- largest group index and the largest DoPa index (both have smallest
 -- index of 1).  Since the regular expression is supplied as [Char] it
--- automatically supports unicode and '\NUL' characters.
+-- automatically supports unicode and @\\NUL@ characters.
 parseRegex :: String -> Either ParseError (Pattern,(GroupIndex,DoPa))
 parseRegex x = runParser (do pat <- p_regex
                              eof

@@ -9,7 +9,7 @@ qualified imports (with renaming for convenience).
 This regex-tdfa package implements, correctly, POSIX extended regular
 expressions.  It is highly unlikely that the regex-posix package on
 your operating system is correct, see
-http://www.haskell.org/haskellwiki/Regex_Posix for examples of your
+<http://www.haskell.org/haskellwiki/Regex_Posix> for examples of your
 OS's bugs.
 
 This package does provide captured parenthesized subexpressions.
@@ -23,23 +23,18 @@ regex-tdfa-utf8 packages together  (required the utf8-string package).
 As of version 1.1.1 the following GNU extensions are recognized, all
 anchors:
 
-\\\` at beginning of entire text
-
-\\\' at end of entire text
-
-\\< at beginning of word
-
-\\> at end of word
-
-\\b at either beginning or end of word
-
-\\B at neither beginning nor end of word
+* \\\` at beginning of entire text
+* \\\' at end of entire text
+* \\\< at beginning of word
+* \\\> at end of word
+* \\b at either beginning or end of word
+* \\B at neither beginning nor end of word
 
 The above are controlled by the 'newSyntax' Bool in 'CompOption'.
 
 Where the "word" boundaries means between characters that are and are
 not in the [:word:] character class which contains [a-zA-Z0-9_].  Note
-that \< and \b may match before the entire text and \> and \b may
+that \\\< and \\b may match before the entire text and \\\> and \\b may
 match at the end of the entire text.
 
 There is no locale support, so collating elements like [.ch.] are
