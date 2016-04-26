@@ -6,7 +6,6 @@ module Text.Regex.TDFA.TDFA(patternToRegex,DFA(..),DT(..)
                             ,examineDFA,nfaToDFA,dfaMap) where
 
 --import Control.Arrow((***))
-import Control.Monad.Instances()
 import Data.Monoid(Monoid(..))
 import Control.Monad.State(State,MonadState(..),execState)
 import Data.Array.IArray(Array,(!),bounds,{-assocs-})
