@@ -1,3 +1,8 @@
+# 1.2.2
+
+* New maintainer.
+* Now we don't reexport the problematic `Show` instance for functions.
+
 # 1.2.1
 
 * Updated dependency versions.
