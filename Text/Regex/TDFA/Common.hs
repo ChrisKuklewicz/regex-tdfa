@@ -7,7 +7,6 @@ module Text.Regex.TDFA.Common where
 import Text.Regex.Base(RegexOptions(..))
 
 {- By Chris Kuklewicz, 2007-2009. BSD License, see the LICENSE file. -}
-import Text.Show.Functions()
 import Data.Array.IArray(Array)
 import Data.IntSet.EnumSet2(EnumSet)
 import qualified Data.IntSet.EnumSet2 as Set(toList)
@@ -259,7 +258,19 @@ data Orbits = Orbits
 data Instructions = Instructions
   { newPos :: ![(Tag,Action)] -- False is preUpdate, True is postUpdate (there are no Orbit tags here) -- 2009 : Change to enum from bool?
   , newOrbits :: !(Maybe (Position -> OrbitTransformer))
-  } deriving (Show)
+  }
+
+instance Show Instructions where
+  showsPrec p (Instructions pos _)
+    = showParen (p >= 11) $
+        showString "Instructions {" .
+        showString "newPos = " .
+        showsPrec 0 pos .
+        showString ", " .
+        showString "newOrbits = " .
+        showString "<function>" .
+        showString "}"
+
 data Action = SetPre | SetPost | SetVal Int deriving (Show,Eq)
 type OrbitTransformer = OrbitLog -> OrbitLog
 type OrbitLog = IntMap Orbits
