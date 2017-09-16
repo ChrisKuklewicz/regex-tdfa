@@ -1,5 +1,10 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Data.IntMap.EnumMap2 where
 
+#if MIN_VERSION_base(4,9,0)
+import Data.Semigroup
+#endif
 import Data.Foldable(Foldable(..))
 import qualified Data.IntMap as M
 import qualified Data.IntSet.EnumSet2 as S (EnumSet(..))
@@ -8,17 +13,11 @@ import Prelude
 import qualified Prelude as L (map)
 
 newtype EnumMap k a = EnumMap {unEnumMap :: M.IntMap a}
-  deriving (Eq,Ord,Read,Show)
-
-instance Ord k => Monoid (EnumMap k a) where
-  mempty = EnumMap mempty
-  EnumMap x `mappend` EnumMap y = EnumMap (x `mappend` y)
-
-instance Ord k => Functor (EnumMap k) where
-  fmap f (EnumMap m) = EnumMap (fmap f m)
-
-instance Ord k => Foldable (EnumMap k) where
-  foldMap f (EnumMap m) = foldMap f m
+  deriving (Eq,Ord,Read,Show,Monoid,Functor,Foldable
+#if MIN_VERSION_base(4,9,0)
+           ,Semigroup
+#endif
+           )
 
 (!) :: (Enum key) => EnumMap key a -> key -> a
 (!) (EnumMap m) k = (M.!) m (fromEnum k)

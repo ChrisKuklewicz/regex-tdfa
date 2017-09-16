@@ -1,10 +1,14 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Data.IntMap.CharMap2 where
 
 #ifdef __GLASGOW_HASKELL__
 import GHC.Base(unsafeChr)
 #else
 import Data.Char (chr)
+#endif
+#if MIN_VERSION_base(4,9,0)
+import Data.Semigroup
 #endif
 import Data.Char as C(ord)
 import Data.List as L (map)
@@ -16,14 +20,12 @@ import Data.Monoid(Monoid(..))
 unsafeChr = chr
 #endif
 
-newtype CharMap a = CharMap {unCharMap :: M.IntMap a} deriving (Eq,Ord,Read,Show)
-
-instance Monoid (CharMap a) where
-  mempty = CharMap mempty
-  CharMap x `mappend` CharMap y = CharMap (x `mappend` y)
-
-instance Functor CharMap where
-  fmap f (CharMap m) = CharMap (fmap f m)
+newtype CharMap a = CharMap {unCharMap :: M.IntMap a}
+                  deriving (Eq,Ord,Read,Show,Functor,Monoid
+#if MIN_VERSION_base(4,9,0)
+                           ,Semigroup
+#endif
+                           )
 
 type Key = Char
 

@@ -1,15 +1,20 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Data.IntSet.EnumSet2 where
 
+#if MIN_VERSION_base(4,9,0)
+import Data.Semigroup
+#endif
 import qualified Data.IntSet as S
 import qualified Data.List as L (map)
 import Data.Monoid(Monoid(..))
 
 newtype EnumSet e = EnumSet {unEnumSet :: S.IntSet}
-  deriving (Eq,Ord,Read,Show)
-
-instance Monoid (EnumSet e) where
-  mempty = EnumSet mempty
-  EnumSet x `mappend` EnumSet y = EnumSet (x `mappend` y)
+  deriving (Eq,Ord,Read,Show,Monoid
+#if MIN_VERSION_base(4,9,0)
+           ,Semigroup
+#endif
+           )
 
 (\\) :: (Enum e) => EnumSet e -> EnumSet e -> EnumSet e
 (\\) (EnumSet s1) (EnumSet s2) = EnumSet ((S.\\) s1 s2)
