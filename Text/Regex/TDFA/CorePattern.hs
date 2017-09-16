@@ -30,10 +30,16 @@
 -- (start) looking for the first with an embedded PGroup can be found
 -- and the PGroup free elements can be wrapped in some new PNOTAG
 -- semantic indicator.
+
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Text.Regex.TDFA.CorePattern(Q(..),P(..),WhichTest(..),Wanted(..)
                                   ,TestInfo,OP(..),SetTestInfo(..),NullView
                                   ,patternToQ,cleanNullView,cannotAccept,mustAccept) where
 
+#if MIN_VERSION_base(4,9,0)
+import Data.Semigroup
+#endif
 import Control.Monad.RWS {- all -}
 import Data.Array.IArray(Array,(!),accumArray,listArray)
 import Data.List(sort)
@@ -85,11 +91,12 @@ type TestInfo = (WhichTest,DoPa)
 
 -- This is newtype'd to allow control over class instances
 -- This is a set of WhichTest where each test has associated pattern location information
-newtype SetTestInfo = SetTestInfo {getTests :: EnumMap WhichTest (EnumSet DoPa)} deriving (Eq)
-
-instance Monoid SetTestInfo where
-  mempty = SetTestInfo mempty
-  SetTestInfo x `mappend` SetTestInfo y = SetTestInfo (x `mappend` y)
+newtype SetTestInfo = SetTestInfo {getTests :: EnumMap WhichTest (EnumSet DoPa)}
+                    deriving (Eq,Monoid
+#if MIN_VERSION_base(4,9,0)
+                             ,Semigroup
+#endif
+                             )
 
 instance Show SetTestInfo where
   show (SetTestInfo sti) = "SetTestInfo "++show (mapSnd (Set.toList) $ Map.assocs sti)
