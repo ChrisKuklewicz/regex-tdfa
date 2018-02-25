@@ -10,7 +10,7 @@ import Data.Char as C(ord)
 import Data.List as L (map)
 import qualified Data.IntMap as M
 import qualified Data.IntSet as S(IntSet)
-import Data.Monoid(Monoid(..))
+import Data.Semigroup as Sem
 
 #ifndef __GLASGOW_HASKELL__
 unsafeChr = chr
@@ -18,9 +18,12 @@ unsafeChr = chr
 
 newtype CharMap a = CharMap {unCharMap :: M.IntMap a} deriving (Eq,Ord,Read,Show)
 
+instance Sem.Semigroup (CharMap a) where
+  CharMap x <> CharMap y = CharMap (x `mappend` y)
+
 instance Monoid (CharMap a) where
   mempty = CharMap mempty
-  CharMap x `mappend` CharMap y = CharMap (x `mappend` y)
+  mappend = (<>)
 
 instance Functor CharMap where
   fmap f (CharMap m) = CharMap (fmap f m)

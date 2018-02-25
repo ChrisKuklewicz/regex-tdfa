@@ -3,16 +3,19 @@ module Data.IntMap.EnumMap2 where
 import Data.Foldable(Foldable(..))
 import qualified Data.IntMap as M
 import qualified Data.IntSet.EnumSet2 as S (EnumSet(..))
-import Data.Monoid(Monoid(..))
+import Data.Semigroup as Sem
 import Prelude
 import qualified Prelude as L (map)
 
 newtype EnumMap k a = EnumMap {unEnumMap :: M.IntMap a}
   deriving (Eq,Ord,Read,Show)
 
+instance Ord k => Sem.Semigroup (EnumMap k a) where
+  EnumMap x <> EnumMap y = EnumMap (x `mappend` y)
+
 instance Ord k => Monoid (EnumMap k a) where
   mempty = EnumMap mempty
-  EnumMap x `mappend` EnumMap y = EnumMap (x `mappend` y)
+  mappend = (<>)
 
 instance Ord k => Functor (EnumMap k) where
   fmap f (EnumMap m) = EnumMap (fmap f m)

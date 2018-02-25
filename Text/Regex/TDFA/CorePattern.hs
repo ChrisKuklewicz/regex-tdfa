@@ -42,6 +42,7 @@ import qualified Data.IntMap.EnumMap2 as Map(singleton,null,assocs,keysSet)
 --import Data.Maybe(isNothing)
 import Data.IntSet.EnumSet2(EnumSet)
 import qualified Data.IntSet.EnumSet2 as Set(singleton,toList,isSubsetOf)
+import Data.Semigroup as Sem
 import Text.Regex.TDFA.Common {- all -}
 import Text.Regex.TDFA.Pattern(Pattern(..),starTrans)
 -- import Debug.Trace
@@ -87,9 +88,12 @@ type TestInfo = (WhichTest,DoPa)
 -- This is a set of WhichTest where each test has associated pattern location information
 newtype SetTestInfo = SetTestInfo {getTests :: EnumMap WhichTest (EnumSet DoPa)} deriving (Eq)
 
+instance Semigroup SetTestInfo where
+  SetTestInfo x <> SetTestInfo y = SetTestInfo (x Sem.<> y)
+
 instance Monoid SetTestInfo where
   mempty = SetTestInfo mempty
-  SetTestInfo x `mappend` SetTestInfo y = SetTestInfo (x `mappend` y)
+  mappend = (Sem.<>)
 
 instance Show SetTestInfo where
   show (SetTestInfo sti) = "SetTestInfo "++show (mapSnd (Set.toList) $ Map.assocs sti)

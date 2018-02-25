@@ -36,6 +36,17 @@ library
                       , parsec
                       , regex-base >= 0.93.1
 
+  -- Support Semigroup instances uniformly
+  --
+  -- See also
+  --  https://prime.haskell.org/wiki/Libraries/Proposals/SemigroupMonoid#RecommendedVariant
+  --
+  -- NB: This is the same logic `parsec.cabal` uses, so this doesn't
+  -- add any new dependency that isn't already incurred by
+  -- `regex-tdfa`'s transitive deps
+  if !impl(ghc >= 8.0)
+    build-depends:      semigroups == 0.18.*
+
   other-modules:          Paths_regex_tdfa
   Exposed-Modules:        Data.IntMap.CharMap2
                           Data.IntMap.EnumMap2

@@ -86,6 +86,7 @@ execMatch (Regex { regex_dfa =  DFA {d_id=didIn,d_dt=dtIn}
   comp :: C s
   comp = {-# SCC "matchHere.comp" #-} ditzyComp'3 aTags
 
+  goNext :: ST s [MatchArray]
   goNext = {-# SCC "goNext" #-} do
     (SScratch s1In s2In (winQ,blank,which)) <- newScratch b_index b_tags
     spawnAt b_tags blank startState s1In offsetIn
