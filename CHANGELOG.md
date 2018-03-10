@@ -1,3 +1,7 @@
+# 1.2.3
+
+* Added `Semigroup` instances for some types (h/t Herbert Valerio Riedel).
+
 # 1.2.2
 
 * New maintainer.
