@@ -2,14 +2,17 @@ module Data.IntSet.EnumSet2 where
 
 import qualified Data.IntSet as S
 import qualified Data.List as L (map)
-import Data.Monoid(Monoid(..))
+import Data.Semigroup as Sem
 
 newtype EnumSet e = EnumSet {unEnumSet :: S.IntSet}
   deriving (Eq,Ord,Read,Show)
 
+instance Sem.Semigroup (EnumSet e) where
+  EnumSet x <> EnumSet y = EnumSet (x `mappend` y)
+
 instance Monoid (EnumSet e) where
   mempty = EnumSet mempty
-  EnumSet x `mappend` EnumSet y = EnumSet (x `mappend` y)
+  mappend = (<>)
 
 (\\) :: (Enum e) => EnumSet e -> EnumSet e -> EnumSet e
 (\\) (EnumSet s1) (EnumSet s2) = EnumSet ((S.\\) s1 s2)

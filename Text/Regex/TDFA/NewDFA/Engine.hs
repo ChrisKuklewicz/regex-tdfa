@@ -122,6 +122,7 @@ execMatch r@(Regex { regex_dfa = DFA {d_id=didIn,d_dt=dtIn}
     let obtainNext = join (readSTRef storeNext)
     return obtainNext
 
+  goNext :: STRef s (ST s [MatchArray]) -> ST s [MatchArray]
   goNext storeNext = {-# SCC "goNext" #-} do
     (SScratch s1In s2In (winQ,blank,which)) <- newScratch b_index b_tags
     _ <- spawnStart b_tags blank startState s1In offsetIn
