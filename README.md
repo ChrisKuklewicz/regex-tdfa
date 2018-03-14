@@ -12,6 +12,17 @@ This was also documented at the [Haskell wiki](https://wiki.haskell.org/Regular_
 
 The new git repository is at [github](https://github.com/ChrisKuklewicz/regex-tdfa), which is primarily maintained by [Artyom (neongreen)](https://github.com/neongreen).
 
+## Known Bugs and Infelicities
+
+* Regexes with large character classes combined with `{m,n}` are very slow and memory-hungry ([#14][]).
+
+  > An example of such a regex is `^[\x0020-\xD7FF]{1,255}$`.
+
+* POSIX submatch semantics are broken in some rare cases ([#12][]).
+
+[#12]: https://github.com/ChrisKuklewicz/regex-tdfa/issues/12
+[#14]: https://github.com/ChrisKuklewicz/regex-tdfa/issues/14
+
 ## About this package
 
 This was inspired by the algorithm (and Master's thesis) behind the regular expression library known as [TRE or libtre](https://github.com/laurikari/tre/).  This was created by Ville Laurikari and tackled the difficult issue of efficient sub-match capture for POSIX regular expressions.
