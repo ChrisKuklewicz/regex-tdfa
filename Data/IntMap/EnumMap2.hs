@@ -2,6 +2,7 @@ module Data.IntMap.EnumMap2 where
 
 import Data.Foldable(Foldable(..))
 import qualified Data.IntMap as M
+import qualified Data.IntMap.Internal.Debug as MD
 import qualified Data.IntSet.EnumSet2 as S (EnumSet(..))
 import Data.Semigroup as Sem
 import Prelude
@@ -144,10 +145,10 @@ mapAccumWithKey f a (EnumMap m) = (a',EnumMap m')
         f' a1 b a2 = f a1 (toEnum b) a2
 
 fold :: (Enum key) => (a -> b -> b) -> b -> EnumMap key a -> b
-fold f a (EnumMap m) = M.fold f a m
+fold f a (EnumMap m) = M.foldr f a m
 
 foldWithKey :: (Enum key) => (key -> a -> b -> b) -> b -> EnumMap key a -> b
-foldWithKey f a (EnumMap m) = M.foldWithKey f' a m
+foldWithKey f a (EnumMap m) = M.foldrWithKey f' a m
   where f' b a1 a2 = f (toEnum b) a1 a2
 
 elems :: (Enum key) => EnumMap key a -> [a]
@@ -245,7 +246,7 @@ isProperSubmapOfBy :: (Enum key) => (a -> b -> Bool) -> EnumMap key a -> EnumMap
 isProperSubmapOfBy f (EnumMap m1) (EnumMap m2) = M.isProperSubmapOfBy f m1 m2
 
 showTree :: (Enum key,Show a) => EnumMap key a -> String
-showTree (EnumMap m) = M.showTree m
+showTree (EnumMap m) = MD.showTree m
 
 showTreeWith :: (Enum key,Show a) => Bool -> Bool -> EnumMap key a -> String
-showTreeWith b1 b2 (EnumMap m) = M.showTreeWith b1 b2 m
+showTreeWith b1 b2 (EnumMap m) = MD.showTreeWith b1 b2 m

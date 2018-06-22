@@ -9,6 +9,7 @@ import Data.Char (chr)
 import Data.Char as C(ord)
 import Data.List as L (map)
 import qualified Data.IntMap as M
+import qualified Data.IntMap.Internal.Debug as MD
 import qualified Data.IntSet as S(IntSet)
 import Data.Semigroup as Sem
 
@@ -150,10 +151,10 @@ mapAccumWithKey f a (CharMap m) = (a',CharMap m')
         f' a1 b a2 = f a1 (unsafeChr b) a2
 
 fold :: (a -> b -> b) -> b -> CharMap a -> b
-fold f a (CharMap m) = M.fold f a m
+fold f a (CharMap m) = M.foldr f a m
 
 foldWithKey :: (Key -> a -> b -> b) -> b -> CharMap a -> b
-foldWithKey f a (CharMap m) = M.foldWithKey f' a m
+foldWithKey f a (CharMap m) = M.foldrWithKey f' a m
   where f' b a1 a2 = f (unsafeChr b) a1 a2
 
 elems :: CharMap a -> [a]
@@ -250,10 +251,10 @@ isProperSubmapOfBy :: (a -> b -> Bool) -> CharMap a -> CharMap b -> Bool
 isProperSubmapOfBy f (CharMap m1) (CharMap m2) = M.isProperSubmapOfBy f m1 m2
 
 showTree :: Show a => CharMap a -> String
-showTree (CharMap m) = M.showTree m
+showTree (CharMap m) = MD.showTree m
 
 showTreeWith :: Show a => Bool -> Bool -> CharMap a -> String
-showTreeWith b1 b2 (CharMap m) = M.showTreeWith b1 b2 m
+showTreeWith b1 b2 (CharMap m) = MD.showTreeWith b1 b2 m
 {-# INLINE (!) #-}
 {-# INLINE (\\) #-}
 {-# INLINE null #-}

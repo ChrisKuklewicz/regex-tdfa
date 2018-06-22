@@ -1,5 +1,5 @@
 Name:                   regex-tdfa
-Version:                1.2.3
+Version:                1.2.3.1
 License:                BSD3
 License-File:           LICENSE
 Copyright:              Copyright (c) 2007, Christopher Kuklewicz
@@ -30,7 +30,7 @@ library
   Build-Depends:        array              >= 0.4 && < 0.6
                       , base               >= 4 && < 5
                       , bytestring         >= 0.10 && < 0.11
-                      , containers         >= 0.5 && < 0.6
+                      , containers         >= 0.5 && < 0.7
                       , ghc-prim
                       , mtl                == 2.*
                       , parsec             == 3.*
