@@ -27,14 +27,14 @@ flag devel
   manual: True
 
 library 
-  Build-Depends:        array >= 0.4
-                      , base >= 4 && < 5
-                      , bytestring
-                      , containers
+  Build-Depends:        array              >= 0.4 && < 0.6
+                      , base               >= 4 && < 5
+                      , bytestring         >= 0.10 && < 0.11
+                      , containers         >= 0.5 && < 0.6
                       , ghc-prim
-                      , mtl
-                      , parsec
-                      , regex-base >= 0.93.1
+                      , mtl                == 2.*
+                      , parsec             == 3.*
+                      , regex-base         >= 0.93.1
 
   -- Support Semigroup instances uniformly
   --
