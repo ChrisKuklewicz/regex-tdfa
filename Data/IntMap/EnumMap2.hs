@@ -1,8 +1,14 @@
+{-# LANGUAGE CPP #-}
+
 module Data.IntMap.EnumMap2 where
 
 import Data.Foldable(Foldable(..))
 import qualified Data.IntMap as M
+#if MIN_VERSION_containers(0,6,0)
 import qualified Data.IntMap.Internal.Debug as MD
+#else
+import qualified Data.IntMap as MD
+#endif
 import qualified Data.IntSet.EnumSet2 as S (EnumSet(..))
 import Data.Semigroup as Sem
 import Prelude
