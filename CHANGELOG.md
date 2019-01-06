@@ -1,6 +1,7 @@
 # next
 
 * Migrated to `enummapset` instead of using our own `EnumMap`.
+* Support for GHC 7.6 has been dropped.
 
 # 1.2.3.1
 
