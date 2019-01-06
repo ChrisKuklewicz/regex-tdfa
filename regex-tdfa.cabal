@@ -26,11 +26,12 @@ flag devel
   default: False
   manual: True
 
-library 
+library
   Build-Depends:        array              >= 0.4 && < 0.6
                       , base               >= 4 && < 5
                       , bytestring         >= 0.10 && < 0.11
                       , containers         >= 0.5 && < 0.7
+                      , enummapset         >= 0.5 && < 0.7
                       , ghc-prim
                       , mtl                == 2.*
                       , parsec             == 3.*
@@ -48,10 +49,7 @@ library
     build-depends:      semigroups == 0.18.*
 
   other-modules:          Paths_regex_tdfa
-  Exposed-Modules:        Data.IntMap.CharMap2
-                          Data.IntMap.EnumMap2
-                          Data.IntSet.EnumSet2
-                          Text.Regex.TDFA
+  Exposed-Modules:        Text.Regex.TDFA
                           Text.Regex.TDFA.ByteString
                           Text.Regex.TDFA.ByteString.Lazy
                           Text.Regex.TDFA.Common

@@ -9,7 +9,7 @@ import Data.Array.MArray(MArray(..))
 import Data.Array.Unsafe(unsafeFreeze)
 import Data.Array.IArray(Ix)
 import Data.Array.ST(STArray,STUArray)
-import qualified Data.IntMap.CharMap2 as CMap(findWithDefault)
+import qualified Data.EnumMap as EMap(findWithDefault)
 import qualified Data.IntMap as IMap(null,toList,keys,member)
 import qualified Data.IntSet as ISet(toAscList)
 import Data.STRef(STRef,newSTRef,readSTRef,writeSTRef)
@@ -52,7 +52,7 @@ execMatch (Regex { regex_dfa = (DFA {d_id=didIn,d_dt=dtIn})
                  , regex_compOptions = CompOption { multiline = newline } } )
           offsetIn prevIn inputIn = L.runST runCaptureGroup where
 
-  !test = mkTest newline         
+  !test = mkTest newline
 
   runCaptureGroup = {-# SCC "runCaptureGroup" #-} do
     obtainNext <- L.strictToLazyST constructNewEngine
@@ -86,7 +86,7 @@ execMatch (Regex { regex_dfa = (DFA {d_id=didIn,d_dt=dtIn})
                   case uncons input of
                     Nothing -> finalizeWinners
                     Just (c,input') -> do
-                      case CMap.findWithDefault o c t of
+                      case EMap.findWithDefault o c t of
                         Transition {trans_many=DFA {d_id=did',d_dt=dt'},trans_how=dtrans} ->
                           findTrans s1 s2 did' dt' dtrans offset c input'
               | otherwise -> do
@@ -103,7 +103,7 @@ execMatch (Regex { regex_dfa = (DFA {d_id=didIn,d_dt=dtIn})
               case uncons input of
                 Nothing -> finalizeWinners
                 Just (c,input') -> do
-                  case CMap.findWithDefault o c t of
+                  case EMap.findWithDefault o c t of
                     Transition {trans_many=DFA {d_id=did',d_dt=dt'},trans_how=dtrans} ->
                       findTrans s1 s2 did' dt' dtrans offset c input'
 
@@ -199,7 +199,7 @@ putMQ ws@(WScratch {ws_start=start}) (MQ {mq_earliest=earliest,mq_list=list}) = 
     then writeSTRef earliest start >> writeSTRef list [ws]
     else do
       old <- readSTRef list
-      let !rest = dropWhile (\ w -> start <= ws_start w) old 
+      let !rest = dropWhile (\ w -> start <= ws_start w) old
           !new = ws : rest
       writeSTRef list new
 
@@ -249,4 +249,3 @@ wsToGroup :: WScratch -> S.ST s MatchArray
 wsToGroup (WScratch start stop) = do
   ma <- newArray (0,0) (start,stop-start)  :: S.ST s (STArray s Int (MatchOffset,MatchLength))
   unsafeFreeze ma
-

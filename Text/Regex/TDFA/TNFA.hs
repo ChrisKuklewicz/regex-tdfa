@@ -8,7 +8,7 @@
 
 -- | "Text.Regex.TDFA.TNFA" converts the CorePattern Q\/P data (and its
 -- Pattern leafs) to a QNFA tagged non-deterministic finite automata.
--- 
+--
 -- This holds every possible way to follow one state by another, while
 -- in the DFA these will be reduced by picking a single best
 -- transition for each (soure,destination) pair.  The transitions are
@@ -26,7 +26,7 @@
 -- processing Star with optimizations.  This compact design also means
 -- that tags are assigned not just to be updated before taking a
 -- transition (PreUpdate) but also after the transition (PostUpdate).
--- 
+--
 -- Uses recursive do notation.
 
 module Text.Regex.TDFA.TNFA(patternToNFA
@@ -37,15 +37,14 @@ module Text.Regex.TDFA.TNFA(patternToNFA
 import Control.Monad(when)
 import Control.Monad.State(State,runState,execState,get,put,modify)
 import Data.Array.IArray(Array,array)
-import Data.Char(toLower,toUpper,isAlpha,ord)
+import Data.Char(toLower,toUpper,isAlpha)
 import Data.List(foldl')
 import Data.IntMap (IntMap)
-import qualified Data.IntMap as IMap(toAscList,null,unionWith,singleton,fromList,fromDistinctAscList)
-import Data.IntMap.CharMap2(CharMap(..))
-import qualified Data.IntMap.CharMap2 as Map(null,singleton,map)
-import qualified Data.IntMap.EnumMap2 as EMap(null,keysSet,assocs)
-import Data.IntSet.EnumSet2(EnumSet)
-import qualified Data.IntSet.EnumSet2 as Set(singleton,toList,insert)
+import qualified Data.IntMap as IMap(null,unionWith,singleton)
+import Data.EnumMap(EnumMap)
+import qualified Data.EnumMap as Map(fromList,null,keysSet,singleton,map,assocs,toAscList,fromDistinctAscList)
+import Data.EnumSet(EnumSet)
+import qualified Data.EnumSet as Set(singleton,toList,insert)
 import Data.Maybe(catMaybes,isNothing)
 import Data.Monoid(mempty,mappend)
 import qualified Data.Set as S(Set,insert,toAscList,empty)
@@ -86,7 +85,7 @@ patternToNFA compOpt pattern =
       msg = unlines [ show q ]
   in debug msg (qToNFA compOpt q,tags,groups)
 
--- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
+-- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- ==
 -- Query function on Q
 
 nullable :: Q -> Bool
@@ -97,7 +96,7 @@ notNullable = null . nullQ
 
 -- This asks if the preferred (i.e. first) NullView has no tests.
 maybeOnlyEmpty :: Q -> Maybe WinTags
-maybeOnlyEmpty (Q {nullQ = ((SetTestInfo sti,tags):_)}) = if EMap.null sti then Just tags else Nothing
+maybeOnlyEmpty (Q {nullQ = ((SetTestInfo sti,tags):_)}) = if Map.null sti then Just tags else Nothing
 maybeOnlyEmpty _ = Nothing
 
 usesQNFA :: Q -> Bool
@@ -105,7 +104,7 @@ usesQNFA (Q {wants=WantsBoth}) = True
 usesQNFA (Q {wants=WantsQNFA}) = True
 usesQNFA _ = False
 
--- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
+-- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- ==
 -- Functions related to QT
 
 -- dumb smart constructor used by qToQNFA
@@ -148,7 +147,7 @@ preferNullViews :: NullView -> QT -> QT
 preferNullViews [] win = win
 preferNullViews nvs win = foldl' (dominate win) win (reverse $ cleanNullView nvs) where
 
-{- 
+{-
 dominate is common to applyNullViews and preferNullViews above.
 
 Even I no longer understand it without study.
@@ -171,9 +170,9 @@ dominate :: QT -> QT -> (SetTestInfo,WinTags) -> QT
 dominate win lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x) $
   let -- The winning states are reached through the SetTag
       win' = prependTags' tags win
-      -- get the SetTestInfo 
+      -- get the SetTestInfo
       winTests = listTestInfo win $ mempty
-      allTests = (listTestInfo lose $ winTests) `mappend` (EMap.keysSet sti)
+      allTests = (listTestInfo lose $ winTests) `mappend` (Map.keysSet sti)
       -- The first and second arguments of useTest are sorted
       -- At all times the second argument of useTest is a subset of the first
       useTest _ [] w _ = w -- no more dominating tests to fail to choose lose, so just choose win
@@ -192,7 +191,7 @@ dominate win lose x@(SetTestInfo sti,tags) = debug ("dominate "++show x) $
                           ,qt_a = useTest tests allD wA lA
                           ,qt_b = useTest tests allD wB lB}
       useTest [] _ _  _ = err "This case in dominate.useText cannot happen: second argument would have to have been null and that is checked before this case"
-  in useTest (Set.toList allTests) (EMap.assocs sti) win' lose
+  in useTest (Set.toList allTests) (Map.assocs sti) win' lose
 
 -- 'applyTest' is only used by addTest
 -- 2009: maybe need to keep track of whether a change is actually made
@@ -204,7 +203,7 @@ applyTest (wt,dopa) qt | nullQT qt = qt
   applyTest' q@(Simple {}) =
     mkTesting $ Testing {qt_test = wt
                         ,qt_dopas = Set.singleton dopa
-                        ,qt_a = q 
+                        ,qt_a = q
                         ,qt_b = qtlose}
   applyTest' q@(Testing {qt_test=wt'}) =
     case compare wt wt' of
@@ -239,8 +238,7 @@ mergeQT q1 q2 | nullQT q1 = q2  -- union wins
               | otherwise = mergeQTWith mappend q1 q2 -- no preference, win with combined SetTag XXX is the wrong thing! "(.?)*"
 
 -- This takes a function which implements a policy on mergining
--- winning transitions and then merges all the transitions.  It opens
--- the CharMap newtype for more efficient operation, then rewraps it.
+-- winning transitions and then merges all the transitions.
 mergeQTWith :: (WinTags -> WinTags -> WinTags) -> QT -> QT -> QT
 mergeQTWith mergeWins = merge where
   merge :: QT -> QT -> QT
@@ -262,12 +260,12 @@ mergeQTWith mergeWins = merge where
                     ,qt_b = merge b1 b2}
       GT -> t2 {qt_a=(merge t1 a2), qt_b=(merge t1 b2)}
 
-  fuseQTrans :: (CharMap QTrans) -> QTrans
-             -> (CharMap QTrans) -> QTrans
-             -> CharMap QTrans
-  fuseQTrans (CharMap t1) o1 (CharMap t2) o2 = CharMap (IMap.fromDistinctAscList (fuse l1 l2)) where
-    l1 = IMap.toAscList t1
-    l2 = IMap.toAscList t2
+  fuseQTrans :: EnumMap Char QTrans -> QTrans
+             -> EnumMap Char QTrans -> QTrans
+             -> EnumMap Char QTrans
+  fuseQTrans t1 o1 t2 o2 = Map.fromDistinctAscList (fuse l1 l2) where
+    l1 = Map.toAscList t1
+    l2 = Map.toAscList t2
     fuse [] y  = mapSnd (mergeQTrans o1) y
     fuse x  [] = mapSnd (mergeQTrans o2) x
     fuse x@((xc,xa):xs) y@((yc,ya):ys) =
@@ -302,7 +300,7 @@ prependTags' tcs' (Simple {qt_win=w,qt_trans=t,qt_other=o}) =
          , qt_other = prependQTrans o }
   where prependQTrans = fmap (map (\(d,tcs) -> (d,tcs' `mappend` tcs)))
 
--- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
+-- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- ==
 -- define type S which is a State monad, this allows the creation of the uniq QNFA ids and storing the QNFA
 -- in an ascending order difference list for later placement in an array.
 
@@ -330,7 +328,7 @@ newQNFA s qt = do
   put $! (futureI, oldQs . ((thisI,qnfa):))
   return qnfa
 
--- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
+-- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- ==
 -- E related functions
 
 fromQNFA :: QNFA -> E
@@ -439,7 +437,7 @@ addWinTagsAC :: WinTags -> ActCont -> ActCont
 addWinTagsAC wtags (e,mE,mQNFA) = (addWinTags wtags e
                                   ,fmap (addWinTags wtags) mE
                                   ,fmap (addWinTags wtags) mQNFA)
--- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == 
+-- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- == -- ==
 
 -- Initial preTag of 0th tag is implied. No other general pre-tags would be expected.
 -- The qtwin contains the preTag of the 1st tag and is only set when a match is completed.
@@ -530,7 +528,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                                                                  | otherwise =
     debug (">< inStar/2 "++show qIn++" <>") $
     return . fmap (prependGroupResets resets . prependPreTag pre) =<< inStarNullableTagless qIn (addTag post . addGroupSets sets $ eLoop)
-    
+
   inStarNullableTagless qIn eLoop = debug (">< inStarNullableTagless "++show qIn++" <>") $ do
     case unQ qIn of
       Empty -> return Nothing -- with Or this discards () branch in "(^|foo|())*"
@@ -619,7 +617,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
   actNullableTagless qIn ac@(eLoop,mAccepting,mQNFA) = debug (">< actNullableTagless "++show (qIn)++" <>") $ do
     case unQ qIn of
       Seq q1 q2 -> actNullable q1 =<< actNullable q2 ac   -- We know q1 and q2 are nullable
-                      
+
       Or [] -> return ac
       Or [q] -> actNullableTagless q ac
       Or qs -> do
@@ -660,7 +658,7 @@ qToNFA compOpt qTop = (q_id startingQNFA
                             in ((nQ eLoop,fmap nQ mAccepting,Nothing),False)
         if cannotAccept q then return ac0 else mdo
           mChildAccepting <- act q (this,Nothing,Nothing)
-          (thisAC@(this,_,_),ansAC) <- 
+          (thisAC@(this,_,_),ansAC) <-
             case mChildAccepting of
               Nothing -> err $ "Weird pattern in getTransTagless/Star: " ++ show (qTop,qIn)
               Just childAccepting -> do
@@ -759,15 +757,15 @@ qToNFA compOpt qTop = (q_id startingQNFA
     where  -- Take a common destination and a sorted list of unique chraceters
            -- and create a map from those characters to the common destination
       toMap :: IntMap [(DoPa,[(Tag, TagUpdate)])] -> [Char]
-            -> CharMap (IntMap [(DoPa,[(Tag, TagUpdate)])])
-      toMap dest | caseSensitive compOpt = CharMap . IMap.fromDistinctAscList . map (\c -> (ord c,dest))
-                 | otherwise = CharMap . IMap.fromList . ($ []) 
+            -> EnumMap Char (IntMap [(DoPa,[(Tag, TagUpdate)])])
+      toMap dest | caseSensitive compOpt = Map.fromDistinctAscList . map (\c -> (c,dest))
+                 | otherwise = Map.fromList . ($ [])
                                . foldr (\c dl -> if isAlpha c
-                                                   then (dl.((ord (toUpper c),dest):)
-                                                           .((ord (toLower c),dest):)
+                                                   then (dl.((toUpper c,dest):)
+                                                           .((toLower c,dest):)
                                                         )
-                                                   else (dl.((ord c,dest):))
-                                       ) id 
+                                                   else (dl.((c,dest):))
+                                       ) id
       addNewline | multiline compOpt = S.insert '\n'
                  | otherwise = id
       dotTrans | multiline compOpt = Map.singleton '\n' mempty

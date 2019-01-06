@@ -7,7 +7,7 @@ import Prelude hiding ((!!))
 import Data.Array.MArray(MArray(..))
 import Data.Array.Unsafe(unsafeFreeze)
 import Data.Array.ST(STArray)
-import qualified Data.IntMap.CharMap2 as CMap(findWithDefault)
+import qualified Data.EnumMap as EMap(findWithDefault)
 import qualified Data.IntMap as IMap(null)
 import qualified Data.IntSet as ISet(null)
 import qualified Data.Array.MArray()
@@ -51,7 +51,7 @@ execMatch (Regex { regex_dfa = DFA {d_dt=dtIn} })
               case uncons input of
                 Nothing -> finalizeWinner
                 Just (c,input') -> do
-                  case CMap.findWithDefault o c t of
+                  case EMap.findWithDefault o c t of
                     Transition {trans_single=DFA {d_id=did',d_dt=dt'}}
                       | ISet.null did' -> finalizeWinner
                       | otherwise ->

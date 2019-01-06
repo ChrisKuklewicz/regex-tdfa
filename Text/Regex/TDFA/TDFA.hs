@@ -9,13 +9,13 @@ module Text.Regex.TDFA.TDFA(patternToRegex,DFA(..),DT(..)
 import Data.Monoid(Monoid(..))
 import Control.Monad.State(State,MonadState(..),execState)
 import Data.Array.IArray(Array,(!),bounds,{-assocs-})
-import Data.IntMap(IntMap)
 import qualified Data.IntMap as IMap(empty,keys,delete,null,lookup,fromDistinctAscList
                                     ,member,unionWith,singleton,union
-                                    ,toAscList,Key,elems,toList,insert
+                                    ,elems,toList,insert
                                     ,insertWith,insertWithKey)
-import Data.IntMap.CharMap2(CharMap(..))
-import qualified Data.IntMap.CharMap2 as Map(empty)
+import Data.IntMap(IntMap)
+import qualified Data.EnumMap as Map(empty,fromDistinctAscList,toAscList,elems)
+import Data.EnumMap(EnumMap)
 --import Data.IntSet(IntSet)
 import qualified Data.IntSet as ISet(empty,singleton,null)
 import Data.List(foldl')
@@ -128,17 +128,17 @@ nfaToDFA ((startIndex,aQNFA),aTagOp,aGroupInfo) co eo = Regex dfa startIndex ind
           mergeDTrans (Transition {trans_how=dt1}) (Transition {trans_how=dt2}) = makeTransition dtrans
             where dtrans = IMap.unionWith IMap.union dt1 dt2
           -- This is very much like fuseQTrans
-          fuseDTrans :: CharMap Transition
-          fuseDTrans = CharMap (IMap.fromDistinctAscList (fuse l1 l2))
+          fuseDTrans :: EnumMap Char Transition
+          fuseDTrans = Map.fromDistinctAscList (fuse l1 l2)
             where
-              l1 = IMap.toAscList (unCharMap t1)
-              l2 = IMap.toAscList (unCharMap t2)
-              fuse :: [(IMap.Key, Transition)]
-                   -> [(IMap.Key, Transition)]
-                   -> [(IMap.Key, Transition)]
+              l1 = Map.toAscList t1
+              l2 = Map.toAscList t2
+              fuse :: [(Char, Transition)]
+                   -> [(Char, Transition)]
+                   -> [(Char, Transition)]
               fuse [] y = fmap (fmap (mergeDTrans o1)) y
               fuse x [] = fmap (fmap (mergeDTrans o2)) x
-              fuse x@((xc,xa):xs) y@((yc,ya):ys) = 
+              fuse x@((xc,xa):xs) y@((yc,ya):ys) =
                 case compare xc yc of
                   LT -> (xc,mergeDTrans o2 xa) : fuse xs y
                   EQ -> (xc,mergeDTrans xa ya) : fuse xs ys
@@ -169,7 +169,7 @@ dfaMap = seen (Data.Map.empty) where
 
 -- Get all trans_many states
 flattenDT :: DT -> [DFA]
-flattenDT (Simple' {dt_trans=(CharMap mt),dt_other=o}) = concatMap (\d -> [trans_many d {-,trans_single d-}]) . (:) o . IMap.elems $ mt
+flattenDT (Simple' {dt_trans=mt,dt_other=o}) = concatMap (\d -> [trans_many d {-,trans_single d-}]) . (:) o . Map.elems $ mt
 flattenDT (Testing' {dt_a=a,dt_b=b}) = flattenDT a ++ flattenDT b
 
 examineDFA :: Regex -> String
@@ -211,7 +211,7 @@ showDFA m (DFA {d_id=i,d_dt=dt}) = "DFA {d_id = "++show (ISet.toList i)
 -- is free to mutatate the old state.  If the QTrans has only one
 -- entry then all we need to do is mutate that entry when making a
 -- transition.
--- 
+--
 pickQTrans :: Array Tag OP -> QTrans -> [({-Destination-}Index,(DoPa,Instructions))]
 pickQTrans op tr = mapSnd (bestTrans op) . IMap.toList $ tr
 
@@ -246,7 +246,7 @@ bestTrans aTagOP (f:fs) | null fs = canonical f
 
   mergeTagOrbit xx [] = xx
   mergeTagOrbit [] yy = yy
-  mergeTagOrbit xx@(x:xs) yy@(y:ys) = 
+  mergeTagOrbit xx@(x:xs) yy@(y:ys) =
     case compare (fst x) (fst y) of
       GT -> y : mergeTagOrbit xx ys
       LT -> x : mergeTagOrbit xs yy
@@ -293,7 +293,7 @@ bestTrans aTagOP (f:fs) | null fs = canonical f
     cw xx [] = foldr (\x rest -> comp (Just x) Nothing  `mappend` rest) mempty xx
     cw [] yy = foldr (\y rest -> comp Nothing  (Just y) `mappend` rest) mempty yy
 
-                   
+
 isDFAFrontAnchored :: DFA -> Bool
 isDFAFrontAnchored = isDTFrontAnchored . d_dt
  where
@@ -306,8 +306,8 @@ isDFAFrontAnchored = isDTFrontAnchored . d_dt
     isDTLosing :: DT -> Bool
     isDTLosing (Testing' {dt_a=a',dt_b=b'}) = isDTLosing a' && isDTLosing b'
     isDTLosing (Simple' {dt_win=w}) | not (IMap.null w) = False -- can win with 0 characters
-    isDTLosing (Simple' {dt_trans=CharMap mt,dt_other=o}) =
-      let ts = o : IMap.elems mt
+    isDTLosing (Simple' {dt_trans=mt,dt_other=o}) =
+      let ts = o : Map.elems mt
       in all transLoses ts
      where
       transLoses :: Transition -> Bool

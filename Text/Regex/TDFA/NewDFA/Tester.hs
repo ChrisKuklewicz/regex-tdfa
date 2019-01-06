@@ -1,8 +1,8 @@
 -- | Like Engine, but merely checks to see whether any match at all is found.
--- 
+--
 module Text.Regex.TDFA.NewDFA.Tester(matchTest) where
 
-import qualified Data.IntMap.CharMap2 as CMap(findWithDefault)
+import qualified Data.EnumMap as EMap(findWithDefault)
 import qualified Data.IntMap as IMap(null)
 import qualified Data.IntSet as ISet(null)
 
@@ -37,7 +37,7 @@ matchTest (Regex { regex_dfa = dfaIn
         case uncons input of
           Nothing -> False
           Just (c,input') ->
-            case CMap.findWithDefault o c t of
+            case EMap.findWithDefault o c t of
               Transition {trans_many=DFA {d_dt=dt'}} -> multi dt' c input'
     | otherwise = True
 
@@ -50,7 +50,7 @@ matchTest (Regex { regex_dfa = dfaIn
         case uncons input of
           Nothing -> False
           Just (c,input') ->
-            case CMap.findWithDefault o c t of
+            case EMap.findWithDefault o c t of
               Transition {trans_many=DFA {d_dt=dt'}} -> multi dt' c input'
     | otherwise = True
 
@@ -63,7 +63,7 @@ matchTest (Regex { regex_dfa = dfaIn
         case uncons input of
              Nothing -> False
              Just (c,input') ->
-               case CMap.findWithDefault o c t of
+               case EMap.findWithDefault o c t of
                  Transition {trans_single=DFA {d_id=did',d_dt=dt'}}
                    | ISet.null did' -> False
                    | otherwise -> single dt' c input'
@@ -78,7 +78,7 @@ matchTest (Regex { regex_dfa = dfaIn
         case uncons input of
              Nothing -> False
              Just (c,input') ->
-               case CMap.findWithDefault o c t of
+               case EMap.findWithDefault o c t of
                  Transition {trans_single=DFA {d_id=did',d_dt=dt'}}
                    | ISet.null did' -> False
                    | otherwise -> single dt' c input'

@@ -8,13 +8,13 @@ import Text.Regex.Base(RegexOptions(..))
 
 {- By Chris Kuklewicz, 2007-2009. BSD License, see the LICENSE file. -}
 import Data.Array.IArray(Array)
-import Data.IntSet.EnumSet2(EnumSet)
-import qualified Data.IntSet.EnumSet2 as Set(toList)
-import Data.IntMap.CharMap2(CharMap(..))
+import Data.EnumSet(EnumSet)
+import qualified Data.EnumSet as Set(toList)
+import Data.EnumMap(EnumMap)
 import Data.IntMap (IntMap)
-import qualified Data.IntMap as IMap (findWithDefault,assocs,toList,null,size,toAscList)
+import qualified Data.IntMap as IMap (findWithDefault,assocs,toList,null)
 import Data.IntSet(IntSet)
-import qualified Data.IntMap.CharMap2 as Map (assocs,toAscList,null)
+import qualified Data.EnumMap as Map (assocs,toAscList,null)
 import Data.Sequence as S(Seq)
 --import Debug.Trace
 
@@ -68,7 +68,7 @@ flipOrder EQ = EQ
 noWin :: WinTags -> Bool
 noWin = null
 
--- | Used to track elements of the pattern that accept characters or 
+-- | Used to track elements of the pattern that accept characters or
 -- are anchors
 newtype DoPa = DoPa {dopaIndex :: Int} deriving (Eq,Ord)
 
@@ -116,7 +116,7 @@ type Position = Int
 -- | GroupIndex is for indexing submatches from capturing
 -- parenthesized groups (PGroup\/Group)
 type GroupIndex = Int
--- | GroupInfo collects the parent and tag information for an instance 
+-- | GroupInfo collects the parent and tag information for an instance
 -- of a group
 data GroupInfo = GroupInfo {
     thisIndex, parentIndex :: GroupIndex
@@ -166,7 +166,7 @@ data QNFA = QNFA {q_id :: Index, q_qt :: QT}
 
 -- | Internal to QNFA type.
 data QT = Simple { qt_win :: WinTags -- ^ empty transitions to the virtual winning state
-                 , qt_trans :: CharMap QTrans -- ^ all ways to leave this QNFA to other or the same QNFA
+                 , qt_trans :: EnumMap Char QTrans -- ^ all ways to leave this QNFA to other or the same QNFA
                  , qt_other :: QTrans -- ^ default ways to leave this QNFA to other or the same QNFA
                  }
         | Testing { qt_test :: WhichTest -- ^ The test to perform
@@ -218,7 +218,7 @@ data Transition = Transition { trans_many :: DFA    -- ^ where to go (maximal), 
                              }
 -- | Internal to the DFA node
 data DT = Simple' { dt_win :: IntMap {- Source Index -} Instructions -- ^ Actions to perform to win
-                  , dt_trans :: CharMap Transition -- ^ Transition to accept Char
+                  , dt_trans :: EnumMap Char Transition -- ^ Transition to accept Char
                   , dt_other :: Transition -- ^ default accepting transition
                   }
         | Testing' { dt_test :: WhichTest -- ^ The test to perform
@@ -287,10 +287,10 @@ showQT :: QT -> String
 showQT (Simple win trans other) = "{qt_win=" ++ show win
                              ++ "\n, qt_trans=" ++ show (foo trans)
                              ++ "\n, qt_other=" ++ show (foo' other) ++ "}"
-  where foo :: CharMap QTrans -> [(Char,[(Index,[TagCommand])])]
+  where foo :: EnumMap Char QTrans -> [(Char,[(Index,[TagCommand])])]
         foo = mapSnd foo' . Map.toAscList
         foo' :: QTrans -> [(Index,[TagCommand])]
-        foo' = IMap.toList 
+        foo' = IMap.toList
 showQT (Testing test dopas a b) = "{Testing "++show test++" "++show (Set.toList dopas)
                               ++"\n"++indent' a
                               ++"\n"++indent' b++"}"
@@ -358,12 +358,6 @@ seeDTrans x = concatMap seeSource (IMap.assocs x)
 instance Eq QT where
   t1@(Testing {}) == t2@(Testing {}) =
     (qt_test t1) == (qt_test t2) && (qt_a t1) == (qt_a t2) && (qt_b t1) == (qt_b t2)
-  (Simple w1 (CharMap t1) o1) == (Simple w2 (CharMap t2) o2) =
-    w1 == w2 && eqTrans && eqQTrans o1 o2
-    where eqTrans :: Bool
-          eqTrans = (IMap.size t1 == IMap.size t2)
-                    && and (zipWith together (IMap.toAscList t1) (IMap.toAscList t2))
-            where together (c1,qtrans1) (c2,qtrans2) = (c1 == c2) && eqQTrans qtrans1 qtrans2
-          eqQTrans :: QTrans -> QTrans -> Bool
-          eqQTrans = (==)
+  (Simple w1 t1 o1) == (Simple w2 t2 o2) =
+    w1 == w2 && t1 == t2 && o1 == o2
   _ == _ = False

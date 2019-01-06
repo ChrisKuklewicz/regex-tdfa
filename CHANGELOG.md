@@ -1,3 +1,7 @@
+# next
+
+* Migrated to `enummapset` instead of using our own `EnumMap`.
+
 # 1.2.3.1
 
 * Compatibility with `containers-0.6`.
@@ -37,7 +41,7 @@ try `needUniqTags` in `POr` in CorePattern.hs, try `toAdvice b` for `PStar child
 
 # 1.1.4
 
-fixed 
+fixed
 
 # 1.1.3
 
