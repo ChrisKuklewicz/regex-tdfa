@@ -147,7 +147,7 @@ regex-tdfa does not provide find-and-replace.
 
 ## The Relevant Links
 
-Terse documentation is available in [Text.Regex.TDFA haddock](http://hackage.haskell.org/package/regex-tdfa-1.2.2/docs/Text-Regex-TDFA.html).
+This documentation is also available in [Text.Regex.TDFA haddock](http://hackage.haskell.org/package/regex-tdfa-1.2.2/docs/Text-Regex-TDFA.html).
 
 This was also documented at the [Haskell wiki](https://wiki.haskell.org/Regular_expressions#regex-tdfa).  The original Darcs repository was at [code.haskell.org](http://code.haskell.org/regex-tdfa/).  When not updated, this was forked and maintained by Roman Cheplyaka as [regex-tdfa-rc](http://hackage.haskell.org/package/regex-tdfa-rc).
 
