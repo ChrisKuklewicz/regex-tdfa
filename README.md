@@ -4,6 +4,147 @@ This is [regex-tdfa](http://hackage.haskell.org/package/regex-tdfa) which is a p
 
 The name "tdfa" stands for Tagged-DFA.
 
+## Getting started
+
+### Importing and using
+
+Add to your `package.yaml`/cabal file:
+
+    dependencies:
+      - regex-tdfa
+
+In modules where you need to use regexes:
+
+    import Text.Regex.TDFA
+
+Note that regex-tdfa does not provide support for Text by default.
+If you need this functionality, add [regex-tdfa-text](https://hackage.haskell.org/package/regex-tdfa-text)
+as a dependency and `import Text.Regex.TDFA.Text ()`.
+
+### Basics
+
+```haskell
+λ> emailRegex = "[a-zA-Z0-9+._-]+@[a-zA-Z-]+\\.[a-z]+"
+λ> "my email is email@email.com" =~ emailRegex :: Bool
+>>> True
+
+-- non-monadic
+<to-match-against> =~ <regex>
+
+-- monadic, uses MonadFail on lack of match
+<to-match-against> =~~ <regex>
+```
+
+`(=~)` and `(=~~)` are polymorphic in their return type. This is so that
+regex-tdfa can pick the most efficient way to give you your result based on
+what you need. For instance, if all you want is to check whether the regex
+matched or not, there's no need to allocate a result string. If you only want
+the first match, rather than all the matches, then the matching engine can stop
+after finding a single hit.
+
+This does mean, though, that you may sometimes have to explicitly specify the
+type you want, especially if you're trying things out at the REPL.
+
+### Common use cases
+
+#### Get the first match
+
+```haskell
+-- returns empty string if no match
+a =~ b :: String  -- or ByteString, or Text...
+
+λ> "alexis-de-tocqueville" =~ "[a-z]+" :: String
+>>> "alexis"
+
+λ> "alexis-de-tocqueville" =~ "[0-9]+" :: String
+>>> ""
+```
+
+#### Check if it matched at all
+
+```haskell
+a =~ b :: Bool
+
+λ> "alexis-de-tocqueville" =~ "[a-z]+" :: Bool
+>>> True
+```
+
+#### Get first match + text before/after
+
+```haskell
+-- if no match, will just return whole
+-- string in the first element of the tuple
+a =~ b :: (String, String, String)
+
+λ> "alexis-de-tocqueville" =~ "de" :: (String, String, String)
+>>> ("alexis-", "de", "-tocqueville")
+
+λ> "alexis-de-tocqueville" =~ "kant" :: (String, String, String)
+>>> ("alexis-de-tocqueville", "", "")
+```
+
+#### Get first match + submatches
+
+```haskell
+-- same as above, but also returns a list of /just/ submatches
+-- submatch list is empty if regex doesn't match at all
+a =~ b :: (String, String, String, [String])
+
+λ> "div[attr=1234]" =~ "div\\[([a-z]+)=([^]]+)\\]"
+     :: (String, String, String, [String])
+>>> ("", "div[attr=1234]", "", ["attr","1234"])
+```
+
+#### Get *all* matches
+
+```haskell
+-- can also return Data.Array instead of List
+getAllTextMatches (a =~ b) :: [String]
+
+λ> getAllTextMatches ("john anne yifan" =~ "[a-z]+") :: [String]
+>>> ["john","anne","yifan"]
+```
+
+#### Special characters
+
+`regex-tdfa` only supports a small set of special characters and is much less
+featureful than some other regex engines you might be used to, such as PCRE.
+
+* ``\` `` &mdash; Match start of entire text (similar to `^` in other regex engines)
+* `\'` &mdash; Match end of entire text (similar to `$` in other regex engines)
+* `\<` &mdash; Match beginning of word
+* `\>` &mdash; Match end of word
+* `\b` &mdash; Match beginning or end of word
+* `\B` &mdash; Match neither beginning nor end of word
+
+### Less common stuff
+
+#### Get match indices
+
+```haskell
+-- can also return Data.Array instead of List
+getAllMatches (a =~ b) :: [(Int, Int)]  -- (index, length)
+
+λ> getAllMatches ("john anne yifan" =~ "[a-z]+") :: [(Int, Int)]
+>>> [(0,4), (5,4), (10,5)]
+```
+
+#### Get submatch indices
+
+```haskell
+-- match of __entire__ regex is first element, not first capture
+-- can also return Data.Array instead of List
+getAllSubmatches (a =~ b) :: [(Int, Int)]  -- (index, length)
+
+λ> getAllSubmatches ("div[attr=1234]" =~ "div\\[([a-z]+)=([^]]+)\\]")
+     :: [(Int, Int)]
+>>> [(0,14), (4,4), (9,4)]
+```
+
+### Replacement
+
+regex-tdfa does not provide find-and-replace.
+
 ## The Relevant Links
 
 Terse documentation is available in [Text.Regex.TDFA haddock](http://hackage.haskell.org/package/regex-tdfa-1.2.2/docs/Text-Regex-TDFA.html).
@@ -11,6 +152,22 @@ Terse documentation is available in [Text.Regex.TDFA haddock](http://hackage.has
 This was also documented at the [Haskell wiki](https://wiki.haskell.org/Regular_expressions#regex-tdfa).  The original Darcs repository was at [code.haskell.org](http://code.haskell.org/regex-tdfa/).  When not updated, this was forked and maintained by Roman Cheplyaka as [regex-tdfa-rc](http://hackage.haskell.org/package/regex-tdfa-rc).
 
 The new git repository is at [github](https://github.com/ChrisKuklewicz/regex-tdfa), which is primarily maintained by [Artyom (neongreen)](https://github.com/neongreen).
+
+## Avoiding backslashes
+
+If you find yourself writing a lot of regexes, take a look at
+[raw-string-qq](http://hackage.haskell.org/package/raw-strings-qq). It'll
+let you write regexes without needing to escape all your backslashes.
+
+```haskell
+{-# LANGUAGE QuasiQuotes #-}
+
+import Text.RawString.QQ
+import Text.Regex.TDFA
+
+λ> "2 * (3 + 1) / 4" =~ [r|\([^)]+\)|] :: String
+>>> "(3 + 1)"
+```
 
 ## Known Bugs and Infelicities
 
