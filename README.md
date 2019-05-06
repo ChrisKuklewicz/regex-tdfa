@@ -156,7 +156,7 @@ The new git repository is at [github](https://github.com/ChrisKuklewicz/regex-td
 ## Avoiding backslashes
 
 If you find yourself writing a lot of regexes, take a look at
-[raw-string-qq](http://hackage.haskell.org/package/raw-strings-qq). It'll
+[raw-strings-qq](http://hackage.haskell.org/package/raw-strings-qq). It'll
 let you write regexes without needing to escape all your backslashes.
 
 ```haskell
