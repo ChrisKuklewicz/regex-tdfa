@@ -8,7 +8,7 @@ The name "tdfa" stands for Tagged-DFA.
 
 ### Importing and using
 
-Add to your `package.yaml`/cabal file:
+Add to your package.yaml/cabal file:
 
     dependencies:
       - regex-tdfa
