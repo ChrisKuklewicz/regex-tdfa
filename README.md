@@ -31,7 +31,7 @@ as a dependency and `import Text.Regex.TDFA.Text ()`.
 -- non-monadic
 <to-match-against> =~ <regex>
 
--- monadic, uses MonadFail on lack of match
+-- monadic, uses 'fail' on lack of match
 <to-match-against> =~~ <regex>
 ```
 
@@ -145,7 +145,7 @@ getAllSubmatches (a =~ b) :: [(Int, Int)]  -- (index, length)
 
 regex-tdfa does not provide find-and-replace.
 
-## The Relevant Links
+## The relevant links
 
 This documentation is also available in [Text.Regex.TDFA haddock](http://hackage.haskell.org/package/regex-tdfa-1.2.3.2/docs/Text-Regex-TDFA.html).
 
@@ -169,7 +169,7 @@ import Text.Regex.TDFA
 >>> "(3 + 1)"
 ```
 
-## Known Bugs and Infelicities
+## Known bugs and infelicities
 
 * Regexes with large character classes combined with `{m,n}` are very slow and memory-hungry ([#14][]).
 

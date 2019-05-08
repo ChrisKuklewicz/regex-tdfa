@@ -1,6 +1,6 @@
-{-| 
+{-|
 This modules provides 'RegexMaker' and 'RegexLike' instances for using
-'ByteString' with the DFA backend ("Text.Regex.Lib.WrapDFAEngine" and
+@ByteString@ with the DFA backend ("Text.Regex.Lib.WrapDFAEngine" and
 "Text.Regex.Lazy.DFAEngineFPS").  This module is usually used via
 import "Text.Regex.TDFA".
 
@@ -44,7 +44,7 @@ instance RegexLike Regex B.ByteString where
   matchCount r s = length (matchAll r' s)
     where r' = r { regex_execOptions = (regex_execOptions r) {captureGroups = False} }
   matchTest = Tester.matchTest
-  matchOnceText regex source = 
+  matchOnceText regex source =
     fmap (\ma -> let (o,l) = ma!0
                  in (B.take o source
                     ,fmap (\ol@(off,len) -> (B.take len (B.drop off source),ol)) ma
