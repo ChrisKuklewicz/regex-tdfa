@@ -1,4 +1,4 @@
-{-| 
+{-|
 
 The "Text.Regex.TDFA" module provides a backend for regular
 expressions. It provides instances for the classes defined and
@@ -11,6 +11,94 @@ expressions.  It is highly unlikely that the regex-posix package on
 your operating system is correct, see
 <http://www.haskell.org/haskellwiki/Regex_Posix> for examples of your
 OS's bugs.
+
+= Importing and using
+
+Add to your package.yaml/cabal file:
+
+> dependencies:
+>   - regex-tdfa
+
+In modules where you need to use regexes:
+
+> import Text.Regex.TDFA
+
+Note that regex-tdfa does not provide support for Text by default.
+If you need this functionality, add <https://hackage.haskell.org/package/regex-tdfa-text regex-tdfa-text>
+as a dependency and @import Text.Regex.TDFA.Text ()@.
+
+= Basics
+
+> λ> emailRegex = "[a-zA-Z0-9+._-]+@[a-zA-Z-]+\\.[a-z]+"
+> λ> "my email is email@email.com" =~ emailRegex :: Bool
+> >>> True
+>
+> -- non-monadic
+> <to-match-against> =~ <regex>
+>
+> -- monadic, uses MonadFail on lack of match
+> <to-match-against> =~~ <regex>
+
+@(=~)@ and @(=~~)@ are polymorphic in their return type. This is so that
+regex-tdfa can pick the most efficient way to give you your result based on
+what you need. For instance, if all you want is to check whether the regex
+matched or not, there's no need to allocate a result string. If you only want
+the first match, rather than all the matches, then the matching engine can stop
+after finding a single hit.
+
+This does mean, though, that you may sometimes have to explicitly specify the
+type you want, especially if you're trying things out at the REPL.
+
+= Common use cases
+
+== Get the first match
+
+> -- returns empty string if no match
+> a =~ b :: String  -- or ByteString, or Text...
+>
+> λ> "alexis-de-tocqueville" =~ "[a-z]+" :: String
+> >>> "alexis"
+>
+> λ> "alexis-de-tocqueville" =~ "[0-9]+" :: String
+> >>> ""
+
+== Check if it matched at all
+
+> a =~ b :: Bool
+>
+> λ> "alexis-de-tocqueville" =~ "[a-z]+" :: Bool
+> >>> True
+
+== Get first match + text before/after
+
+> -- if no match, will just return whole
+> -- string in the first element of the tuple
+> a =~ b :: (String, String, String)
+>
+> λ> "alexis-de-tocqueville" =~ "de" :: (String, String, String)
+> >>> ("alexis-", "de", "-tocqueville")
+>
+> λ> "alexis-de-tocqueville" =~ "kant" :: (String, String, String)
+> >>> ("alexis-de-tocqueville", "", "")
+
+== Get first match + submatches
+
+> -- same as above, but also returns a list of /just/ submatches
+> -- submatch list is empty if regex doesn't match at all
+> a =~ b :: (String, String, String, [String])
+>
+> λ> "div[attr=1234]" =~ "div\\[([a-z]+)=([^]]+)\\]" :: (String, String, String, [String])
+> >>> ("", "div[attr=1234]", "", ["attr","1234"])
+
+== Get /all/ matches
+
+> -- can also return Data.Array instead of List
+> getAllTextMatches (a =~ b) :: [String]
+>
+> λ> getAllTextMatches ("john anne yifan" =~ "[a-z]+") :: [String]
+> >>> ["john","anne","yifan"]
+
+= Feature support
 
 This package does provide captured parenthesized subexpressions.
 
@@ -48,6 +136,22 @@ package does not provide back references inside regular expressions.
 
 The package does not provide Perl style regular expressions.  Please
 look at the regex-pcre and pcre-light packages instead.
+
+This package does not provide find-and-replace.
+
+= Avoiding backslashes
+
+If you find yourself writing a lot of regexes, take a look at
+<http://hackage.haskell.org/package/raw-strings-qq raw-strings-qq>. It'll
+let you write regexes without needing to escape all your backslashes.
+
+> {-# LANGUAGE QuasiQuotes #-}
+>
+> import Text.RawString.QQ
+> import Text.Regex.TDFA
+>
+> λ> "2 * (3 + 1) / 4" =~ [r|\([^)]+\)|] :: String
+> >>> "(3 + 1)"
 
 -}
 
