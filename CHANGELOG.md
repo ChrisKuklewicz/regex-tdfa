@@ -1,3 +1,7 @@
+# 1.2.3.2
+
+* Significantly improved documentation (h/t William Yao).
+
 # 1.2.3.1
 
 * Compatibility with `containers-0.6`.
@@ -37,7 +41,7 @@ try `needUniqTags` in `POr` in CorePattern.hs, try `toAdvice b` for `PStar child
 
 # 1.1.4
 
-fixed 
+fixed
 
 # 1.1.3
 
