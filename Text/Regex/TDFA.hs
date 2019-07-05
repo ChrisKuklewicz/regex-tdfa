@@ -176,6 +176,7 @@ module Text.Regex.TDFA(getVersion_Text_Regex_TDFA
                       ,module Text.Regex.TDFA.Common
                       ,module Text.Regex.Base) where
 
+import qualified Control.Monad.Fail as Fail
 import Data.Version(Version)
 import Text.Regex.Base
 import Text.Regex.TDFA.String()
@@ -202,9 +203,9 @@ getVersion_Text_Regex_TDFA = version
 
 -- | This is the monadic matching operator.  If a single match fails,
 -- then 'fail' will be called.
-(=~~) :: (RegexMaker Regex CompOption ExecOption source,RegexContext Regex source1 target,Monad m)
+(=~~) :: (RegexMaker Regex CompOption ExecOption source,RegexContext Regex source1 target, Fail.MonadFail m)
       => source1 -> source -> m target
-(=~~) x r = do let make :: (RegexMaker Regex CompOption ExecOption a, Monad m) => a -> m Regex
+(=~~) x r = do let make :: (RegexMaker Regex CompOption ExecOption a, Fail.MonadFail m) => a -> m Regex
                    make = makeRegexM
                q <- make r
                matchM q x
