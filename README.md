@@ -180,14 +180,6 @@ import Text.Regex.TDFA
 [#12]: https://github.com/ChrisKuklewicz/regex-tdfa/issues/12
 [#14]: https://github.com/ChrisKuklewicz/regex-tdfa/issues/14
 
-## Testing
-
-Tests for this package live in [regex-tdfa-unittest](http://hackage.haskell.org/package/regex-tdfa-unittest). To run them, do:
-
-    stack build
-    stack build regex-tdfa-unittest
-    stack exec regex-tdfa-unittest
-
 ## About this package
 
 This was inspired by the algorithm (and Master's thesis) behind the regular expression library known as [TRE or libtre](https://github.com/laurikari/tre/).  This was created by Ville Laurikari and tackled the difficult issue of efficient sub-match capture for POSIX regular expressions.
