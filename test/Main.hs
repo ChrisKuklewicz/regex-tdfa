@@ -7,6 +7,7 @@ import Control.Monad
 import Control.Monad.Error()
 import Data.Array
 import Data.List
+import Control.Applicative
 --import Data.Monoid
 import Data.Sequence(Seq)
 import Data.String
