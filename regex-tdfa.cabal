@@ -22,7 +22,7 @@ Tested-With:            GHC==7.6.3
 Build-Type:             Simple
 extra-source-files:
   CHANGELOG.md
-Cabal-Version:          >= 1.6
+Cabal-Version:          >= 1.8
 
 source-repository head
   type:                git
@@ -34,6 +34,7 @@ flag devel
   manual: True
 
 library
+  hs-source-dirs:       lib
   Build-Depends:        array              >= 0.4 && < 0.6
                       , base               >= 4 && < 5
                       , bytestring         >= 0.10 && < 0.11
@@ -83,3 +84,14 @@ library
   GHC-Options:            -Wall -funbox-strict-fields -fspec-constr-count=10 -O2 -fno-warn-orphans
   if flag(devel)
     ghc-prof-options: -auto-all
+
+test-suite regex-tdfa-unittest
+  type:                 exitcode-stdio-1.0
+  build-depends:        regex-base >= 0.93.1, base >=4  && < 5, regex-tdfa >= 0.92, bytestring, containers, array, mtl, file-embed, filepath, utf8-string
+  hs-source-dirs:       test
+  main-is:              Main.hs
+  extensions:           FlexibleInstances, FlexibleContexts,Rank2Types
+  GHC-Options:          -Wall -O2 -funbox-strict-fields
+  GHC-Prof-Options:     -auto-all
+  if !impl(ghc >= 8.0)
+    build-depends:      fail
