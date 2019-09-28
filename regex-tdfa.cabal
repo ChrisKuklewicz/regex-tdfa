@@ -93,6 +93,7 @@ test-suite regex-tdfa-unittest
   main-is:              Main.hs
   extensions:           FlexibleInstances, FlexibleContexts,Rank2Types
   GHC-Options:          -Wall -O2 -funbox-strict-fields
-  GHC-Prof-Options:     -auto-all
+  if flag(devel)
+    ghc-prof-options: -auto-all
   if !impl(ghc >= 8.0)
     build-depends:      fail
