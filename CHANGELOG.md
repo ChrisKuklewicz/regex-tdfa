@@ -1,3 +1,8 @@
+# 1.2.3.3
+
+* Compatibility with GHC 8.8 and regex-base-0.9.4 (h/t @asr).
+* Turned `regex-tdfa-unittest` into a `regex-tdfa` testsuite.
+
 # 1.2.3.2
 
 * Significantly improved documentation (h/t William Yao).
