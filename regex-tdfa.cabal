@@ -51,7 +51,8 @@ library
   -- add any new dependency that isn't already incurred by
   -- `regex-tdfa`'s transitive deps
   if !impl(ghc >= 8.0)
-    build-depends:      semigroups == 0.18.*
+    build-depends:      fail
+                      , semigroups == 0.18.*
 
   other-modules:          Paths_regex_tdfa
   Exposed-Modules:        Data.IntMap.CharMap2
