@@ -1,4 +1,10 @@
-# 1.2.3.3
+# 1.3.0
+
+Same as 1.2.3.3.
+
+See <https://github.com/ChrisKuklewicz/regex-tdfa/issues/29>.
+
+# 1.2.3.3 (deprecated)
 
 * Compatibility with GHC 8.8 and regex-base-0.9.4 (h/t @asr).
 * Turned `regex-tdfa-unittest` into a `regex-tdfa` testsuite.
